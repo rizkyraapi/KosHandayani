@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Image from 'next/image';
 export default function Page() {
       useEffect(() => {
     const style = document.createElement('style');
@@ -42,7 +43,16 @@ export default function Page() {
       {/* Top Navigation Bar */}
       <nav className="bg-white/80 backdrop-blur-md font-headline tracking-tight text-slate-900 sticky top-0 z-50 shadow-sm">
         <div className="flex justify-between items-center px-4 sm:px-8 py-4 max-w-7xl mx-auto">
-          <div className="text-2xl font-bold tracking-tighter text-green-600">KosHandayani</div>
+          <div className="flex items-center">
+            <Image
+              src="/KosHandayani_Logo.png"
+              alt="KosHandayani Logo"
+              width={180}
+              height={56}
+              className="h-12 w-auto object-contain"
+              priority
+            />
+          </div>
           <div className="hidden md:flex gap-8 items-center">
             <a className="text-green-700 font-bold border-b-2 border-green-600 transition-colors" href="#">Beranda</a>
             <a className="text-slate-600 font-medium hover:text-green-500 transition-colors" href="#">Bantuan</a>

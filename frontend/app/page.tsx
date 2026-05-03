@@ -164,6 +164,50 @@ export default function Page() {
           gap: 64px;
           align-items: center;
         }
+        .branch-info-section {
+          padding-top: 72px;
+          padding-bottom: 72px;
+        }
+        .branch-grid {
+          display: grid;
+          gap: 40px;
+        }
+        .branch-card {
+          display: flex;
+          align-items: center;
+          gap: 32px;
+          background-color: #ffffff;
+          border-radius: 1.5rem;
+          padding: 32px;
+          box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+        }
+        .branch-card.reverse {
+          flex-direction: row-reverse;
+        }
+        .branch-image {
+          flex: 0 0 380px;
+          border-radius: 1.25rem;
+          overflow: hidden;
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+          min-height: 240px;
+        }
+        .branch-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .branch-content h3 {
+          font-family: 'Manrope, sans-serif';
+          font-size: clamp(1.5rem, 3vw, 1.875rem);
+          font-weight: 800;
+          margin-bottom: 16px;
+        }
+        .branch-content p {
+          font-family: 'Inter, sans-serif';
+          color: #334155;
+          line-height: 1.8;
+        }
         .feature-title {
           font-size: clamp(1.8rem, 4vw, 2.25rem) !important;
         }
@@ -177,6 +221,12 @@ export default function Page() {
           .feature-grid {
             grid-template-columns: 1fr;
             gap: 48px;
+          }
+          .branch-card {
+            flex-direction: column;
+          }
+          .branch-card.reverse {
+            flex-direction: column;
           }
         }
         @media (max-width: 640px) {
@@ -616,6 +666,59 @@ export default function Page() {
               Lihat Kamar Lainnya
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
+          </div>
+        </section>
+
+        <section className="content-shell branch-info-section" style={{ paddingTop: '72px', paddingBottom: '72px' }}>
+          <div style={{ marginBottom: '40px' }}>
+            <h2
+              style={{
+                fontSize: '1.875rem',
+                fontWeight: 800,
+                fontFamily: 'Manrope, sans-serif',
+                letterSpacing: '-0.025em',
+                marginBottom: '12px',
+              }}
+            >
+              Informasi Cabang
+            </h2>
+            <p style={{ color: '#3d4a3d', maxWidth: '42rem' }}>
+              Lihat detail masing-masing cabang KosHandayani dengan lokasi strategis dan fasilitas nyaman.
+            </p>
+          </div>
+
+          <div className="branch-grid">
+            <div className="branch-card">
+              <div className="branch-image">
+                <img
+                  src="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=960&q=80"
+                  alt="Cabang 1"
+                />
+              </div>
+              <div className="branch-content">
+                <h3>Cabang 1</h3>
+                <p>
+                  Cabang 1 terletak di pusat kota dengan akses mudah ke fasilitas umum dan transportasi.
+                  Nikmati kamar modern, keamanan 24 jam, dan layanan kebersihan harian.
+                </p>
+              </div>
+            </div>
+
+            <div className="branch-card reverse">
+              <div className="branch-image">
+                <img
+                  src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=960&q=80"
+                  alt="Cabang 2"
+                />
+              </div>
+              <div className="branch-content">
+                <h3>Cabang 2</h3>
+                <p>
+                  Cabang 2 menawarkan suasana tenang dekat area kampus dengan fasilitas lengkap untuk mahasiswa.
+                  Dilengkapi ruang bersama, dapur modern, dan koneksi internet cepat.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
