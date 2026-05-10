@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+import apiClient from './axios';
 
 export interface ApiRoom {
   id: number;
@@ -10,16 +10,7 @@ export interface ApiRoom {
 }
 
 export async function getRooms(): Promise<ApiRoom[]> {
-  const res = await fetch(`${API_BASE_URL}/rooms`, {
-    headers: {
-      Accept: "application/json",
-    },
-    cache: "no-store",
-  });
+  const { data } = await apiClient.get<ApiRoom[]>('/rooms');
 
-  if (!res.ok) {
-    throw new Error("Gagal fetch data kamar");
-  }
-
-  return res.json();
+  return data;
 }

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 /* ═══════════════════════════════════════════════════════════════
    ALL CUSTOM STYLES — fonts, colors, utilities, Material Symbols,
@@ -261,7 +262,9 @@ const ANNOUNCEMENTS = [
    PAGE COMPONENT
 ═══════════════════════════════════════════════════════════════ */
 export default function Page() {
+  const { user, logout, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const displayName = user?.full_name || 'Tenant';
 
   useEffect(() => {
     if (document.getElementById('kos-styles')) return;
@@ -334,15 +337,21 @@ export default function Page() {
           <div className="flex items-center gap-3 mb-4">
             <img
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0qnEsKVMHkHuca0IndT_fvNKEYkq444re0T0SQ1wlH3Ao-xgdTjbtpQ42CYPeXajYfa_uICvIWMBiYxVLLKhXfupVde0iiyhj1znXKqPxNIet20R1oXHrAR1FjXPw-pk3l9dhjbSQb7uAHzfaUN_gOTlt6Hf8aUNCytQSd-GOekETLIbLLwd7ZNFE2nwx7x2pBN629i3hxNXhVFDVoJB-_skTHFvwlAP3RbczParih48BRhT1GlBDISqk0EVh7s3652dROq_tvSZm"
-              alt="Budi Santoso"
+              alt={displayName}
               className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
             />
             <div className="overflow-hidden">
-              <p className="text-xs font-bold text-on-surface truncate">Budi Santoso</p>
+              <p className="text-xs font-bold text-on-surface truncate">{displayName}</p>
               <p className="text-on-surface-variant truncate" style={{ fontSize: '10px' }}>Premium Tenant</p>
             </div>
           </div>
-          <button className="w-full py-2 bg-white text-error text-xs font-bold rounded-lg border border-error-10 hover-bg-error-5 transition-colors flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={logout}
+            disabled={isLoading}
+            className="w-full py-2 bg-white text-error text-xs font-bold rounded-lg border border-error-10 hover-bg-error-5 transition-colors flex items-center justify-center gap-2"
+            style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
+          >
             <span className="material-symbols-outlined text-sm">logout</span>
             Logout
           </button>
@@ -364,7 +373,7 @@ export default function Page() {
             </button>
             <div>
               <h2 className="text-2xl lg:text-3xl font-extrabold text-on-surface font-manrope tracking-tight">
-                Selamat Datang, Budi Santoso!
+                Selamat Datang, {displayName}!
               </h2>
               <p className="text-on-surface-variant mt-1 font-medium text-sm lg:text-base">
                 Senang melihat Anda kembali di hunian kami.

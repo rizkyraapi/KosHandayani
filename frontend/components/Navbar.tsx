@@ -68,21 +68,21 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-4">
-          <a
-            href="#login"
+          <Link
+            href="/login"
             className="px-5 py-2 font-medium text-slate-600 text-base tracking-[-0.4px] hover:text-green-600 transition-colors"
           >
             Login
-          </a>
-          <a
-            href="#daftar"
+          </Link>
+          <Link
+            href="/register"
             className="px-6 py-2 rounded-lg text-white text-base tracking-[-0.4px] font-semibold border-0 shadow-md transition-opacity hover:opacity-90"
             style={{
               background: 'linear-gradient(90deg, rgba(0,110,47,1) 0%, rgba(34,197,94,1) 100%)',
             }}
           >
             Daftar
-          </a>
+          </Link>
         </div>
 
         <button
@@ -116,15 +116,15 @@ export default function Navbar() {
           })}
 
           <div className="flex gap-3 pt-2">
-            <a
-              href="#login"
+            <Link
+              href="/login"
               className="flex-1 py-2 text-center font-medium text-slate-600 border border-slate-200 rounded-lg"
               onClick={() => setMobileMenuOpen(false)}
             >
               Login
-            </a>
-            <a
-              href="#daftar"
+            </Link>
+            <Link
+              href="/register"
               className="flex-1 py-2 text-center rounded-lg text-white font-semibold border-0"
               style={{
                 background:
@@ -133,7 +133,7 @@ export default function Navbar() {
               onClick={() => setMobileMenuOpen(false)}
             >
               Daftar
-            </a>
+            </Link>
           </div>
         </div>
       )}

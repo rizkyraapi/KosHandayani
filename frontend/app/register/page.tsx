@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { getAuthErrorMessage } from '@/lib/auth';
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
@@ -78,9 +81,12 @@ interface InputFieldProps {
   icon: string;
   placeholder: string;
   type?: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
 }
 
-function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps) {
+function InputField({ label, icon, placeholder, type = 'text', value, onChange, disabled }: InputFieldProps) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -112,7 +118,10 @@ function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps
         </span>
         <input
           type={type}
+          value={value}
           placeholder={placeholder}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           style={{
@@ -128,6 +137,7 @@ function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps
             color: colors.onSurface,
             transition: 'background-color 0.2s',
             boxSizing: 'border-box',
+            opacity: disabled ? 0.7 : 1,
           }}
         />
       </div>
@@ -136,7 +146,45 @@ function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps
 }
 
 export default function Page() {
+  const { register, error: authError, clearError } = useAuth();
   const [agreed, setAgreed] = useState(false);
+  const [localError, setLocalError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+    whatsapp: '',
+    pekerjaan: '',
+    address: '',
+  });
+  const errorMessage = localError || authError;
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLocalError('');
+    clearError();
+
+    if (!agreed) {
+      setLocalError('Anda harus menyetujui Syarat & Ketentuan terlebih dahulu.');
+      return;
+    }
+
+    if (form.password !== form.password_confirmation) {
+      setLocalError('Konfirmasi password tidak sama.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await register(form);
+    } catch (error) {
+      setLocalError(getAuthErrorMessage(error, 'Register gagal. Periksa data yang diisi.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -242,7 +290,7 @@ export default function Page() {
               }}
             >
               <form
-                onSubmit={(e) => e.preventDefault()}
+                onSubmit={handleSubmit}
                 style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
               >
                 <InputField
@@ -250,12 +298,18 @@ export default function Page() {
                   icon="person"
                   placeholder="Masukkan nama lengkap"
                   type="text"
+                  value={form.full_name}
+                  onChange={(full_name) => setForm((current) => ({ ...current, full_name }))}
+                  disabled={isSubmitting}
                 />
                 <InputField
                   label="Email"
                   icon="mail"
                   placeholder="contoh@email.com"
                   type="email"
+                  value={form.email}
+                  onChange={(email) => setForm((current) => ({ ...current, email }))}
+                  disabled={isSubmitting}
                 />
 
                 {/* Password Grid */}
@@ -271,14 +325,52 @@ export default function Page() {
                     icon="lock"
                     placeholder="••••••••"
                     type="password"
+                    value={form.password}
+                    onChange={(password) => setForm((current) => ({ ...current, password }))}
+                    disabled={isSubmitting}
                   />
                   <InputField
                     label="Konfirmasi"
                     icon="shield"
                     placeholder="••••••••"
                     type="password"
+                    value={form.password_confirmation}
+                    onChange={(password_confirmation) =>
+                      setForm((current) => ({ ...current, password_confirmation }))
+                    }
+                    disabled={isSubmitting}
                   />
                 </div>
+
+                <InputField
+                  label="WhatsApp"
+                  icon="call"
+                  placeholder="08xxxxxxxxxx"
+                  type="tel"
+                  value={form.whatsapp}
+                  onChange={(whatsapp) => setForm((current) => ({ ...current, whatsapp }))}
+                  disabled={isSubmitting}
+                />
+
+                <InputField
+                  label="Pekerjaan"
+                  icon="work"
+                  placeholder="Masukkan pekerjaan"
+                  type="text"
+                  value={form.pekerjaan}
+                  onChange={(pekerjaan) => setForm((current) => ({ ...current, pekerjaan }))}
+                  disabled={isSubmitting}
+                />
+
+                <InputField
+                  label="Alamat"
+                  icon="home"
+                  placeholder="Masukkan alamat"
+                  type="text"
+                  value={form.address}
+                  onChange={(address) => setForm((current) => ({ ...current, address }))}
+                  disabled={isSubmitting}
+                />
 
                 {/* Terms */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '0 4px' }}>
@@ -286,6 +378,7 @@ export default function Page() {
                     id="terms"
                     type="checkbox"
                     checked={agreed}
+                    disabled={isSubmitting}
                     onChange={(e) => setAgreed(e.target.checked)}
                     style={{
                       marginTop: '2px',
@@ -336,10 +429,25 @@ export default function Page() {
                   </label>
                 </div>
 
+                {errorMessage && (
+                  <p
+                    style={{
+                      margin: 0,
+                      color: colors.error,
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {errorMessage}
+                  </p>
+                )}
+
                 {/* Submit Button */}
                 <button
                   type="submit"
                   className="primary-gradient"
+                  disabled={isSubmitting}
                   style={{
                     width: '100%',
                     color: colors.onPrimary,
@@ -350,19 +458,23 @@ export default function Page() {
                     borderRadius: '16px',
                     border: 'none',
                     boxShadow: '0 4px 16px rgba(0, 110, 47, 0.3)',
-                    cursor: 'pointer',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: '8px',
                     transition: 'filter 0.2s, transform 0.1s',
                   }}
-                  onMouseOver={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
+                  onMouseOver={(e) => {
+                    if (!isSubmitting) e.currentTarget.style.filter = 'brightness(1.1)';
+                  }}
                   onMouseOut={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
-                  onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+                  onMouseDown={(e) => {
+                    if (!isSubmitting) e.currentTarget.style.transform = 'scale(0.97)';
+                  }}
                   onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
-                  Daftar
+                  {isSubmitting ? 'Memproses...' : 'Daftar'}
                   <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
                     arrow_forward
                   </span>
@@ -380,8 +492,8 @@ export default function Page() {
               >
                 <p style={{ fontSize: '14px', color: colors.onSurfaceVariant, margin: 0 }}>
                   Sudah punya akun?{' '}
-                  <a
-                    href="#"
+                  <Link
+                    href="/login"
                     style={{
                       color: colors.primary,
                       fontWeight: 700,
@@ -392,7 +504,7 @@ export default function Page() {
                     onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                   >
                     Login
-                  </a>
+                  </Link>
                 </p>
               </div>
             </div>

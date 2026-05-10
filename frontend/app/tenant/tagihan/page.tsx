@@ -1,20 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-// Inject Google Fonts and Material Symbols into document head
-const fontLink1 = document.createElement('link');
-fontLink1.rel = 'stylesheet';
-fontLink1.href = 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap';
-document.head.appendChild(fontLink1);
-
-const fontLink2 = document.createElement('link');
-fontLink2.rel = 'stylesheet';
-fontLink2.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap';
-document.head.appendChild(fontLink2);
-
-// Inject global styles
-const style = document.createElement('style');
-style.textContent = `
+const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
   @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
@@ -135,7 +122,6 @@ style.textContent = `
     background: linear-gradient(to right, var(--color-primary), var(--color-primary-container));
   }
 `;
-document.head.appendChild(style);
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -842,8 +828,7 @@ function MobileNav() {
 }
 
 // ─── Responsive styles injected ───────────────────────────────────────────────
-const responsiveStyle = document.createElement('style');
-responsiveStyle.textContent = `
+const responsiveStyle = `
   .hidden-mobile {
     display: flex;
   }
@@ -877,11 +862,39 @@ responsiveStyle.textContent = `
     }
   }
 `;
-document.head.appendChild(responsiveStyle);
 
 // ─── Page Component ────────────────────────────────────────────────────────────
 
 export default function Page() {
+  useEffect(() => {
+    const fontLink1 = document.createElement('link');
+    fontLink1.rel = 'stylesheet';
+    fontLink1.href =
+      'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap';
+    document.head.appendChild(fontLink1);
+
+    const fontLink2 = document.createElement('link');
+    fontLink2.rel = 'stylesheet';
+    fontLink2.href =
+      'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap';
+    document.head.appendChild(fontLink2);
+
+    const globalStyleElement = document.createElement('style');
+    globalStyleElement.textContent = globalStyle;
+    document.head.appendChild(globalStyleElement);
+
+    const responsiveStyleElement = document.createElement('style');
+    responsiveStyleElement.textContent = responsiveStyle;
+    document.head.appendChild(responsiveStyleElement);
+
+    return () => {
+      fontLink1.remove();
+      fontLink2.remove();
+      globalStyleElement.remove();
+      responsiveStyleElement.remove();
+    };
+  }, []);
+
   return (
     <div style={{ backgroundColor: '#f9f9ff', minHeight: '100vh', color: '#111c2d' }}>
       <Sidebar />

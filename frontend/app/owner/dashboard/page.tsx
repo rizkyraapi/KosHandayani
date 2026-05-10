@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 /* ─── Inject Google Fonts + Material Symbols into <head> ─── */
 function useGlobalStyles() {
@@ -178,6 +179,8 @@ const navItems = [
 ];
 
 function Sidebar() {
+  const { logout, isLoading } = useAuth();
+
   return (
     <nav
       style={{
@@ -276,25 +279,30 @@ function Sidebar() {
           <span>Semua Cabang</span>
           <Icon name="unfold_more" style={{ fontSize: 18 }} />
         </button>
-        <a
-          href="#"
+        <button
+          type="button"
+          onClick={logout}
+          disabled={isLoading}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 12,
+            width: '100%',
             padding: '12px 16px',
             color: '#64748b',
-            textDecoration: 'none',
+            background: 'transparent',
+            border: 'none',
             borderRadius: 8,
             transition: 'background-color 0.2s',
             fontSize: 14,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
           }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = '#f1f5f9')}
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
         >
           <Icon name="logout" />
           <span style={{ fontFamily: 'Inter, sans-serif' }}>Logout</span>
-        </a>
+        </button>
       </div>
     </nav>
   );

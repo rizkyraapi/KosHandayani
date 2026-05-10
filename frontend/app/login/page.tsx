@@ -1,6 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { getAuthErrorMessage } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
@@ -58,14 +61,29 @@ const colors = {
   outline: '#6d7b6c',
 };
 
+function subscribeToUrlChanges() {
+  return () => undefined;
+}
+
+function getRegisteredSearchParam() {
+  return new URLSearchParams(window.location.search).get('registered') === '1';
+}
+
+function getServerRegisteredSearchParam() {
+  return false;
+}
+
 interface InputFieldProps {
   label: string;
   icon: string;
   placeholder: string;
   type?: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
 }
 
-function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps) {
+function InputField({ label, icon, placeholder, type = 'text', value, onChange, disabled }: InputFieldProps) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -97,7 +115,10 @@ function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps
         </span>
         <input
           type={type}
+          value={value}
           placeholder={placeholder}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           style={{
@@ -113,6 +134,7 @@ function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps
             color: colors.onSurface,
             transition: 'background-color 0.2s',
             boxSizing: 'border-box',
+            opacity: disabled ? 0.7 : 1,
           }}
         />
       </div>
@@ -121,6 +143,36 @@ function InputField({ label, icon, placeholder, type = 'text' }: InputFieldProps
 }
 
 export default function Page() {
+  const { login, error: authError, clearError } = useAuth();
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+  });
+  const [localError, setLocalError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const registered = useSyncExternalStore(
+    subscribeToUrlChanges,
+    getRegisteredSearchParam,
+    getServerRegisteredSearchParam
+  );
+
+  const errorMessage = localError || authError;
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLocalError('');
+    clearError();
+    setIsSubmitting(true);
+
+    try {
+      await login(form);
+    } catch (error) {
+      setLocalError(getAuthErrorMessage(error, 'Login gagal. Periksa email dan password.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <>
       <style>{styles}</style>
@@ -222,14 +274,17 @@ export default function Page() {
               }}
             >
               <form
-                onSubmit={(e) => e.preventDefault()}
+                onSubmit={handleSubmit}
                 style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
               >
                 <InputField
-                  label="Username"
+                  label="Email"
                   icon="person"
-                  placeholder="Masukkan username"
-                  type="text"
+                  placeholder="Masukkan email"
+                  type="email"
+                  value={form.email}
+                  onChange={(email) => setForm((current) => ({ ...current, email }))}
+                  disabled={isSubmitting}
                 />
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -283,6 +338,9 @@ export default function Page() {
                     <input
                       type="password"
                       placeholder="Masukkan password"
+                      value={form.password}
+                      disabled={isSubmitting}
+                      onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
                       style={{
                         width: '100%',
                         paddingLeft: '48px',
@@ -296,6 +354,7 @@ export default function Page() {
                         color: colors.onSurface,
                         transition: 'background-color 0.2s',
                         boxSizing: 'border-box',
+                        opacity: isSubmitting ? 0.7 : 1,
                       }}
                       onFocus={(e) => {
                         e.currentTarget.style.backgroundColor = colors.surfaceContainerLowest;
@@ -307,9 +366,24 @@ export default function Page() {
                   </div>
                 </div>
 
+                {(errorMessage || registered) && (
+                  <p
+                    style={{
+                      margin: 0,
+                      color: errorMessage ? '#ba1a1a' : colors.primary,
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {errorMessage || 'Registrasi berhasil. Silakan login.'}
+                  </p>
+                )}
+
                 <button
                   type="submit"
                   className="primary-gradient"
+                  disabled={isSubmitting}
                   style={{
                     width: '100%',
                     color: colors.onPrimary,
@@ -320,19 +394,23 @@ export default function Page() {
                     borderRadius: '16px',
                     border: 'none',
                     boxShadow: '0 4px 16px rgba(0, 110, 47, 0.3)',
-                    cursor: 'pointer',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: '8px',
                     transition: 'filter 0.2s, transform 0.1s',
                   }}
-                  onMouseOver={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
+                  onMouseOver={(e) => {
+                    if (!isSubmitting) e.currentTarget.style.filter = 'brightness(1.1)';
+                  }}
                   onMouseOut={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
-                  onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+                  onMouseDown={(e) => {
+                    if (!isSubmitting) e.currentTarget.style.transform = 'scale(0.97)';
+                  }}
                   onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
-                  Login
+                  {isSubmitting ? 'Memproses...' : 'Login'}
                   <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
                     login
                   </span>
@@ -349,8 +427,8 @@ export default function Page() {
               >
                 <p style={{ fontSize: '14px', color: colors.onSurfaceVariant, margin: 0 }}>
                   Belum punya akun?{' '}
-                  <a
-                    href="#"
+                  <Link
+                    href="/register"
                     style={{
                       color: colors.primary,
                       fontWeight: 700,
@@ -361,7 +439,7 @@ export default function Page() {
                     onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                   >
                     Daftar
-                  </a>
+                  </Link>
                 </p>
               </div>
             </div>
