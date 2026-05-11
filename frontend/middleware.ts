@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   AUTH_ROLE_COOKIE,
-  AUTH_TOKEN_COOKIE,
   getRoleDashboardPath,
   isUserRole,
   type UserRole,
@@ -16,13 +15,12 @@ const guestRoutes = ['/login', '/register'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get(AUTH_TOKEN_COOKIE)?.value;
   const roleCookie = request.cookies.get(AUTH_ROLE_COOKIE)?.value;
   const role = isUserRole(roleCookie) ? roleCookie : null;
   const protectedRoute = protectedRoutes.find((route) => pathname.startsWith(route.prefix));
 
   if (protectedRoute) {
-    if (!token || !role) {
+    if (!role) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('next', pathname);
 
@@ -34,7 +32,7 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  if (token && role && guestRoutes.includes(pathname)) {
+  if (role && guestRoutes.includes(pathname)) {
     return NextResponse.redirect(new URL(getRoleDashboardPath(role), request.url));
   }
 

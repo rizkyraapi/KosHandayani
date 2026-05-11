@@ -6,7 +6,7 @@ import {
   authService,
   getAuthErrorMessage,
   getRedirectPathForRole,
-  getStoredToken,
+  isUnauthorizedError,
   type AuthUser,
   type LoginCredentials,
   type RegisterPayload,
@@ -32,14 +32,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
 
   const refreshUser = useCallback(async () => {
-    const token = getStoredToken();
-
-    if (!token) {
-      setUser(null);
-      setIsLoading(false);
-      return null;
-    }
-
     try {
       setIsLoading(true);
       const currentUser = await authService.me();
@@ -48,7 +40,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (refreshError) {
       authService.clearSession();
       setUser(null);
-      setError(getAuthErrorMessage(refreshError, 'Sesi berakhir. Silakan login kembali.'));
+
+      if (!isUnauthorizedError(refreshError)) {
+        setError(getAuthErrorMessage(refreshError, 'Sesi berakhir. Silakan login kembali.'));
+      }
+
       return null;
     } finally {
       setIsLoading(false);

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
-import { AUTH_ROLE_COOKIE, AUTH_TOKEN_COOKIE } from './auth-constants';
+import { AUTH_ROLE_COOKIE } from './auth-constants';
 
 const browserHost = typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
 const defaultApiBaseUrl = `http://${browserHost}:8000/api`;
@@ -31,21 +31,10 @@ export const csrfClient = axios.create({
   },
 });
 
-apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get(AUTH_TOKEN_COOKIE);
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
-});
-
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      Cookies.remove(AUTH_TOKEN_COOKIE);
       Cookies.remove(AUTH_ROLE_COOKIE);
     }
 

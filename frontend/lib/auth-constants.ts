@@ -1,4 +1,3 @@
-export const AUTH_TOKEN_COOKIE = 'kh_auth_token';
 export const AUTH_ROLE_COOKIE = 'kh_auth_role';
 
 export const ROLE_DASHBOARD_PATHS = {

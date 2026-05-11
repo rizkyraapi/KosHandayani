@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -31,10 +32,13 @@ class AuthController extends Controller
             'profile_completed' => false,
         ]);
 
+        Auth::login($user);
+        $request->session()->regenerate();
+
         return response()->json([
             'success' => true,
             'message' => 'Register berhasil',
-            'user' => $user
+            'user' => $this->authUser($user),
         ]);
     }
 
@@ -56,34 +60,29 @@ class AuthController extends Controller
             ]);
         }
 
-        // generate token
-        $token = $user->createToken('auth_token')->plainTextToken;
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
 
             'success' => true,
             'message' => 'Login berhasil',
 
-            'token' => $token,
-
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'profile_completed' => $user->profile_completed,
-            ]
+            'user' => $this->authUser($user),
         ]);
     }
 
     // LOGOUT
     public function logout(Request $request)
     {
-        $request->user()->tokens()->delete();
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json([
             'success' => true,
-            'message' => 'Logout berhasil'
+            'message' => 'Logout berhasil',
         ]);
     }
 
@@ -91,7 +90,21 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return response()->json([
-            'user' => $request->user()
+            'user' => $this->authUser($request->user()),
         ]);
+    }
+
+    private function authUser(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'phone' => $user->phone,
+            'job' => $user->job,
+            'address' => $user->address,
+            'profile_completed' => $user->profile_completed,
+        ];
     }
 }

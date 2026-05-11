@@ -2,7 +2,6 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 import {
   AUTH_ROLE_COOKIE,
-  AUTH_TOKEN_COOKIE,
   getRoleDashboardPath,
   isUserRole,
   type UserRole,
@@ -48,12 +47,8 @@ type ApiUser = {
 };
 
 type AuthResponse = {
-  token?: string;
-  access_token?: string;
   user?: ApiUser;
   data?: {
-    token?: string;
-    access_token?: string;
     user?: ApiUser;
   };
   message?: string;
@@ -85,19 +80,11 @@ function normalizeUser(user?: ApiUser): AuthUser {
   };
 }
 
-function getAuthToken(response: AuthResponse) {
-  return response.token ?? response.access_token ?? response.data?.token ?? response.data?.access_token;
-}
-
 function getAuthUser(response: AuthResponse) {
   return response.user ?? response.data?.user;
 }
 
-function persistSession(token: string, user: AuthUser) {
-  Cookies.set(AUTH_TOKEN_COOKIE, token, {
-    expires: 7,
-    sameSite: 'lax',
-  });
+function persistSession(user: AuthUser) {
   Cookies.set(AUTH_ROLE_COOKIE, user.role, {
     expires: 7,
     sameSite: 'lax',
@@ -105,16 +92,11 @@ function persistSession(token: string, user: AuthUser) {
 }
 
 function clearSessionCookies() {
-  Cookies.remove(AUTH_TOKEN_COOKIE);
   Cookies.remove(AUTH_ROLE_COOKIE);
 }
 
 async function ensureCsrfCookie() {
   await csrfClient.get('/sanctum/csrf-cookie');
-}
-
-export function getStoredToken() {
-  return Cookies.get(AUTH_TOKEN_COOKIE);
 }
 
 export function getRedirectPathForRole(role: UserRole) {
@@ -140,18 +122,17 @@ export function getAuthErrorMessage(error: unknown, fallback = 'Terjadi kesalaha
   return fallback;
 }
 
+export function isUnauthorizedError(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
 export const authService = {
   async login(credentials: LoginCredentials) {
     await ensureCsrfCookie();
     const { data } = await apiClient.post<AuthResponse>('/login', credentials);
-    const token = getAuthToken(data);
     const user = normalizeUser(getAuthUser(data));
 
-    if (!token) {
-      throw new AuthError('Token login tidak ditemukan dari server.');
-    }
-
-    persistSession(token, user);
+    persistSession(user);
 
     return user;
   },
@@ -165,15 +146,14 @@ export const authService = {
       job: payload.pekerjaan,
       role: 'tenant',
     });
-    const token = getAuthToken(data);
     const apiUser = getAuthUser(data);
 
-    if (!token || !apiUser) {
+    if (!apiUser) {
       return null;
     }
 
     const user = normalizeUser(apiUser);
-    persistSession(token, user);
+    persistSession(user);
 
     return user;
   },
@@ -186,10 +166,8 @@ export const authService = {
 
   async logout() {
     try {
-      if (getStoredToken()) {
-        await ensureCsrfCookie();
-        await apiClient.post('/logout');
-      }
+      await ensureCsrfCookie();
+      await apiClient.post('/logout');
     } finally {
       clearSessionCookies();
     }

@@ -544,7 +544,7 @@ function DocumentsCard() {
           >
             format_quote
           </span>
-          "{tenantData.note}"
+          &quot;{tenantData.note}&quot;
         </div>
       </div>
     </div>
@@ -1343,7 +1343,7 @@ export default function Page() {
                     >
                       format_quote
                     </span>
-                    "{tenantData.note}"
+                    &quot;{tenantData.note}&quot;
                   </div>
                 </div>
               </div>
