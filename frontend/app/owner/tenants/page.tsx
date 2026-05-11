@@ -510,6 +510,7 @@ function TenantRow({ tenant }: { tenant: Tenant }) {
         transition: 'background 0.15s',
         fontSize: 13,
         height: 72,
+        borderBottom: `1px solid ${C.surfaceContainerLow}`,
       }}
     >
       {/* Name */}
@@ -1023,10 +1024,8 @@ export default function Page() {
                       </td>
                     </tr>
                   ) : (
-                    filteredTenants.map((t, idx) => (
-                      <tr key={t.id} style={{ borderBottom: `1px solid ${C.surfaceContainerLow}` }}>
-                        <TenantRow tenant={t} />
-                      </tr>
+                    filteredTenants.map((t) => (
+                      <TenantRow key={t.id} tenant={t} />
                     ))
                   )}
                 </tbody>

@@ -139,69 +139,329 @@ export default function KosHandayaniPage() {
             padding: 0;
           }
         }
+
+        .rooms-page-shell {
+          min-height: 100vh;
+          background: #f9f9ff;
+        }
+
+        .rooms-main {
+          width: 100%;
+          min-height: 100vh;
+          padding: 40px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .rooms-main-inner {
+          width: 100%;
+          max-width: 1440px;
+          margin: 0 auto;
+          position: relative;
+          z-index: 1;
+        }
+
+        .rooms-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 24px;
+          margin-bottom: 32px;
+        }
+
+        .rooms-eyebrow {
+          display: block;
+          margin-bottom: 8px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: rgba(61, 74, 61, 0.66);
+        }
+
+        .rooms-title {
+          font-family: 'Manrope', sans-serif;
+          font-size: 44px;
+          line-height: 1.05;
+          font-weight: 900;
+          color: #111c2d;
+          letter-spacing: 0;
+        }
+
+        .rooms-subtitle {
+          margin-top: 8px;
+          color: #3d4a3d;
+          font-size: 16px;
+          line-height: 1.5;
+        }
+
+        .rooms-add-button {
+          min-height: 48px;
+          padding: 0 22px;
+          border: 0;
+          border-radius: 12px;
+          color: white;
+          font-size: 15px;
+          font-weight: 800;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          box-shadow: 0 14px 28px rgba(0, 110, 47, 0.18);
+          white-space: nowrap;
+          cursor: pointer;
+        }
+
+        .rooms-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 24px;
+          margin-bottom: 32px;
+        }
+
+        .rooms-stat-card {
+          min-height: 148px;
+          background: white;
+          padding: 24px;
+          border-radius: 16px;
+          border: 1px solid rgba(188, 203, 185, 0.18);
+          box-shadow: 0 12px 32px rgba(17, 28, 45, 0.05);
+        }
+
+        .rooms-stat-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+
+        .rooms-stat-icon {
+          width: 48px;
+          height: 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 14px;
+        }
+
+        .rooms-stat-badge {
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .rooms-stat-label {
+          color: #3d4a3d;
+          font-size: 14px;
+          font-weight: 600;
+          margin-bottom: 4px;
+        }
+
+        .rooms-stat-value {
+          font-family: 'Manrope', sans-serif;
+          color: #111c2d;
+          font-size: 36px;
+          line-height: 1;
+          font-weight: 900;
+        }
+
+        .rooms-table-card {
+          background: white;
+          border-radius: 16px;
+          border: 1px solid rgba(188, 203, 185, 0.18);
+          box-shadow: 0 12px 32px rgba(17, 28, 45, 0.05);
+          overflow: hidden;
+        }
+
+        .rooms-filter {
+          padding: 24px 32px;
+          border-bottom: 1px solid rgba(188, 203, 185, 0.14);
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+
+        .rooms-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .rooms-tab {
+          border: 0;
+          border-radius: 999px;
+          padding: 9px 18px;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .rooms-search {
+          position: relative;
+          max-width: 480px;
+        }
+
+        .rooms-search-icon {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: rgba(61, 74, 61, 0.62);
+        }
+
+        .rooms-search-input {
+          width: 100%;
+          height: 44px;
+          padding: 0 16px 0 44px;
+          background: #f0f3ff;
+          border: 0;
+          border-radius: 12px;
+          color: #111c2d;
+          font-size: 14px;
+          outline: none;
+        }
+
+        .rooms-table-wrap {
+          overflow-x: auto;
+        }
+
+        .rooms-table {
+          width: 100%;
+          min-width: 940px;
+          border-collapse: collapse;
+          text-align: left;
+        }
+
+        .rooms-table th {
+          padding: 18px 28px;
+          background: rgba(240, 243, 255, 0.7);
+          color: #3d4a3d;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          border-bottom: 1px solid rgba(188, 203, 185, 0.16);
+          white-space: nowrap;
+        }
+
+        .rooms-table td {
+          padding: 20px 28px;
+          border-bottom: 1px solid rgba(188, 203, 185, 0.12);
+          vertical-align: middle;
+        }
+
+        .rooms-name-cell {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          min-width: 260px;
+        }
+
+        .rooms-room-icon {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .rooms-room-name {
+          color: #111c2d;
+          font-size: 17px;
+          font-weight: 800;
+          line-height: 1.25;
+        }
+
+        .rooms-room-floor {
+          color: #3d4a3d;
+          font-size: 13px;
+          margin-top: 4px;
+        }
+
+        .rooms-pagination {
+          padding: 20px 32px;
+          background: rgba(240, 243, 255, 0.25);
+          border-top: 1px solid rgba(188, 203, 185, 0.14);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .rooms-footer {
+          margin-top: 40px;
+          padding: 28px 0;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+          text-align: center;
+        }
+
+        @media (max-width: 1023px) {
+          .rooms-main {
+            padding: 24px;
+          }
+
+          .rooms-header {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .rooms-stats-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .rooms-main {
+            padding: 18px;
+          }
+
+          .rooms-title {
+            font-size: 34px;
+          }
+
+          .rooms-filter,
+          .rooms-pagination {
+            padding: 18px;
+          }
+
+          .rooms-pagination {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+        }
       `}</style>
 
-      <div className="flex min-h-screen bg-[#f9f9ff]">
-        {/* Sidebar */}
-        <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-slate-50 flex-col p-4 gap-2 z-40 border-r border-slate-200">
-          <div className="mb-8 px-2">
-            <h1 className="text-xl font-black text-slate-900">KosHandayani</h1>
-            <p className="text-xs text-slate-500">Owner Dashboard</p>
-          </div>
-          <nav className="flex-1 space-y-1">
-            <a href="#" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-100 hover:translate-x-1 transition-all rounded-lg group">
-              <span className="material-symbols-outlined text-xl">dashboard</span>
-              <span className="text-sm font-medium">Dashboard</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 bg-green-100 text-green-700 rounded-xl font-semibold transition-all">
-              <span className="material-symbols-outlined text-xl">bed</span>
-              <span className="text-sm">Data Kamar</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-100 hover:translate-x-1 transition-all rounded-lg">
-              <span className="material-symbols-outlined text-xl">group</span>
-              <span className="text-sm font-medium">Data Penyewa</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-100 hover:translate-x-1 transition-all rounded-lg">
-              <span className="material-symbols-outlined text-xl">payments</span>
-              <span className="text-sm font-medium">Tagihan</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-100 hover:translate-x-1 transition-all rounded-lg">
-              <span className="material-symbols-outlined text-xl">receipt_long</span>
-              <span className="text-sm font-medium">Pengeluaran</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-100 hover:translate-x-1 transition-all rounded-lg">
-              <span className="material-symbols-outlined text-xl">analytics</span>
-              <span className="text-sm font-medium">Laporan</span>
-            </a>
-          </nav>
-          <div className="mt-auto border-t border-slate-200 pt-4 px-2">
-            <button className="w-full flex items-center justify-between bg-green-100/50 text-green-700 px-4 py-2 rounded-lg text-xs font-bold mb-4 hover:bg-green-100 transition-colors">
-              Semua Cabang
-              <span className="material-symbols-outlined text-sm">expand_more</span>
-            </button>
-            <a href="#" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-red-600 transition-colors rounded-lg">
-              <span className="material-symbols-outlined text-xl">logout</span>
-              <span className="text-sm font-medium">Logout</span>
-            </a>
-          </div>
-        </aside>
-
+      <div className="rooms-page-shell">
         {/* Main Content */}
-        <main className="w-full md:ml-64 min-h-screen p-4 md:p-8 lg:p-12 relative overflow-hidden">
+        <main className="rooms-main">
           {/* Background Shapes */}
           <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#006e2f]/5 rounded-full blur-3xl pointer-events-none"></div>
           <div className="absolute top-1/2 -left-24 w-64 h-64 bg-[#2f6a3c]/5 rounded-full blur-2xl pointer-events-none"></div>
 
+          <div className="rooms-main-inner">
+
           {/* Header Section */}
-          <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-8 md:mb-10 relative z-10">
-            <div className="w-full md:w-auto">
-              <nav className="mb-2">
-                <span className="text-xs font-semibold uppercase tracking-widest text-[#3d4a3d]/60">Manajemen Properti</span>
+          <header className="rooms-header">
+            <div>
+              <nav>
+                <span className="rooms-eyebrow">Manajemen Properti</span>
               </nav>
-              <h2 className="text-3xl md:text-4xl font-black tracking-tight text-headline text-[#111c2d]">Daftar Kamar</h2>
-              <p className="text-[#3d4a3d] mt-1 text-sm md:text-base">Pantau dan kelola ketersediaan unit di seluruh cabang.</p>
+              <h2 className="rooms-title">Daftar Kamar</h2>
+              <p className="rooms-subtitle">Pantau dan kelola ketersediaan unit di seluruh cabang.</p>
             </div>
-            <button className="inline-flex items-center justify-center gap-2 px-6 py-3 gradient-primary text-white rounded-xl font-bold shadow-lg shadow-[#006e2f]/20 hover:shadow-[#006e2f]/40 transition-all hover:scale-105 active:scale-95 whitespace-nowrap">
+            <button className="rooms-add-button gradient-primary">
               <span className="material-symbols-outlined text-xl">add</span>
               <span className="hidden sm:inline">Tambah Kamar Baru</span>
               <span className="sm:hidden">Tambah</span>
@@ -209,102 +469,102 @@ export default function KosHandayaniPage() {
           </header>
 
           {/* Stats Grid */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10">
-            <div className="bg-white p-6 rounded-xl border border-[#bccbb9]/15 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-4">
-                <span className="material-symbols-outlined text-2xl text-[#006e2f] p-2 bg-[#006e2f]/10 rounded-lg">door_open</span>
-                <span className="text-xs font-bold text-[#006e2f] bg-[#006e2f]/10 px-2 py-1 rounded-full">+4 Bulan Ini</span>
+          <section className="rooms-stats-grid">
+            <div className="rooms-stat-card">
+              <div className="rooms-stat-top">
+                <span className="material-symbols-outlined rooms-stat-icon text-[#006e2f] bg-[#006e2f]/10">door_open</span>
+                <span className="rooms-stat-badge text-[#006e2f] bg-[#006e2f]/10">+4 Bulan Ini</span>
               </div>
-              <p className="text-[#3d4a3d] text-sm font-medium mb-1">Total Unit</p>
-              <h3 className="text-3xl font-black text-headline text-[#111c2d]">128</h3>
+              <p className="rooms-stat-label">Total Unit</p>
+              <h3 className="rooms-stat-value">128</h3>
             </div>
-            <div className="bg-white p-6 rounded-xl border border-[#bccbb9]/15 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-4">
-                <span className="material-symbols-outlined text-2xl text-[#2f6a3c] p-2 bg-[#2f6a3c]/10 rounded-lg">check_circle</span>
-                <span className="text-xs font-bold text-[#2f6a3c] bg-[#2f6a3c]/10 px-2 py-1 rounded-full">92% Okupansi</span>
+            <div className="rooms-stat-card">
+              <div className="rooms-stat-top">
+                <span className="material-symbols-outlined rooms-stat-icon text-[#2f6a3c] bg-[#2f6a3c]/10">check_circle</span>
+                <span className="rooms-stat-badge text-[#2f6a3c] bg-[#2f6a3c]/10">92% Okupansi</span>
               </div>
-              <p className="text-[#3d4a3d] text-sm font-medium mb-1">Terisi</p>
-              <h3 className="text-3xl font-black text-headline text-[#111c2d]">114</h3>
+              <p className="rooms-stat-label">Terisi</p>
+              <h3 className="rooms-stat-value">114</h3>
             </div>
-            <div className="bg-white p-6 rounded-xl border border-[#bccbb9]/15 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-4">
-                <span className="material-symbols-outlined text-2xl text-[#9e4036] p-2 bg-[#9e4036]/10 rounded-lg">error</span>
-                <span className="text-xs font-bold text-[#9e4036] bg-[#9e4036]/10 px-2 py-1 rounded-full">Tersedia</span>
+            <div className="rooms-stat-card">
+              <div className="rooms-stat-top">
+                <span className="material-symbols-outlined rooms-stat-icon text-[#9e4036] bg-[#9e4036]/10">error</span>
+                <span className="rooms-stat-badge text-[#9e4036] bg-[#9e4036]/10">Tersedia</span>
               </div>
-              <p className="text-[#3d4a3d] text-sm font-medium mb-1">Kosong</p>
-              <h3 className="text-3xl font-black text-headline text-[#111c2d]">14</h3>
+              <p className="rooms-stat-label">Kosong</p>
+              <h3 className="rooms-stat-value">14</h3>
             </div>
           </section>
 
           {/* Table Section */}
-          <div className="bg-white rounded-xl border border-[#bccbb9]/15 shadow-sm overflow-hidden">
+          <div className="rooms-table-card">
             {/* Filter Bar */}
-            <div className="px-4 md:px-8 py-4 md:py-6 border-b border-[#bccbb9]/10 flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="rooms-filter">
+              <div className="rooms-tabs">
                 <button
                   onClick={() => setSelectedBranch('all')}
-                  className={`px-4 md:px-5 py-2 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${selectedBranch === 'all' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
+                  className={`rooms-tab ${selectedBranch === 'all' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
                 >
                   Semua
                 </button>
                 <button
                   onClick={() => setSelectedBranch('emerald')}
-                  className={`px-4 md:px-5 py-2 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${selectedBranch === 'emerald' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
+                  className={`rooms-tab ${selectedBranch === 'emerald' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
                 >
                   Cabang 1 (Emerald Heights)
                 </button>
                 <button
                   onClick={() => setSelectedBranch('ruby')}
-                  className={`px-4 md:px-5 py-2 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${selectedBranch === 'ruby' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
+                  className={`rooms-tab ${selectedBranch === 'ruby' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
                 >
                   Cabang 2 (Ruby Residence)
                 </button>
               </div>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#3d4a3d]/60 text-lg">search</span>
+              <div className="rooms-search">
+                <span className="material-symbols-outlined rooms-search-icon">search</span>
                 <input
                   type="text"
                   placeholder="Cari nomor kamar..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-[#f0f3ff] border-none rounded-lg text-sm focus:ring-2 focus:ring-[#006e2f]/20 transition-all outline-none"
+                  className="rooms-search-input"
                 />
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="rooms-table-wrap">
+              <table className="rooms-table">
                 <thead>
-                  <tr className="bg-[#f0f3ff]/50 border-b border-[#bccbb9]/10">
-                    <th className="px-4 md:px-8 py-4 text-xs font-bold text-[#3d4a3d] uppercase tracking-wider">Nama Kamar</th>
-                    <th className="px-4 md:px-8 py-4 text-xs font-bold text-[#3d4a3d] uppercase tracking-wider">Cabang</th>
-                    <th className="px-4 md:px-8 py-4 text-xs font-bold text-[#3d4a3d] uppercase tracking-wider">Harga Bulanan</th>
-                    <th className="px-4 md:px-8 py-4 text-xs font-bold text-[#3d4a3d] uppercase tracking-wider">Status</th>
-                    <th className="px-4 md:px-8 py-4 text-xs font-bold text-[#3d4a3d] uppercase tracking-wider text-right">Aksi</th>
+                  <tr>
+                    <th>Nama Kamar</th>
+                    <th>Cabang</th>
+                    <th>Harga Bulanan</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#bccbb9]/10">
+                <tbody>
                   {rooms.map((room) => (
                     <tr key={room.id} className="hover:bg-[#f0f3ff]/30 transition-colors group">
-                      <td className="px-4 md:px-8 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                      <td>
+                        <div className="rooms-name-cell">
+                          <div className="rooms-room-icon">
                             <span className="material-symbols-outlined text-[#3d4a3d]/40 text-lg">meeting_room</span>
                           </div>
                           <div className="min-w-0">
-                            <p className="font-bold text-[#111c2d] truncate">{room.name}</p>
-                            <p className="text-xs text-[#3d4a3d] truncate">{room.floor}</p>
+                            <p className="rooms-room-name">{room.name}</p>
+                            <p className="rooms-room-floor">{room.floor}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 md:px-8 py-5">
+                      <td>
                         <span className="text-sm font-medium text-[#111c2d]">{room.branch}</span>
                       </td>
-                      <td className="px-4 md:px-8 py-5">
+                      <td>
                         <span className="text-sm font-bold text-[#006e2f]">{room.price}</span>
                       </td>
-                      <td className="px-4 md:px-8 py-5">
+                      <td>
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                           room.statusType === 'occupied' ? 'bg-[#afefb4] text-[#346e40]' :
                           room.statusType === 'empty' ? 'bg-[#ff8b7c] text-[#76231b]' :
@@ -318,7 +578,7 @@ export default function KosHandayaniPage() {
                           {room.status}
                         </span>
                       </td>
-                      <td className="px-4 md:px-8 py-5 text-right">
+                      <td style={{ textAlign: 'right' }}>
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button className="p-2 text-[#006e2f] hover:bg-[#006e2f]/10 rounded-lg transition-colors" title="Edit">
                             <span className="material-symbols-outlined text-lg">edit</span>
@@ -335,7 +595,7 @@ export default function KosHandayaniPage() {
             </div>
 
             {/* Pagination */}
-            <div className="px-4 md:px-8 py-6 bg-[#f0f3ff]/20 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#bccbb9]/10">
+            <div className="rooms-pagination">
               <p className="text-xs text-[#3d4a3d] font-medium">Menampilkan 1-10 dari 128 Kamar</p>
               <div className="flex items-center gap-1">
                 <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
@@ -352,7 +612,7 @@ export default function KosHandayaniPage() {
           </div>
 
           {/* Footer */}
-          <footer className="mt-12 py-8 border-t border-slate-200 flex flex-col items-center gap-4 text-center">
+          <footer className="rooms-footer">
             <p className="text-xs text-slate-500">© 2024 KosHandayani. Digital Concierge Property Management.</p>
             <div className="flex flex-wrap gap-4 md:gap-6 justify-center">
               <a href="#" className="text-slate-400 hover:text-[#006e2f] transition-colors text-xs">Tentang Kami</a>
@@ -360,6 +620,7 @@ export default function KosHandayaniPage() {
               <a href="#" className="text-slate-400 hover:text-[#006e2f] transition-colors text-xs">Kebijakan Privasi</a>
             </div>
           </footer>
+          </div>
         </main>
 
         {/* Mobile FAB */}

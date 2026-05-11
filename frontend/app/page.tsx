@@ -12,6 +12,31 @@ const fallbackRoomImages = [
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAawYG1UBuHaZaPoa-nzL1rziF2Fi5Br9_c0UMRJVtQJNrYsyeu3yAjU1ACcDlsoERgXnQfRXzo4ggqxMm54xz5Uw-es_y4sBy4ZAFVgQ59mMNRNU68Cq4ihEDOsoNBbc4jP7HvEmIY6E_MteV91RmEGDdyozszXHEc7RHIkGBmw04-CgGUF3NqSAS7WXwRx7exEXORTE6GxeOLdJ5V0oyGr7TEe4JC6yW2C-kU3UFy3Ul8MF9rOnWGizcMkl3O5NDyXWuqX15UDyKQ',
 ];
 
+const branchDetails = [
+  {
+    name: 'Cabang 1',
+    area: 'Pusat kota',
+    image: 'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=960&q=80',
+    summary:
+      'Cabang 1 terletak di pusat kota dengan akses mudah ke fasilitas umum dan transportasi. Cocok untuk penyewa yang butuh mobilitas cepat setiap hari.',
+    address: 'Jl. Handayani Raya No. 12, area bisnis dan perkantoran',
+    access: '5 menit ke halte utama, minimarket, ATM, dan pusat kuliner',
+    units: '64 unit aktif',
+    facilities: ['Keamanan 24 jam', 'Kebersihan rutin', 'Parkir motor', 'Dapur bersama'],
+  },
+  {
+    name: 'Cabang 2',
+    area: 'Area kampus',
+    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=960&q=80',
+    summary:
+      'Cabang 2 menawarkan suasana lebih tenang dekat area kampus. Lingkungannya nyaman untuk belajar, bekerja remote, dan istirahat setelah aktivitas harian.',
+    address: 'Jl. Melati Residence No. 8, dekat kawasan pendidikan',
+    access: '7 menit ke kampus, laundry, warung makan, dan transportasi online',
+    units: '48 unit aktif',
+    facilities: ['WiFi cepat', 'Ruang bersama', 'Dapur modern', 'Area jemur'],
+  },
+];
+
 const glassEffectStyle: CSSProperties = {
   backdropFilter: 'blur(24px)',
   WebkitBackdropFilter: 'blur(24px)',
@@ -154,8 +179,8 @@ export default function Page() {
         }
         .room-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 32px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 24px;
           margin-bottom: 64px;
         }
         .feature-grid {
@@ -173,23 +198,36 @@ export default function Page() {
           gap: 40px;
         }
         .branch-card {
-          display: flex;
-          align-items: center;
+          display: grid;
+          grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+          align-items: stretch;
           gap: 32px;
           background-color: #ffffff;
           border-radius: 1.5rem;
           padding: 32px;
           box-shadow: 0 24px 50px rgba(15, 23, 42, 0.08);
+          border: 1px solid rgba(188, 203, 185, 0.18);
+          position: relative;
+          overflow: hidden;
         }
         .branch-card.reverse {
-          flex-direction: row-reverse;
+          grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
         }
         .branch-image {
-          flex: 0 0 380px;
           border-radius: 1.25rem;
           overflow: hidden;
           box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-          min-height: 240px;
+          min-height: 320px;
+          position: relative;
+          background: #e7eeff;
+        }
+        .branch-card.reverse .branch-image {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .branch-card.reverse .branch-content {
+          grid-column: 1;
+          grid-row: 1;
         }
         .branch-image img {
           width: 100%;
@@ -197,16 +235,136 @@ export default function Page() {
           object-fit: cover;
           display: block;
         }
+        .branch-image::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, transparent 45%, rgba(17, 28, 45, 0.38));
+          pointer-events: none;
+        }
+        .branch-image-badge {
+          position: absolute;
+          left: 18px;
+          bottom: 18px;
+          z-index: 1;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 14px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.9);
+          color: #006e2f;
+          font-weight: 800;
+          font-size: 0.85rem;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+        }
+        .branch-content {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          min-width: 0;
+          padding: 8px 0;
+        }
+        .branch-kicker {
+          display: inline-flex;
+          width: fit-content;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: #f0f3ff;
+          color: #006e2f;
+          font-family: 'Inter', sans-serif;
+          font-size: 0.78rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin-bottom: 14px;
+        }
         .branch-content h3 {
-          font-family: 'Manrope, sans-serif';
+          font-family: 'Manrope', sans-serif;
           font-size: clamp(1.5rem, 3vw, 1.875rem);
           font-weight: 800;
-          margin-bottom: 16px;
+          letter-spacing: -0.025em;
+          margin-bottom: 12px;
+          color: #111c2d;
         }
         .branch-content p {
-          font-family: 'Inter, sans-serif';
+          font-family: 'Inter', sans-serif;
           color: #334155;
           line-height: 1.8;
+        }
+        .branch-meta-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          margin-top: 22px;
+        }
+        .branch-meta-card {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          padding: 14px;
+          border-radius: 1rem;
+          background: #f9f9ff;
+          border: 1px solid rgba(188, 203, 185, 0.22);
+        }
+        .branch-meta-card span {
+          color: #006e2f;
+          font-size: 20px;
+          flex-shrink: 0;
+        }
+        .branch-meta-label {
+          margin: 0 0 4px;
+          color: #3d4a3d;
+          font-size: 0.75rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          line-height: 1.3;
+        }
+        .branch-meta-value {
+          margin: 0;
+          color: #111c2d;
+          font-size: 0.9rem;
+          font-weight: 600;
+          line-height: 1.5;
+        }
+        .branch-facility-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 20px;
+        }
+        .branch-facility-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 8px 11px;
+          border-radius: 999px;
+          background: #e7eeff;
+          color: #3d4a3d;
+          font-size: 0.84rem;
+          font-weight: 700;
+        }
+        .branch-facility-chip .material-symbols-outlined {
+          color: #006e2f;
+          font-size: 17px;
+        }
+        .branch-card-action {
+          width: fit-content;
+          margin-top: 24px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          border-radius: 999px;
+          background: #006e2f;
+          color: #ffffff;
+          font-family: 'Inter', sans-serif;
+          font-weight: 800;
+          text-decoration: none;
+          box-shadow: 0 12px 22px rgba(0, 110, 47, 0.18);
         }
         .feature-title {
           font-size: clamp(1.8rem, 4vw, 2.25rem) !important;
@@ -218,15 +376,26 @@ export default function Page() {
           justify-content: center;
         }
         @media (max-width: 900px) {
+          .room-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
           .feature-grid {
             grid-template-columns: 1fr;
             gap: 48px;
           }
           .branch-card {
-            flex-direction: column;
+            grid-template-columns: 1fr;
           }
           .branch-card.reverse {
-            flex-direction: column;
+            grid-template-columns: 1fr;
+          }
+          .branch-card.reverse .branch-image,
+          .branch-card.reverse .branch-content {
+            grid-column: auto;
+            grid-row: auto;
+          }
+          .branch-image {
+            min-height: 260px;
           }
         }
         @media (max-width: 640px) {
@@ -276,8 +445,8 @@ export default function Page() {
             display: none !important;
           }
           .room-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
+            grid-template-columns: 1fr;
+            gap: 16px;
             margin-bottom: 40px;
           }
           .feature-section {
@@ -306,6 +475,18 @@ export default function Page() {
           }
           .footer-links {
             gap: 14px 20px;
+          }
+          .branch-card {
+            padding: 18px;
+            gap: 20px;
+            border-radius: 1rem;
+          }
+          .branch-meta-grid {
+            grid-template-columns: 1fr;
+          }
+          .branch-card-action {
+            width: 100%;
+            justify-content: center;
           }
         }
       `}</style>
@@ -550,7 +731,7 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="content-shell" style={{ paddingTop: '64px', paddingBottom: '64px' }}>
+        <section id="kamar-tersedia" className="content-shell" style={{ paddingTop: '64px', paddingBottom: '64px' }}>
           <div className="section-heading-row">
             <div>
               <h2
@@ -688,37 +869,56 @@ export default function Page() {
           </div>
 
           <div className="branch-grid">
-            <div className="branch-card">
-              <div className="branch-image">
-                <img
-                  src="https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=960&q=80"
-                  alt="Cabang 1"
-                />
-              </div>
-              <div className="branch-content">
-                <h3>Cabang 1</h3>
-                <p>
-                  Cabang 1 terletak di pusat kota dengan akses mudah ke fasilitas umum dan transportasi.
-                  Nikmati kamar modern, keamanan 24 jam, dan layanan kebersihan harian.
-                </p>
-              </div>
-            </div>
+            {branchDetails.map((branch, index) => (
+              <div key={branch.name} className={`branch-card ${index % 2 === 1 ? 'reverse' : ''}`}>
+                <div className="branch-image">
+                  <img src={branch.image} alt={branch.name} />
+                  <div className="branch-image-badge">
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>apartment</span>
+                    {branch.units}
+                  </div>
+                </div>
+                <div className="branch-content">
+                  <span className="branch-kicker">
+                    <span className="material-symbols-outlined" style={{ fontSize: 17 }}>location_on</span>
+                    {branch.area}
+                  </span>
+                  <h3>{branch.name}</h3>
+                  <p>{branch.summary}</p>
 
-            <div className="branch-card reverse">
-              <div className="branch-image">
-                <img
-                  src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=960&q=80"
-                  alt="Cabang 2"
-                />
+                  <div className="branch-meta-grid">
+                    <div className="branch-meta-card">
+                      <span className="material-symbols-outlined">map</span>
+                      <div>
+                        <p className="branch-meta-label">Alamat</p>
+                        <p className="branch-meta-value">{branch.address}</p>
+                      </div>
+                    </div>
+                    <div className="branch-meta-card">
+                      <span className="material-symbols-outlined">directions_bus</span>
+                      <div>
+                        <p className="branch-meta-label">Akses</p>
+                        <p className="branch-meta-value">{branch.access}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="branch-facility-list">
+                    {branch.facilities.map((facility) => (
+                      <span key={facility} className="branch-facility-chip">
+                        <span className="material-symbols-outlined">check_circle</span>
+                        {facility}
+                      </span>
+                    ))}
+                  </div>
+
+                  <a className="branch-card-action" href="#kamar-tersedia">
+                    Lihat kamar cabang ini
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
+                  </a>
+                </div>
               </div>
-              <div className="branch-content">
-                <h3>Cabang 2</h3>
-                <p>
-                  Cabang 2 menawarkan suasana tenang dekat area kampus dengan fasilitas lengkap untuk mahasiswa.
-                  Dilengkapi ruang bersama, dapur modern, dan koneksi internet cepat.
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 

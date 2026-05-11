@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   authService,
   getAuthErrorMessage,
@@ -27,7 +27,6 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -113,11 +112,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await authService.logout();
       setUser(null);
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      router.replace('/');
     } finally {
       setIsLoading(false);
     }
-  }, [pathname, router]);
+  }, [router]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
