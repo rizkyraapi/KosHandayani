@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import { useParams, useRouter } from 'next/navigation';
+import { getProfile } from '@/lib/api';
 export default function Page() {
-      useEffect(() => {
+  const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const [isCheckingProfile, setIsCheckingProfile] = useState(false);
+  const [profileWarning, setProfileWarning] = useState('');
+
+  useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
       @tailwind base;
@@ -38,6 +45,26 @@ export default function Page() {
     `;
     document.head.appendChild(style);
   }, []);
+
+  const handleApplyClick = async () => {
+    try {
+      setIsCheckingProfile(true);
+      setProfileWarning('');
+      const profile = await getProfile();
+
+      if (!profile.profile_completed) {
+        router.push('/tenant/profil');
+        return;
+      }
+
+      router.push(`/room/${params.id}/apply`);
+    } catch {
+      router.push('/login');
+    } finally {
+      setIsCheckingProfile(false);
+    }
+  };
+
   return (
     <div className="bg-surface font-body text-on-surface antialiased">
       {/* Top Navigation Bar */}
@@ -218,9 +245,19 @@ export default function Page() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <button className="w-full primary-gradient text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                  {profileWarning && (
+                    <p className="text-sm font-semibold text-error bg-error-container rounded-lg p-3">
+                      {profileWarning}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleApplyClick}
+                    disabled={isCheckingProfile}
+                    className="w-full primary-gradient text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  >
                     <span className="material-symbols-outlined">flash_on</span>
-                    Ajukan Sewa
+                    {isCheckingProfile ? 'Memeriksa Profil...' : 'Ajukan Sewa'}
                   </button>
                   <button className="w-full bg-white border-2 border-primary text-primary py-4 rounded-xl font-bold text-lg hover:bg-primary-container/10 transition-all flex items-center justify-center gap-2">
                     <span className="material-symbols-outlined">chat</span>

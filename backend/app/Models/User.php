@@ -28,6 +28,7 @@ class User extends Authenticatable
         'job',
         'address',
         'profile_completed',
+        'profile_photo',
     ];
 
     /**
@@ -50,6 +51,35 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'profile_completed' => 'boolean',
+        ];
+    }
+
+    public function isProfileComplete(): bool
+    {
+        return filled($this->phone)
+            && filled($this->job)
+            && filled($this->address);
+    }
+
+    public function toProfileArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'full_name' => $this->name,
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => $this->role,
+            'whatsapp' => $this->phone,
+            'phone' => $this->phone,
+            'pekerjaan' => $this->job,
+            'job' => $this->job,
+            'address' => $this->address,
+            'profile_completed' => $this->isProfileComplete(),
+            'profile_photo' => $this->profile_photo,
+            'profile_photo_url' => $this->profile_photo
+                ? url('storage/'.$this->profile_photo)
+                : null,
         ];
     }
 }

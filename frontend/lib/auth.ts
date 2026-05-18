@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import {
+  AUTH_REMEMBER_COOKIE,
   AUTH_ROLE_COOKIE,
   getRoleDashboardPath,
   isUserRole,
@@ -16,11 +17,15 @@ export type AuthUser = {
   whatsapp?: string | null;
   pekerjaan?: string | null;
   address?: string | null;
+  profile_completed: boolean;
+  profile_photo?: string | null;
+  profile_photo_url?: string | null;
 };
 
 export type LoginCredentials = {
   email: string;
   password: string;
+  remember?: boolean;
 };
 
 export type RegisterPayload = {
@@ -44,6 +49,9 @@ type ApiUser = {
   pekerjaan?: string | null;
   job?: string | null;
   address?: string | null;
+  profile_completed?: boolean | null;
+  profile_photo?: string | null;
+  profile_photo_url?: string | null;
 };
 
 type AuthResponse = {
@@ -77,6 +85,9 @@ function normalizeUser(user?: ApiUser): AuthUser {
     whatsapp: user.whatsapp ?? user.phone ?? null,
     pekerjaan: user.pekerjaan ?? user.job ?? null,
     address: user.address ?? null,
+    profile_completed: Boolean(user.profile_completed),
+    profile_photo: user.profile_photo ?? null,
+    profile_photo_url: user.profile_photo_url ?? null,
   };
 }
 
@@ -84,15 +95,27 @@ function getAuthUser(response: AuthResponse) {
   return response.user ?? response.data?.user;
 }
 
-function persistSession(user: AuthUser) {
-  Cookies.set(AUTH_ROLE_COOKIE, user.role, {
-    expires: 7,
+function persistSession(user: AuthUser, remember = false) {
+  const options: Cookies.CookieAttributes = {
     sameSite: 'lax',
-  });
+  };
+
+  if (remember) {
+    options.expires = 30;
+    Cookies.set(AUTH_REMEMBER_COOKIE, '1', {
+      expires: 30,
+      sameSite: 'lax',
+    });
+  } else {
+    Cookies.remove(AUTH_REMEMBER_COOKIE);
+  }
+
+  Cookies.set(AUTH_ROLE_COOKIE, user.role, options);
 }
 
 function clearSessionCookies() {
   Cookies.remove(AUTH_ROLE_COOKIE);
+  Cookies.remove(AUTH_REMEMBER_COOKIE);
 }
 
 async function ensureCsrfCookie() {
@@ -132,7 +155,7 @@ export const authService = {
     const { data } = await apiClient.post<AuthResponse>('/login', credentials);
     const user = normalizeUser(getAuthUser(data));
 
-    persistSession(user);
+    persistSession(user, Boolean(credentials.remember));
 
     return user;
   },

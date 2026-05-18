@@ -2,34 +2,42 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Http\Requests\UpdateProfileRequest;
+use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
-    public function update(Request $request)
+    public function show()
     {
-        $request->validate([
-            'phone' => 'required',
-            'job' => 'required',
-            'address' => 'required',
+        return response()->json([
+            'data' => request()->user()->toProfileArray(),
         ]);
+    }
 
+    public function update(UpdateProfileRequest $request)
+    {
         $user = $request->user();
-
-        $user->update([
-            'phone' => $request->phone,
-            'job' => $request->job,
-            'address' => $request->address,
-
-            // profile sudah lengkap
+        $data = [
+            'name' => $request->validated('full_name'),
+            'phone' => $request->validated('whatsapp'),
+            'job' => $request->validated('pekerjaan'),
+            'address' => $request->validated('address'),
             'profile_completed' => true,
-        ]);
+        ];
+
+        if ($request->hasFile('profile_photo')) {
+            if ($user->profile_photo) {
+                Storage::disk('public')->delete($user->profile_photo);
+            }
+
+            $data['profile_photo'] = $request->file('profile_photo')->store('profile_photos', 'public');
+        }
+
+        $user->update($data);
 
         return response()->json([
-            'success' => true,
             'message' => 'Profile berhasil diperbarui',
-            'user' => $user
+            'data' => $user->fresh()->toProfileArray(),
         ]);
     }
 }

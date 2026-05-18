@@ -147,6 +147,7 @@ export default function Page() {
   const [form, setForm] = useState({
     email: '',
     password: '',
+    remember: false,
   });
   const [localError, setLocalError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -365,6 +366,34 @@ export default function Page() {
                     />
                   </div>
                 </div>
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    width: 'fit-content',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    color: colors.onSurfaceVariant,
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.remember}
+                    disabled={isSubmitting}
+                    onChange={(e) => setForm((current) => ({ ...current, remember: e.target.checked }))}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      accentColor: colors.primary,
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    }}
+                  />
+                  Ingat saya
+                </label>
 
                 {(errorMessage || registered) && (
                   <p

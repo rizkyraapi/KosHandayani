@@ -1,5 +1,8 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { getProfile, updateProfile, type ProfilePayload } from '@/lib/api';
+import { getAuthErrorMessage } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Inject Google Fonts and Material Symbols into <head>
 function useGlobalStyles() {
@@ -34,15 +37,16 @@ function useGlobalStyles() {
           --color-on-primary-fixed-variant: #005321;
           --color-secondary: #2f6a3c;
           --color-on-secondary: #ffffff;
-          --color-secondary-container: #afefb4;
-          --color-on-secondary-container: #346e40;
-          --color-secondary-fixed: #b2f2b7;
-          --color-secondary-fixed-dim: #96d59d;
-          --color-on-secondary-fixed: #002109;
-          --color-on-secondary-fixed-variant: #145126;
-          --color-tertiary: #9e4036;
-          --color-on-tertiary: #ffffff;
-          --color-tertiary-container: #ff8b7c;
+              {
+                [
+                  { label: 'Bergabung Sejak', value: 'Jan 2023' },
+                ].map((row) => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+                    <div style={{ color: '#64748b' }}>{row.label}</div>
+                    <div style={{ fontWeight: 700 }}>{row.value}</div>
+                  </div>
+                ))
+              }
           --color-on-tertiary-container: #76231b;
           --color-tertiary-fixed: #ffdad5;
           --color-tertiary-fixed-dim: #ffb4a9;
@@ -279,7 +283,23 @@ function SideNav() {
   );
 }
 
-function ProfileIdentityCard() {
+function ProfileIdentityCard({
+  fullName,
+  email,
+  isComplete,
+  photoUrl,
+  isDisabled,
+  onPhotoChange,
+}: {
+  fullName: string;
+  email: string;
+  isComplete: boolean;
+  photoUrl: string;
+  isDisabled: boolean;
+  onPhotoChange: (file: File) => void;
+}) {
+  const defaultPhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'Tenant')}&background=006e2f&color=ffffff&size=256&bold=true`;
+
   return (
     <div
       className="surface-shift-shadow"
@@ -308,7 +328,7 @@ function ProfileIdentityCard() {
         {/* Avatar */}
         <div style={{ display: 'inline-block', position: 'relative', marginBottom: '1rem' }}>
           <img
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0lfYZlq_0inQ9MQ_Y3foKOoO_r8bRgzE3BHVuhupx6Rl4Bh3krLnZNjKeSjc913T-ewcgmtm19qFVngvs76U3ASbhZrJG6bPFpPouXBnLjRkO-Cc5_r6vpzFmRBVRNBDdxKQFDAbM0HHa7lSv51Ga8-WQ0NJO9cUkuzVV48YKzLuNzAik4uWr-KXLQLPl6X4ChvKtvDvQhaE2up0vLLCV6_hfvV6ySJuDHJ2vpCa-tOIJiwdFwF0_vgCodsE8zVTAFWDH6xmBk4WU"
+            src={photoUrl || defaultPhotoUrl}
             alt="Profile photo"
             style={{
               width: '8rem',
@@ -319,7 +339,7 @@ function ProfileIdentityCard() {
               boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
             }}
           />
-          <button
+          <label
             style={{
               position: 'absolute',
               bottom: 0,
@@ -330,21 +350,34 @@ function ProfileIdentityCard() {
               boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
               color: C.primary,
               border: '1px solid #f1f5f9',
-              cursor: 'pointer',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
               lineHeight: 1,
             }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: '1.125rem' }}>
               photo_camera
             </span>
-          </button>
+            <input
+              type="file"
+              accept="image/jpeg,image/jpg,image/png"
+              disabled={isDisabled}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+
+                if (file) {
+                  onPhotoChange(file);
+                }
+              }}
+              style={{ display: 'none' }}
+            />
+          </label>
         </div>
 
         <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: C.onBackground, marginBottom: '0.25rem' }}>
-          Handayani Pratama
+          {fullName || 'Tenant'}
         </h2>
         <p style={{ color: C.onSurfaceVariant, fontSize: '0.875rem', fontWeight: 500, marginBottom: '1rem' }}>
-          Super Admin / Tenant
+          {email || 'Tenant'}
         </p>
 
         <div
@@ -363,7 +396,7 @@ function ProfileIdentityCard() {
           }}
         >
           <span style={{ width: '0.375rem', height: '0.375rem', background: C.primary, borderRadius: '9999px', display: 'inline-block' }} />
-          Terverifikasi
+          {isComplete ? 'Profil Lengkap' : 'Belum Lengkap'}
         </div>
       </div>
 
@@ -395,7 +428,6 @@ function ProfileIdentityCard() {
 function SecurityCard() {
   const actions = [
     { icon: 'lock', label: 'Ganti Kata Sandi' },
-    { icon: 'phonelink_setup', label: 'Autentikasi 2-Faktor' },
   ];
 
   return (
@@ -462,9 +494,37 @@ function SecurityCard() {
   );
 }
 
-function PersonalInfoForm() {
+function PersonalInfoForm({
+  form,
+  isEditing,
+  isFetching,
+  isSaving,
+  error,
+  success,
+  onChange,
+  onEdit,
+  onSubmit,
+  onReset,
+}: {
+  form: ProfilePayload & { email: string };
+  isEditing: boolean;
+  isFetching: boolean;
+  isSaving: boolean;
+  error: string;
+  success: string;
+  onChange: (field: keyof ProfilePayload, value: string) => void;
+  onEdit: () => void;
+  onSubmit: () => void;
+  onReset: () => void;
+}) {
+  const isDisabled = isFetching || isSaving || !isEditing;
+
   return (
-    <div
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
       className="surface-shift-shadow"
       style={{
         background: C.surfaceContainerLowest,
@@ -497,6 +557,38 @@ function PersonalInfoForm() {
         </div>
       </div>
 
+      {error && (
+        <div
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1rem',
+            borderRadius: '0.75rem',
+            background: C.errorContainer,
+            color: C.error,
+            fontSize: '0.875rem',
+            fontWeight: 700,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1rem',
+            borderRadius: '0.75rem',
+            background: 'rgba(175,239,180,0.35)',
+            color: C.onSecondaryContainer,
+            fontSize: '0.875rem',
+            fontWeight: 700,
+          }}
+        >
+          {success}
+        </div>
+      )}
+
       {/* Form grid */}
       <div
         style={{
@@ -505,15 +597,36 @@ function PersonalInfoForm() {
           gap: '1.5rem 2rem',
         }}
       >
-        <FormField label="Nama Lengkap" type="text" defaultValue="Handayani Pratama" />
-        <FormField label="Email" type="email" defaultValue="handayani@example.com" icon="mail" />
-        <FormField label="Nomor WhatsApp" type="text" defaultValue="+62 812-3456-7890" icon="call" />
-        <FormField label="Pekerjaan" type="text" defaultValue="Software Engineer" />
+        <FormField
+          label="Nama Lengkap"
+          type="text"
+          value={form.full_name}
+          disabled={isDisabled}
+          onChange={(value) => onChange('full_name', value)}
+        />
+        <FormField label="Email" type="email" value={form.email} icon="mail" disabled />
+        <FormField
+          label="Nomor WhatsApp"
+          type="text"
+          value={form.whatsapp}
+          icon="call"
+          disabled={isDisabled}
+          onChange={(value) => onChange('whatsapp', value)}
+        />
+        <FormField
+          label="Pekerjaan"
+          type="text"
+          value={form.pekerjaan}
+          disabled={isDisabled}
+          onChange={(value) => onChange('pekerjaan', value)}
+        />
         <FormFieldTextarea
           label="Alamat Asal"
-          defaultValue="Jl. Melati No. 45, Kebon Jeruk, Jakarta Barat"
+          value={form.address}
           icon="location_on"
+          disabled={isDisabled}
           fullWidth
+          onChange={(value) => onChange('address', value)}
         />
       </div>
 
@@ -553,6 +666,7 @@ function PersonalInfoForm() {
         }}
       >
         <button
+          type="button"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -567,6 +681,8 @@ function PersonalInfoForm() {
             borderRadius: '0.5rem',
             transition: 'background 0.15s',
           }}
+          onClick={onReset}
+          disabled={isFetching || isSaving}
           onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(186,26,26,0.08)')}
           onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')}
         >
@@ -576,23 +692,60 @@ function PersonalInfoForm() {
           Logout dari Semua Sesi
         </button>
 
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        {isEditing ? (
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button
+              type="button"
+              style={{
+                padding: '0.75rem 1.5rem',
+                borderRadius: '0.75rem',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                color: '#64748b',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'color 0.15s',
+              }}
+              onClick={onReset}
+              disabled={isFetching || isSaving}
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={isFetching || isSaving}
+              style={{
+                padding: '0.75rem 2rem',
+                borderRadius: '0.75rem',
+                background: C.primary,
+                color: C.onPrimary,
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                border: 'none',
+                cursor: isFetching || isSaving ? 'not-allowed' : 'pointer',
+                boxShadow: '0 10px 15px -3px rgba(0,110,47,0.2)',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 20px 25px -5px rgba(0,110,47,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 10px 15px -3px rgba(0,110,47,0.2)';
+              }}
+              onMouseDown={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)')}
+              onMouseUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)')}
+            >
+              {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
+        ) : (
           <button
-            style={{
-              padding: '0.75rem 1.5rem',
-              borderRadius: '0.75rem',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              color: '#64748b',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'color 0.15s',
-            }}
-          >
-            Batal
-          </button>
-          <button
+            type="button"
+            onClick={onEdit}
+            disabled={isFetching || isSaving}
             style={{
               padding: '0.75rem 2rem',
               borderRadius: '0.75rem',
@@ -601,37 +754,29 @@ function PersonalInfoForm() {
               fontWeight: 700,
               fontSize: '0.875rem',
               border: 'none',
-              cursor: 'pointer',
+              cursor: isFetching || isSaving ? 'not-allowed' : 'pointer',
               boxShadow: '0 10px 15px -3px rgba(0,110,47,0.2)',
               transition: 'all 0.15s',
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
-              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 20px 25px -5px rgba(0,110,47,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 10px 15px -3px rgba(0,110,47,0.2)';
-            }}
-            onMouseDown={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)')}
-            onMouseUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)')}
           >
-            Simpan Perubahan
+            Edit Profil
           </button>
-        </div>
+        )}
       </div>
-    </div>
+    </form>
   );
 }
 
 interface FormFieldProps {
   label: string;
   type: string;
-  defaultValue: string;
+  value: string;
   icon?: string;
+  disabled?: boolean;
+  onChange?: (value: string) => void;
 }
 
-function FormField({ label, type, defaultValue, icon }: FormFieldProps) {
+function FormField({ label, type, value, icon, disabled = false, onChange }: FormFieldProps) {
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: icon ? '0.75rem 1rem 0.75rem 2.75rem' : '0.75rem 1rem',
@@ -668,7 +813,9 @@ function FormField({ label, type, defaultValue, icon }: FormFieldProps) {
         )}
         <input
           type={type}
-          defaultValue={defaultValue}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange?.(event.target.value)}
           style={inputStyle}
           onFocus={(e) => {
             (e.target as HTMLInputElement).style.background = C.surfaceContainerLowest;
@@ -686,12 +833,14 @@ function FormField({ label, type, defaultValue, icon }: FormFieldProps) {
 
 interface FormFieldTextareaProps {
   label: string;
-  defaultValue: string;
+  value: string;
   icon?: string;
   fullWidth?: boolean;
+  disabled?: boolean;
+  onChange?: (value: string) => void;
 }
 
-function FormFieldTextarea({ label, defaultValue, icon }: FormFieldTextareaProps) {
+function FormFieldTextarea({ label, value, icon, disabled = false, onChange }: FormFieldTextareaProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', gridColumn: '1 / -1' }}>
       <label style={{ fontSize: '0.875rem', fontWeight: 700, color: C.onSurfaceVariant }}>{label}</label>
@@ -711,7 +860,9 @@ function FormFieldTextarea({ label, defaultValue, icon }: FormFieldTextareaProps
           </span>
         )}
         <textarea
-          defaultValue={defaultValue}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange?.(event.target.value)}
           rows={3}
           style={{
             width: '100%',
@@ -815,6 +966,109 @@ function SecondaryCard({
 
 export default function Page() {
   useGlobalStyles();
+  const { refreshUser } = useAuth();
+  const [form, setForm] = useState<ProfilePayload & { email: string }>({
+    full_name: '',
+    email: '',
+    whatsapp: '',
+    pekerjaan: '',
+    address: '',
+  });
+  const [isFetching, setIsFetching] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const isComplete = Boolean(form.whatsapp && form.pekerjaan && form.address);
+
+  const loadProfile = async () => {
+    try {
+      setError('');
+      setIsFetching(true);
+      const profile = await getProfile();
+      setForm({
+        full_name: profile.full_name || '',
+        email: profile.email || '',
+        whatsapp: profile.whatsapp || '',
+        pekerjaan: profile.pekerjaan || '',
+        address: profile.address || '',
+      });
+      setSelectedPhoto(null);
+      setPhotoPreviewUrl(profile.profile_photo_url || '');
+    } catch (profileError) {
+      setError(getAuthErrorMessage(profileError, 'Gagal mengambil data profil.'));
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  useEffect(() => {
+    Promise.resolve().then(loadProfile);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [photoPreviewUrl]);
+
+  const handlePhotoChange = (file: File) => {
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setError('Foto profil harus berformat JPG, JPEG, atau PNG.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Ukuran foto profil maksimal 2MB.');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setSelectedPhoto(file);
+    setPhotoPreviewUrl((previousUrl) => {
+      if (previousUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previousUrl);
+      }
+
+      return URL.createObjectURL(file);
+    });
+  };
+
+  const saveProfile = async () => {
+    try {
+      setError('');
+      setSuccess('');
+      setIsSaving(true);
+      const profile = await updateProfile({
+        full_name: form.full_name,
+        whatsapp: form.whatsapp,
+        pekerjaan: form.pekerjaan,
+        address: form.address,
+        profile_photo: selectedPhoto,
+      });
+      setForm({
+        full_name: profile.full_name || '',
+        email: profile.email || '',
+        whatsapp: profile.whatsapp || '',
+        pekerjaan: profile.pekerjaan || '',
+        address: profile.address || '',
+      });
+      setSelectedPhoto(null);
+      setPhotoPreviewUrl(profile.profile_photo_url || '');
+      setIsEditing(false);
+      setSuccess('Profil berhasil diperbarui.');
+      await refreshUser();
+    } catch (profileError) {
+      setError(getAuthErrorMessage(profileError, 'Gagal memperbarui profil.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div style={{ background: C.background, color: C.onBackground, minHeight: '100vh' }}>
@@ -867,51 +1121,6 @@ export default function Page() {
             </h1>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button
-              style={{
-                padding: '0.625rem 1.25rem',
-                borderRadius: '0.75rem',
-                border: `1px solid rgba(188,203,185,0.3)`,
-                color: C.onSurfaceVariant,
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                background: 'transparent',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = C.surfaceContainerLow)}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '1.125rem' }}>
-                edit
-              </span>
-              Edit Profil
-            </button>
-            <button
-              style={{
-                padding: '0.625rem 1.25rem',
-                borderRadius: '0.75rem',
-                background: `linear-gradient(to right, ${C.primary}, ${C.primaryContainer})`,
-                color: C.onPrimary,
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: '0 10px 15px -3px rgba(0,110,47,0.2)',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.02)')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)')}
-              onMouseDown={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)')}
-              onMouseUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.02)')}
-            >
-              Simpan Perubahan
-            </button>
-          </div>
         </header>
 
         {/* Bento grid – top row */}
@@ -932,13 +1141,34 @@ export default function Page() {
             }}
             className="lg-col-4"
           >
-            <ProfileIdentityCard />
+            <ProfileIdentityCard
+              fullName={form.full_name}
+              email={form.email}
+              isComplete={isComplete}
+              photoUrl={photoPreviewUrl}
+              isDisabled={isFetching || isSaving || !isEditing}
+              onPhotoChange={handlePhotoChange}
+            />
             <SecurityCard />
           </div>
 
           {/* Right column: personal info form */}
           <div style={{ gridColumn: 'span 12' }} className="lg-col-8">
-            <PersonalInfoForm />
+            <PersonalInfoForm
+              form={form}
+              isEditing={isEditing}
+              isFetching={isFetching}
+              isSaving={isSaving}
+              error={error}
+              success={success}
+              onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))}
+              onEdit={() => setIsEditing(true)}
+              onSubmit={saveProfile}
+              onReset={() => {
+                setIsEditing(false);
+                void loadProfile();
+              }}
+            />
           </div>
         </div>
 

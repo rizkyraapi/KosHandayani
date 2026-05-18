@@ -192,11 +192,11 @@ body { font-family: 'Inter', sans-serif; }
    Static data
 ───────────────────────────────────────────── */
 const NAV_ITEMS = [
-  { icon: 'home',           label: 'Dashboard',   active: true  },
-  { icon: 'door_front',     label: 'Kamar Saya',  active: false },
-  { icon: 'request_quote',  label: 'Tagihan',     active: false },
-  { icon: 'history',        label: 'Riwayat',     active: false },
-  { icon: 'account_circle', label: 'Profil',      active: false },
+  { icon: 'home',           label: 'Dashboard',   href: '/tenant/dashboard', active: true  },
+  { icon: 'door_front',     label: 'Kamar Saya',  href: '/rooms', active: false },
+  { icon: 'request_quote',  label: 'Tagihan',     href: '/tenant/tagihan', active: false },
+  { icon: 'history',        label: 'Riwayat',     href: '/tenant/riwayat', active: false },
+  { icon: 'account_circle', label: 'Profil',      href: '/tenant/profil', active: false },
 ];
 
 const HOUSE_RULES = [
@@ -265,6 +265,7 @@ export default function Page() {
   const { user, logout, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const displayName = user?.full_name || 'Tenant';
+  const isProfileComplete = Boolean(user?.profile_completed);
 
   useEffect(() => {
     if (document.getElementById('kos-styles')) return;
@@ -306,7 +307,7 @@ export default function Page() {
             item.active ? (
               <a
                 key={item.label}
-                href="#"
+                href={item.href}
                 className="bg-green-50 text-green-700 rounded-lg flex items-center gap-3 px-4 py-3 font-semibold"
                 style={{ transform: 'scale(0.95)' }}
               >
@@ -321,7 +322,7 @@ export default function Page() {
             ) : (
               <a
                 key={item.label}
-                href="#"
+                href={item.href}
                 className="text-slate-500 hover:bg-slate-200 flex items-center gap-3 px-4 py-3 rounded-lg transition-all"
                 style={{ transform: 'scale(0.95)' }}
               >
@@ -389,6 +390,26 @@ export default function Page() {
             </button>
           </div>
         </header>
+
+        {!isLoading && !isProfileComplete && (
+          <div className="mb-8 bg-error-container border border-error-10 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-error">warning</span>
+              <div>
+                <h3 className="font-bold text-on-error-container">Lengkapi profil untuk mengajukan sewa</h3>
+                <p className="text-sm text-on-error-container mt-1">
+                  Nomor WhatsApp, pekerjaan, dan alamat asal wajib diisi sebelum mengirim pengajuan.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/tenant/profil"
+              className="bg-white text-error px-4 py-2 rounded-xl text-sm font-bold text-center border border-error-10"
+            >
+              Lengkapi Profil
+            </a>
+          </div>
+        )}
 
         {/* House Rules */}
         <div className="mb-10 bg-surface-container-low-50 border border-outline-variant-30 rounded-2xl p-4">

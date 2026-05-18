@@ -12,7 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\ApplyRememberedSessionLifetime::class);
         $middleware->statefulApi();
+        $middleware->alias([
+            'check.profile.complete' => \App\Http\Middleware\EnsureProfileIsComplete::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

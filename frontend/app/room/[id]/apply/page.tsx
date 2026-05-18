@@ -1,6 +1,9 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Navbar from '../../../../components/Navbar';
+import { createRentalApplication, getProfile } from '@/lib/api';
+import { getAuthErrorMessage } from '@/lib/auth';
 
 const GOOGLE_FONTS_URL =
   'https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap';
@@ -244,11 +247,17 @@ function InputField({
   type = 'text',
   placeholder,
   children,
+  value,
+  disabled = false,
+  onChange,
 }: {
   label: React.ReactNode;
   type?: string;
   placeholder?: string;
   children?: React.ReactNode;
+  value?: string;
+  disabled?: boolean;
+  onChange?: (value: string) => void;
 }) {
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -280,6 +289,9 @@ function InputField({
         <input
           type={type}
           placeholder={placeholder}
+          value={value}
+          disabled={disabled}
+          onChange={e => onChange?.(e.currentTarget.value)}
           style={inputStyle}
           onFocus={e => {
             e.currentTarget.style.boxShadow = `0 0 0 2px ${css('primary')}`;
@@ -302,11 +314,17 @@ function SelectField({
   options,
   note,
   labelSuffix,
+  value,
+  disabled = false,
+  onChange,
 }: {
   label: string;
   options: string[];
   note?: string;
   labelSuffix?: React.ReactNode;
+  value?: string;
+  disabled?: boolean;
+  onChange?: (value: string) => void;
 }) {
   const selectStyle: React.CSSProperties = {
     width: '100%',
@@ -340,6 +358,9 @@ function SelectField({
       </label>
       <select
         style={selectStyle}
+        value={value}
+        disabled={disabled}
+        onChange={e => onChange?.(e.currentTarget.value)}
         onFocus={e => {
           e.currentTarget.style.boxShadow = `0 0 0 2px ${css('primary')}`;
           e.currentTarget.style.backgroundColor = css('surface-container-lowest');
@@ -436,6 +457,73 @@ function UploadBox({ label, icon }: { label: string; icon: string }) {
 // ─── Main Form ────────────────────────────────────────────────────────────────
 
 function RentalForm() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [form, setForm] = useState({
+    full_name: '',
+    whatsapp: '',
+    email: '',
+    pekerjaan: 'Mahasiswa',
+    duration: '1 Bulan',
+  });
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setError('');
+        setIsLoadingProfile(true);
+        const profile = await getProfile();
+
+        if (!profile.profile_completed) {
+          router.replace('/tenant/profil');
+          return;
+        }
+
+        setForm(current => ({
+          ...current,
+          full_name: profile.full_name || '',
+          whatsapp: profile.whatsapp || '',
+          email: profile.email || '',
+          pekerjaan: profile.pekerjaan || current.pekerjaan,
+        }));
+      } catch {
+        router.replace('/login');
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    void loadProfile();
+  }, [router]);
+
+  const submitApplication = async () => {
+    try {
+      setError('');
+      setSuccess('');
+      setIsSubmitting(true);
+      await createRentalApplication({
+        room_id: Number(params.id),
+        duration: form.duration,
+      });
+      setSuccess('Pengajuan sewa berhasil dikirim.');
+    } catch (submitError) {
+      const message = getAuthErrorMessage(submitError, 'Gagal mengirim pengajuan sewa.');
+
+      if (message === 'Lengkapi profil terlebih dahulu') {
+        router.replace('/tenant/profil');
+        return;
+      }
+
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const sectionTitleStyle: React.CSSProperties = {
     fontFamily: 'Manrope, sans-serif',
     fontWeight: 700,
@@ -474,7 +562,25 @@ function RentalForm() {
         Lengkapi data diri Anda untuk memulai perjalanan hunian yang nyaman di KosHandayani.
       </p>
 
-      <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+      {error && (
+        <p style={{ backgroundColor: css('error-container'), color: css('error'), padding: '1rem', borderRadius: '0.75rem', fontWeight: 700, marginBottom: '1.5rem' }}>
+          {error}
+        </p>
+      )}
+
+      {success && (
+        <p style={{ backgroundColor: `${css('secondary-container')}66`, color: css('on-secondary-container'), padding: '1rem', borderRadius: '0.75rem', fontWeight: 700, marginBottom: '1.5rem' }}>
+          {success}
+        </p>
+      )}
+
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          void submitApplication();
+        }}
+        style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}
+      >
         {/* Personal Info */}
         <section>
           <h3 style={sectionTitleStyle}>
@@ -488,16 +594,41 @@ function RentalForm() {
               gap: '1.5rem',
             }}
           >
-            <InputField label="Nama Lengkap (Sesuai KTP)" placeholder="Contoh: Budi Santoso" />
-            <InputField label="Nomor WhatsApp" type="tel" placeholder="0812xxxxxx" />
-            <InputField label="Email Aktif" type="email" placeholder="email@domain.com" />
+            <InputField
+              label="Nama Lengkap (Sesuai KTP)"
+              placeholder="Contoh: Budi Santoso"
+              value={form.full_name}
+              disabled={isLoadingProfile || isSubmitting}
+              onChange={(value) => setForm(current => ({ ...current, full_name: value }))}
+            />
+            <InputField
+              label="Nomor WhatsApp"
+              type="tel"
+              placeholder="0812xxxxxx"
+              value={form.whatsapp}
+              disabled={isLoadingProfile || isSubmitting}
+              onChange={(value) => setForm(current => ({ ...current, whatsapp: value }))}
+            />
+            <InputField
+              label="Email Aktif"
+              type="email"
+              placeholder="email@domain.com"
+              value={form.email}
+              disabled
+            />
             <SelectField
               label="Pekerjaan"
               options={['Mahasiswa', 'Karyawan Swasta', 'PNS', 'Wiraswasta', 'Lainnya']}
+              value={form.pekerjaan}
+              disabled={isLoadingProfile || isSubmitting}
+              onChange={(value) => setForm(current => ({ ...current, pekerjaan: value }))}
             />
             <SelectField
               label="Durasi Sewa"
               options={['1 Bulan', '3 Bulan', '6 Bulan', '12 Bulan']}
+              value={form.duration}
+              disabled={isLoadingProfile || isSubmitting}
+              onChange={(value) => setForm(current => ({ ...current, duration: value }))}
               note="* Pembayaran durasi sewa yang dipilih bersifat non-refundable."
               labelSuffix={
                 <Icon
@@ -600,6 +731,7 @@ function RentalForm() {
           </button>
           <button
             type="submit"
+            disabled={isLoadingProfile || isSubmitting}
             style={{
               padding: '1rem 2.5rem',
               background: `linear-gradient(to right, ${css('primary')}, ${css('primary-container')})`,
@@ -607,7 +739,7 @@ function RentalForm() {
               fontWeight: 700,
               border: 'none',
               borderRadius: '0.75rem',
-              cursor: 'pointer',
+              cursor: isLoadingProfile || isSubmitting ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit',
               fontSize: '0.9375rem',
               boxShadow: `0 8px 20px rgba(0,110,47,0.2)`,
@@ -618,7 +750,7 @@ function RentalForm() {
             onMouseDown={e => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)')}
             onMouseUp={e => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.05)')}
           >
-            Kirim Pengajuan
+            {isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan'}
           </button>
         </div>
       </form>

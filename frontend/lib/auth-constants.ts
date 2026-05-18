@@ -1,4 +1,5 @@
 export const AUTH_ROLE_COOKIE = 'kh_auth_role';
+export const AUTH_REMEMBER_COOKIE = 'kh_remember_me';
 
 export const ROLE_DASHBOARD_PATHS = {
   owner: '/owner/dashboard',

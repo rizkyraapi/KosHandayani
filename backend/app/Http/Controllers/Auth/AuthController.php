@@ -48,6 +48,7 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
+            'remember' => 'sometimes|boolean',
         ]);
 
         $user = User::where('email', $request->email)->first();
@@ -60,8 +61,15 @@ class AuthController extends Controller
             ]);
         }
 
-        Auth::login($user);
+        $remember = $request->boolean('remember');
+
+        if ($remember) {
+            config(['session.lifetime' => 60 * 24 * 30]);
+        }
+
+        Auth::login($user, $remember);
         $request->session()->regenerate();
+        $request->session()->put('remember_me', $remember);
 
         return response()->json([
 
@@ -96,15 +104,6 @@ class AuthController extends Controller
 
     private function authUser(User $user): array
     {
-        return [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role,
-            'phone' => $user->phone,
-            'job' => $user->job,
-            'address' => $user->address,
-            'profile_completed' => $user->profile_completed,
-        ];
+        return $user->toProfileArray();
     }
 }

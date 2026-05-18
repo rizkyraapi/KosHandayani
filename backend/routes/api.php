@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RentalApplicationController;
 
 use App\Http\Controllers\RoomController;
 
@@ -23,5 +24,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
 
     // profile
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::post('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/update', [ProfileController::class, 'update']);
+
+    Route::post('/rental-applications', [RentalApplicationController::class, 'store'])
+        ->middleware('check.profile.complete');
 });

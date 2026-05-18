@@ -9,19 +9,23 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-public function up(): void
-{
-    Schema::create('rooms', function (Blueprint $table) {
-        $table->id();
+    public function up(): void
+    {
+        if (Schema::hasTable('rooms')) {
+            return;
+        }
 
-        $table->string('name');         // nama kamar
-        $table->integer('price');       // harga kamar
-        $table->string('branch');       // cabang (Cabang 1 / Cabang 2)
-        $table->boolean('is_available'); // status kamar (true = kosong)
+        Schema::create('rooms', function (Blueprint $table) {
+            $table->id();
 
-        $table->timestamps();
-    });
-}
+            $table->string('name');
+            $table->integer('price');
+            $table->string('branch');
+            $table->boolean('is_available');
+
+            $table->timestamps();
+        });
+    }
 
     /**
      * Reverse the migrations.

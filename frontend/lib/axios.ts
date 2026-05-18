@@ -31,6 +31,18 @@ export const csrfClient = axios.create({
   },
 });
 
+apiClient.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    if (typeof config.headers.delete === 'function') {
+      config.headers.delete('Content-Type');
+    } else {
+      delete config.headers['Content-Type'];
+    }
+  }
+
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
