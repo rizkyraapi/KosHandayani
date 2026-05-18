@@ -16,8 +16,9 @@ import type { ApiRoom } from '../../lib/api';
 
 const roomTypeFilters = [
   { label: 'Semua', value: 'semua' },
-  { label: 'AC', value: 'ac' },
-  { label: 'Kipas', value: 'kipas' },
+  { label: 'Single', value: 'single' },
+  { label: 'Double', value: 'double' },
+  { label: 'Suite', value: 'suite' },
 ];
 
 type Amenity = { icon: string; label: string };
@@ -38,7 +39,7 @@ type ListingRoom = {
   branch: string;
   name: string;
   amenities: Amenity[];
-  roomType: 'ac' | 'kipas';
+  roomType: 'single' | 'double' | 'suite';
   price: string;
   priceValue: number;
   priceGreen: boolean;
@@ -54,41 +55,44 @@ function formatRupiah(price: number) {
   }).format(price);
 }
 
-function getRoomAmenities(room: ApiRoom, index: number): { amenities: Amenity[]; roomType: 'ac' | 'kipas' } {
-  const name = room.name.toLowerCase();
-  const roomType = name.includes('kipas') || index % 3 === 1 ? 'kipas' : 'ac';
+function getFacilityIcon(facilityName: string) {
+  const normalized = facilityName.toLowerCase();
 
-  if (roomType === 'kipas') {
-    return {
-      roomType,
-      amenities: [
-        { icon: 'wifi', label: 'WiFi' },
-        { icon: 'mode_fan', label: 'Kipas' },
-      ],
-    };
+  if (normalized.includes('wi')) return 'wifi';
+  if (normalized.includes('ac')) return 'ac_unit';
+  if (normalized.includes('mandi')) return 'bathroom';
+  if (normalized.includes('laundry')) return 'local_laundry_service';
+  if (normalized.includes('heater')) return 'hot_tub';
+  if (normalized.includes('meja')) return 'desk';
+  if (normalized.includes('lemari')) return 'checkroom';
+
+  return 'check_circle';
+}
+
+function getRoomAmenities(room: ApiRoom): Amenity[] {
+  if (room.facilities.length > 0) {
+    return room.facilities.slice(0, 3).map((facility) => ({
+      icon: getFacilityIcon(facility.facility_name || facility.name || ''),
+      label: facility.facility_name || facility.name || '',
+    }));
   }
 
-  return {
-    roomType,
-    amenities: [
-      { icon: 'wifi', label: 'WiFi' },
-      { icon: 'ac_unit', label: 'AC' },
-      { icon: 'local_laundry_service', label: 'Laundry' },
-    ],
-  };
+  return [
+    { icon: 'wifi', label: 'WiFi' },
+    { icon: 'ac_unit', label: 'AC' },
+    { icon: 'bathroom', label: 'KM Dalam' },
+  ];
 }
 
 function mapRoomToListing(room: ApiRoom, index: number): ListingRoom {
-  const { amenities, roomType } = getRoomAmenities(room, index);
-
   return {
     id: room.id,
-    image: room.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
+    image: room.thumbnail || room.image_url || room.images[0]?.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
     statusAvailable: room.is_available,
     branch: room.branch,
-    name: room.name,
-    amenities,
-    roomType,
+    name: room.room_name || room.name,
+    amenities: getRoomAmenities(room),
+    roomType: room.room_type,
     price: formatRupiah(room.price),
     priceValue: room.price,
     priceGreen: room.is_available,
@@ -330,6 +334,7 @@ export default function Page() {
                     location={room.branch}
                     price={room.price}
                     imageUrl={room.image}
+                    roomType={room.roomType}
                     status={room.statusAvailable ? 'Kosong' : 'Terisi'}
                     amenities={room.amenities}
                   />

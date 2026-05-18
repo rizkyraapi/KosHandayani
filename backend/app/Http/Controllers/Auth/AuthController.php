@@ -33,7 +33,9 @@ class AuthController extends Controller
         ]);
 
         Auth::login($user);
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
 
         return response()->json([
             'success' => true,
@@ -68,8 +70,10 @@ class AuthController extends Controller
         }
 
         Auth::login($user, $remember);
-        $request->session()->regenerate();
-        $request->session()->put('remember_me', $remember);
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+            $request->session()->put('remember_me', $remember);
+        }
 
         return response()->json([
 

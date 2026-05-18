@@ -14,6 +14,7 @@ use App\Http\Controllers\RoomController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/rooms', [RoomController::class, 'index']);
+Route::get('/rooms/{room}', [RoomController::class, 'show']);
 
 
 // PROTECTED
@@ -31,4 +32,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/rental-applications', [RentalApplicationController::class, 'store'])
         ->middleware('check.profile.complete');
+
+    Route::post('/rooms', [RoomController::class, 'store']);
 });

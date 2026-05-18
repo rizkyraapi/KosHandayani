@@ -1,4 +1,5 @@
-'use client';   
+'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 
 export default function KosHandayaniPage() {
@@ -461,11 +462,11 @@ export default function KosHandayaniPage() {
               <h2 className="rooms-title">Daftar Kamar</h2>
               <p className="rooms-subtitle">Pantau dan kelola ketersediaan unit di seluruh cabang.</p>
             </div>
-            <button className="rooms-add-button gradient-primary">
+            <Link href="/owner/rooms/create" className="rooms-add-button gradient-primary" style={{ textDecoration: 'none' }}>
               <span className="material-symbols-outlined text-xl">add</span>
               <span className="hidden sm:inline">Tambah Kamar Baru</span>
               <span className="sm:hidden">Tambah</span>
-            </button>
+            </Link>
           </header>
 
           {/* Stats Grid */}

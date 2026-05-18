@@ -10,6 +10,7 @@ interface RoomCardProps {
   location: string;
   price: string;
   imageUrl: string;
+  roomType?: string;
   status?: 'Kosong' | 'Terisi';
   amenities?: Amenity[];
 }
@@ -25,6 +26,7 @@ export default function RoomCard({
   location,
   price,
   imageUrl,
+  roomType,
   status = 'Kosong',
   amenities = defaultAmenities,
 }: RoomCardProps) {
@@ -230,22 +232,40 @@ export default function RoomCard({
             >
               {name}
             </h3>
-            <p
-              className="room-location"
-              style={{
-                fontSize: '0.875rem',
-                color: '#3d4a3d',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                margin: '4px 0 0 0',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                location_on
-              </span>
-              {location}
-            </p>
+            <div className="room-location" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#3d4a3d',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  margin: 0,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                  location_on
+                </span>
+                {location}
+              </p>
+              {roomType && (
+                <span
+                  style={{
+                    width: 'fit-content',
+                    padding: '3px 8px',
+                    borderRadius: '999px',
+                    backgroundColor: '#e7eeff',
+                    color: '#3d4a3d',
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {roomType}
+                </span>
+              )}
+            </div>
           </div>
           <div className="room-price-wrap" style={{ textAlign: 'right' }}>
             <p
@@ -286,7 +306,7 @@ export default function RoomCard({
             borderBottom: '1px solid #f0f3ff',
           }}
         >
-          {amenities.map((amenity) => (
+          {amenities.slice(0, 3).map((amenity) => (
             <div
               key={amenity.icon}
               style={{

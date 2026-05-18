@@ -48,6 +48,7 @@ type HomepageRoom = {
   location: string;
   price: string;
   imageUrl: string;
+  roomType: string;
   status: 'Kosong' | 'Terisi';
 };
 
@@ -62,10 +63,11 @@ function formatRupiah(price: number) {
 function mapRoomToCard(room: ApiRoom, index: number): HomepageRoom {
   return {
     id: room.id,
-    name: room.name,
+    name: room.room_name || room.name,
     location: room.branch,
     price: formatRupiah(room.price),
-    imageUrl: room.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
+    imageUrl: room.thumbnail || room.image_url || room.images[0]?.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
+    roomType: room.room_type,
     status: room.is_available ? 'Kosong' : 'Terisi',
   };
 }
@@ -108,7 +110,7 @@ export default function Page() {
 
   const rooms = useMemo(() => apiRooms.map(mapRoomToCard), [apiRooms]);
   const branchNames = useMemo(() => Array.from(new Set(apiRooms.map((room) => room.branch))), [apiRooms]);
-  const roomNames = useMemo(() => Array.from(new Set(apiRooms.map((room) => room.name))), [apiRooms]);
+  const roomNames = useMemo(() => Array.from(new Set(apiRooms.map((room) => room.room_name || room.name))), [apiRooms]);
 
   return (
     <div
@@ -807,6 +809,7 @@ export default function Page() {
                   location={room.location}
                   price={room.price}
                   imageUrl={room.imageUrl}
+                  roomType={room.roomType}
                   status={room.status}
                 />
               ))}
