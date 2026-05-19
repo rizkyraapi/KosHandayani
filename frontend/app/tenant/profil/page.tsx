@@ -665,32 +665,7 @@ function PersonalInfoForm({
           gap: '1rem',
         }}
       >
-        <button
-          type="button"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            color: '#ba1a1a',
-            fontWeight: 700,
-            fontSize: '0.875rem',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '0.5rem 1rem',
-            borderRadius: '0.5rem',
-            transition: 'background 0.15s',
-          }}
-          onClick={onReset}
-          disabled={isFetching || isSaving}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(186,26,26,0.08)')}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '1.125rem' }}>
-            logout
-          </span>
-          Logout dari Semua Sesi
-        </button>
+
 
         {isEditing ? (
           <div style={{ display: 'flex', gap: '1rem' }}>

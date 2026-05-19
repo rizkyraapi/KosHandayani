@@ -1,14 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Navbar from '../../../../components/Navbar';
+import Navbar from '@/components/Navbar';
 import { createRentalApplication, getProfile } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
-
-const GOOGLE_FONTS_URL =
-  'https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap';
-const MATERIAL_SYMBOLS_URL =
-  'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap';
 
 const COLORS = {
   surface: '#f9f9ff',
@@ -65,31 +60,11 @@ const css = (v: string) => COLORS[v as keyof typeof COLORS] ?? v;
 // ─── Inline Global Styles ────────────────────────────────────────────────────
 
 const globalStyle = `
-  .material-symbols-outlined {
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    vertical-align: middle;
-    font-family: 'Material Symbols Outlined';
-    font-weight: normal;
-    font-style: normal;
-    font-size: 24px;
-    line-height: 1;
-    letter-spacing: normal;
-    text-transform: none;
-    display: inline-block;
-    white-space: nowrap;
-    word-wrap: normal;
-    direction: ltr;
-    -webkit-font-feature-settings: 'liga';
-    font-feature-settings: 'liga';
-    -webkit-font-smoothing: antialiased;
+  .apply-page {
+    background-color: ${css('background')};
+    font-family: 'Inter', sans-serif;
+    color: ${css('on-surface')};
   }
-  .glass-effect {
-    backdrop-filter: blur(24px);
-    background-color: rgba(255,255,255,0.8);
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background-color: ${css('background')}; font-family: 'Inter', sans-serif; color: ${css('on-surface')}; }
-  a { text-decoration: none; }
 `;
 
 // ─── Reusable Atoms ──────────────────────────────────────────────────────────
@@ -800,23 +775,7 @@ function Footer() {
 
 export default function Page() {
   useEffect(() => {
-    // Inject Google Fonts & Material Symbols links
-    const links = [GOOGLE_FONTS_URL, MATERIAL_SYMBOLS_URL].map(href => {
-      const existing = document.querySelector(`link[href="${href}"]`);
-      if (existing) return existing;
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = href;
-      document.head.appendChild(link);
-      return link;
-    });
-
-    // Set page title
     document.title = 'Form Pengajuan Sewa - KosHandayani';
-
-    return () => {
-      links.forEach(l => l?.remove());
-    };
   }, []);
 
   return (
@@ -824,13 +783,11 @@ export default function Page() {
       <style>{globalStyle}</style>
 
       <div
+        className="apply-page"
         style={{
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: css('background'),
-          fontFamily: 'Inter, sans-serif',
-          color: css('on-surface'),
         }}
       >
         <Navbar />

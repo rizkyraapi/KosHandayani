@@ -143,7 +143,7 @@ export default function Page() {
           grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
           grid-template-rows: repeat(3, minmax(0, 1fr));
           gap: 12px;
-          min-height: 520px;
+          min-height: 440px;
         }
 
         @media (max-width: 760px) {
@@ -155,25 +155,25 @@ export default function Page() {
 
           .room-detail-gallery-main {
             grid-row: auto !important;
-            min-height: 260px !important;
+            min-height: 240px !important;
           }
         }
       `}</style>
       <Navbar />
 
-      <main style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 24px 72px' }}>
+      <main style={{ maxWidth: 1120, margin: '0 auto', padding: '24px 24px 72px' }}>
         <section className="room-detail-gallery" style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 34 }}>
-          <img className="room-detail-gallery-main" src={visibleGalleryImages[0]} alt={room.room_name} style={{ gridRow: '1 / 4', width: '100%', height: '100%', objectFit: 'cover', minHeight: 520 }} />
-          <div style={{ position: 'relative', minHeight: 164 }}>
+          <img className="room-detail-gallery-main" src={visibleGalleryImages[0]} alt={room.room_name} style={{ gridRow: '1 / 4', width: '100%', height: '100%', objectFit: 'cover', minHeight: 440 }} />
+          <div style={{ position: 'relative', minHeight: 138 }}>
             <img src={visibleGalleryImages[1]} alt={`${room.room_name} 2`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           </div>
-          <div style={{ position: 'relative', minHeight: 164 }}>
+          <div style={{ position: 'relative', minHeight: 138 }}>
             <img src={visibleGalleryImages[2]} alt={`${room.room_name} 3`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           </div>
-          <div style={{ position: 'relative', minHeight: 164 }}>
+          <div style={{ position: 'relative', minHeight: 138 }}>
             <img src={visibleGalleryImages[3]} alt={`${room.room_name} 4`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             {remainingGalleryCount > 0 && (
-              <div style={{ position: 'absolute', inset: 0, background: 'rgba(17,28,45,0.58)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 24, fontWeight: 900 }}>
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(17,28,45,0.58)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 800 }}>
                 +{remainingGalleryCount} more
               </div>
             )}
@@ -184,32 +184,32 @@ export default function Page() {
           <section style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
             <header>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' }}>{statusLabel(room.room_status)}</span>
-                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#e7eeff', color: '#3d4a3d', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' }}>{room.room_type}</span>
-                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#f0f3ff', color: '#3d4a3d', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' }}>{room.gender_type}</span>
+                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{statusLabel(room.room_status)}</span>
+                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#e7eeff', color: '#3d4a3d', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{room.room_type}</span>
+                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#f0f3ff', color: '#3d4a3d', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{room.gender_type}</span>
               </div>
-              <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(32px, 5vw, 52px)', lineHeight: 1.05, margin: 0 }}>{room.room_name}</h1>
-              <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3d4a3d', fontWeight: 700, marginTop: 12 }}>
+              <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(30px, 4vw, 44px)', lineHeight: 1.12, margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>{room.room_name}</h1>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3d4a3d', fontWeight: 500, fontSize: 15, lineHeight: 1.6, marginTop: 12 }}>
                 <span className="material-symbols-outlined" style={{ color: '#006e2f' }}>location_on</span>
                 {room.branch?.branch_name || 'Cabang belum diatur'}{room.branch?.city ? `, ${room.branch.city}` : ''}
               </p>
             </header>
 
             <section style={{ background: '#fff', borderRadius: 12, padding: 24, borderLeft: '4px solid #006e2f', boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 22, margin: '0 0 12px' }}>Deskripsi Kamar</h2>
-              <p style={{ color: '#3d4a3d', lineHeight: 1.75, margin: 0 }}>{room.description || 'Belum ada deskripsi untuk kamar ini.'}</p>
+              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 21, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 12px' }}>Deskripsi Kamar</h2>
+              <p style={{ color: '#3d4a3d', fontSize: 15, fontWeight: 400, lineHeight: 1.8, margin: 0 }}>{room.description || 'Belum ada deskripsi untuk kamar ini.'}</p>
             </section>
 
             <section>
-              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 24, margin: '0 0 16px' }}>Fasilitas</h2>
+              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 23, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 16px' }}>Fasilitas</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
                 {room.facilities.length > 0 ? room.facilities.map((facility) => (
                   <div key={facility.id} style={{ minHeight: 82, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', borderRadius: 10, color: '#3d4a3d' }}>
                     <span className="material-symbols-outlined" style={{ color: '#006e2f', fontSize: 28 }}>{getFacilityIcon(facility.facility_name)}</span>
-                    <span style={{ fontWeight: 800, textAlign: 'center', fontSize: 13 }}>{facility.facility_name}</span>
+                    <span style={{ fontWeight: 600, textAlign: 'center', fontSize: 13, lineHeight: 1.4 }}>{facility.facility_name}</span>
                   </div>
                 )) : (
-                  <p style={{ color: '#3d4a3d' }}>Belum ada fasilitas yang dicatat.</p>
+                  <p style={{ color: '#3d4a3d', fontSize: 15, fontWeight: 400 }}>Belum ada fasilitas yang dicatat.</p>
                 )}
               </div>
             </section>
@@ -218,20 +218,20 @@ export default function Page() {
           <aside style={{ position: 'sticky', top: 94 }}>
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', borderTop: '8px solid #006e2f', boxShadow: '0 20px 44px rgba(17,28,45,0.1)' }}>
               <div style={{ padding: 24 }}>
-                <p style={{ color: '#3d4a3d', fontWeight: 700, margin: '0 0 6px' }}>Harga per bulan</p>
-                <h2 style={{ fontFamily: 'Manrope, sans-serif', color: '#006e2f', fontSize: 32, margin: 0 }}>{formatRupiah(room.price)}</h2>
+                <p style={{ color: '#3d4a3d', fontSize: 13, fontWeight: 500, lineHeight: 1.5, margin: '0 0 6px' }}>Harga per bulan</p>
+                <h2 style={{ fontFamily: 'Manrope, sans-serif', color: '#006e2f', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{formatRupiah(room.price)}</h2>
                 <div style={{ display: 'grid', gap: 10, marginTop: 22 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: '#f0f3ff', borderRadius: 8 }}>
-                    <span>Maksimal tamu</span>
-                    <strong>{room.max_guest}</strong>
+                    <span style={{ color: '#3d4a3d', fontSize: 14, fontWeight: 400 }}>Maksimal tamu</span>
+                    <strong style={{ color: '#111c2d', fontSize: 14, fontWeight: 700 }}>{room.max_guest}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: '#f0f3ff', borderRadius: 8 }}>
-                    <span>Status</span>
-                    <strong>{statusLabel(room.room_status)}</strong>
+                    <span style={{ color: '#3d4a3d', fontSize: 14, fontWeight: 400 }}>Status</span>
+                    <strong style={{ color: '#111c2d', fontSize: 14, fontWeight: 700 }}>{statusLabel(room.room_status)}</strong>
                   </div>
                 </div>
-                {profileWarning && <p style={{ margin: '16px 0 0', padding: 12, borderRadius: 8, color: '#93000a', background: '#ffdad6', fontWeight: 700 }}>{profileWarning}</p>}
-                <button type="button" onClick={handleApplyClick} disabled={isCheckingProfile || room.room_status !== 'available'} style={{ width: '100%', minHeight: 52, border: 0, borderRadius: 10, marginTop: 20, background: room.room_status === 'available' ? 'linear-gradient(135deg, #006e2f, #22c55e)' : '#bccbb9', color: '#fff', fontWeight: 900, fontSize: 16, cursor: room.room_status === 'available' ? 'pointer' : 'not-allowed' }}>
+                {profileWarning && <p style={{ margin: '16px 0 0', padding: 12, borderRadius: 8, color: '#93000a', background: '#ffdad6', fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>{profileWarning}</p>}
+                <button type="button" onClick={handleApplyClick} disabled={isCheckingProfile || room.room_status !== 'available'} style={{ width: '100%', minHeight: 50, border: 0, borderRadius: 10, marginTop: 20, background: room.room_status === 'available' ? 'linear-gradient(135deg, #006e2f, #22c55e)' : '#bccbb9', color: '#fff', fontWeight: 700, fontSize: 15, cursor: room.room_status === 'available' ? 'pointer' : 'not-allowed' }}>
                   {isCheckingProfile ? 'Memeriksa Profil...' : room.room_status === 'available' ? 'Ajukan Sewa' : 'Belum Bisa Disewa'}
                 </button>
               </div>
@@ -240,7 +240,7 @@ export default function Page() {
         </div>
 
         <section style={{ marginTop: 56 }}>
-          <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 28, margin: '0 0 18px' }}>Kamar Lain di Cabang Ini</h2>
+          <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 26, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' }}>Kamar Lain di Cabang Ini</h2>
           {relatedRooms.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
               {relatedRooms.map((related) => (

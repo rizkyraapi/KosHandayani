@@ -1,5 +1,6 @@
 'use client';
 
+import axios from 'axios';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createRoom, getBranches, type ApiBranch, type ApiRoom } from '@/lib/api';
@@ -36,6 +37,8 @@ const roomStatuses: Array<{ label: string; value: ApiRoom['room_status'] }> = [
 
 const minRoomImages = 4;
 const maxRoomImages = 10;
+const maxRoomImageSizeKb = 10240;
+const maxRoomImageSizeMb = maxRoomImageSizeKb / 1024;
 
 const colors = {
   primary: '#006e2f',
@@ -50,7 +53,72 @@ const colors = {
   error: '#ba1a1a',
 };
 
+function readableRoomField(field: string) {
+  if (field === 'room_name') return 'Nama kamar';
+  if (field === 'branch_id') return 'Cabang';
+  if (field === 'room_type') return 'Tipe kamar';
+  if (field === 'gender_type') return 'Gender';
+  if (field === 'room_status') return 'Status kamar';
+  if (field === 'price') return 'Harga';
+  if (field === 'description') return 'Deskripsi';
+  if (field === 'max_guest') return 'Maksimal tamu';
+  if (field === 'facilities') return 'Fasilitas';
+  if (field.startsWith('facilities.')) return `Fasilitas #${Number(field.split('.')[1]) + 1}`;
+  if (field === 'images') return 'Foto kamar';
+  if (field.startsWith('images.')) return `Foto #${Number(field.split('.')[1]) + 1}`;
+
+  return field;
+}
+
+function readableRoomErrorMessage(message: string, field: string) {
+  const label = readableRoomField(field);
+
+  if (message.includes('must not be greater than 10240 kilobytes')) {
+    return `${label} maksimal ${maxRoomImageSizeMb} MB per foto.`;
+  }
+
+  if (message.includes('must be at least 4')) {
+    return `${label} minimal ${minRoomImages} foto.`;
+  }
+
+  if (message.includes('must not have more than 10')) {
+    return `${label} maksimal ${maxRoomImages} foto.`;
+  }
+
+  if (message.includes('must be an image')) {
+    return `${label} harus berupa file gambar.`;
+  }
+
+  if (message.includes('must be a file of type')) {
+    return `${label} harus berformat JPG, JPEG, PNG, atau WEBP.`;
+  }
+
+  if (message.includes('field is required')) {
+    return `${label} wajib diisi.`;
+  }
+
+  return `${label}: ${message}`;
+}
+
 function formatError(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 413) {
+      return `Ukuran upload terlalu besar. Pastikan tiap foto maksimal ${maxRoomImageSizeMb} MB dan total file tidak berlebihan.`;
+    }
+
+    const data = error.response?.data as { message?: string; errors?: Record<string, string[] | string> } | undefined;
+    const errors = data?.errors;
+
+    if (errors) {
+      const [field, value] = Object.entries(errors)[0] ?? [];
+      const firstMessage = Array.isArray(value) ? value[0] : value;
+
+      if (field && firstMessage) {
+        return readableRoomErrorMessage(firstMessage, field);
+      }
+    }
+  }
+
   return getAuthErrorMessage(error, 'Gagal menyimpan kamar. Periksa kembali data yang diisi.');
 }
 
@@ -129,8 +197,23 @@ export default function Page() {
   function addImages(fileList: FileList | null) {
     if (!fileList) return;
 
-    const nextImages = Array.from(fileList).filter((file) => file.type.startsWith('image/'));
-    setImages((current) => [...current, ...nextImages].slice(0, maxRoomImages));
+    const files = Array.from(fileList);
+    const invalidType = files.find((file) => !file.type.startsWith('image/'));
+
+    if (invalidType) {
+      setError(`${invalidType.name} bukan file gambar yang valid.`);
+      return;
+    }
+
+    const oversized = files.find((file) => file.size > maxRoomImageSizeKb * 1024);
+
+    if (oversized) {
+      setError(`${oversized.name} terlalu besar. Maksimal ${maxRoomImageSizeMb} MB per foto.`);
+      return;
+    }
+
+    setError('');
+    setImages((current) => [...current, ...files].slice(0, maxRoomImages));
   }
 
   function removeImage(index: number) {
@@ -526,7 +609,7 @@ export default function Page() {
               <span className="material-symbols-outlined" style={{ fontSize: 34, color: colors.primary }}>add_photo_alternate</span>
               Pilih beberapa foto kamar
               <span style={{ fontSize: 12, fontWeight: 600 }}>
-                Minimal 4 photos. Maximum 10 photos. First uploaded photo becomes room thumbnail.
+                Minimal 4 photos. Maximum 10 photos. Max 10 MB each. First uploaded photo becomes room thumbnail.
               </span>
               <input
                 type="file"

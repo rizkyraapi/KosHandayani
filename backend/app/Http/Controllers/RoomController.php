@@ -50,7 +50,7 @@ class RoomController extends Controller
             'facilities' => ['nullable', 'array'],
             'facilities.*' => ['string', 'max:255'],
             'images' => ['required', 'array', 'min:4', 'max:10'],
-            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $room = DB::transaction(function () use ($request, $validated): Room {

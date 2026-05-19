@@ -82,8 +82,6 @@ export default function Navbar() {
         {user ? (
           <div
             className="hidden md:block relative"
-            onMouseEnter={() => setProfileOpen(true)}
-            onMouseLeave={() => setProfileOpen(false)}
           >
             <button
               type="button"
