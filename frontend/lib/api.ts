@@ -5,14 +5,17 @@ export interface ApiRoom {
   id: number;
   room_name: string;
   name: string;
+  branch_id: number | null;
+  branch: ApiBranch | null;
   room_type: 'single' | 'double' | 'suite';
+  gender_type: 'male' | 'female' | 'mixed';
   price: number;
-  branch: string;
   description?: string | null;
   thumbnail?: string | null;
   max_guest: number;
+  room_status: 'available' | 'occupied' | 'maintenance';
   is_available: boolean;
-  availability?: 'available' | 'occupied';
+  availability?: 'available' | 'occupied' | 'maintenance';
   image_url?: string | null;
   facilities: Array<{
     id: number;
@@ -26,8 +29,39 @@ export interface ApiRoom {
   }>;
 }
 
-export async function getRooms(): Promise<ApiRoom[]> {
-  const { data } = await apiClient.get<ApiRoom[]>('/rooms');
+export interface ApiBranch {
+  id: number;
+  branch_name: string;
+  city?: string | null;
+  address?: string | null;
+  description?: string | null;
+}
+
+export type RoomFilters = Partial<{
+  branch_id: number | string;
+  room_type: ApiRoom['room_type'];
+  gender_type: ApiRoom['gender_type'];
+  room_status: ApiRoom['room_status'];
+  price_min: number | string;
+  price_max: number | string;
+  exclude_id: number | string;
+  limit: number | string;
+}>;
+
+export async function getRooms(filters?: RoomFilters): Promise<ApiRoom[]> {
+  const { data } = await apiClient.get<ApiRoom[]>('/rooms', { params: filters });
+
+  return data;
+}
+
+export async function getRoomById(id: number | string): Promise<ApiRoom> {
+  const { data } = await apiClient.get<ApiRoom>(`/rooms/${id}`);
+
+  return data;
+}
+
+export async function getBranches(): Promise<ApiBranch[]> {
+  const { data } = await apiClient.get<ApiBranch[]>('/branches');
 
   return data;
 }
@@ -35,11 +69,12 @@ export async function getRooms(): Promise<ApiRoom[]> {
 export type CreateRoomPayload = {
   room_name: string;
   room_type: ApiRoom['room_type'];
-  branch: string;
+  branch_id: number;
+  gender_type: ApiRoom['gender_type'];
+  room_status: ApiRoom['room_status'];
   price: number;
   description?: string;
   max_guest?: number;
-  is_available?: boolean;
   facilities: string[];
   images: File[];
 };
@@ -52,11 +87,12 @@ type CreateRoomResponse = {
 export async function createRoom(payload: CreateRoomPayload): Promise<ApiRoom> {
   const formData = new FormData();
   formData.append('room_name', payload.room_name);
+  formData.append('branch_id', String(payload.branch_id));
   formData.append('room_type', payload.room_type);
-  formData.append('branch', payload.branch);
+  formData.append('gender_type', payload.gender_type);
+  formData.append('room_status', payload.room_status);
   formData.append('price', String(payload.price));
   formData.append('max_guest', String(payload.max_guest ?? 1));
-  formData.append('is_available', payload.is_available === false ? '0' : '1');
 
   if (payload.description) {
     formData.append('description', payload.description);

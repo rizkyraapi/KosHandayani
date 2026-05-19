@@ -1,4 +1,7 @@
+'use client';
+
 import React from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Amenity {
   icon: string;
@@ -6,12 +9,14 @@ interface Amenity {
 }
 
 interface RoomCardProps {
+  id: number;
   name: string;
   location: string;
   price: string;
   imageUrl: string;
   roomType?: string;
-  status?: 'Kosong' | 'Terisi';
+  genderType?: string;
+  status?: 'available' | 'occupied' | 'maintenance' | 'Kosong' | 'Terisi';
   amenities?: Amenity[];
 }
 
@@ -21,19 +26,37 @@ const defaultAmenities: Amenity[] = [
   { icon: 'bathroom', label: 'KM Dalam' },
 ];
 
+const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=600';
+
 export default function RoomCard({
+  id,
   name,
   location,
   price,
   imageUrl,
   roomType,
-  status = 'Kosong',
+  genderType,
+  status = 'available',
   amenities = defaultAmenities,
 }: RoomCardProps) {
+  const router = useRouter();
   const [isHovered, setIsHovered] = React.useState(false);
+  const [failedImageUrl, setFailedImageUrl] = React.useState<string | null>(null);
   const [buttonHoverStates, setButtonHoverStates] = React.useState({
     favoriteButton: false,
   });
+  const resolvedImageUrl = imageUrl || fallbackImageUrl;
+  const displayedImageUrl = failedImageUrl === resolvedImageUrl ? fallbackImageUrl : resolvedImageUrl;
+  const normalizedStatus = status === 'Kosong' ? 'available' : status === 'Terisi' ? 'occupied' : status;
+  const statusMeta = {
+    available: { label: 'Available', background: '#dcfce7', color: '#166534', dot: '#15803d' },
+    occupied: { label: 'Occupied', background: '#fee2e2', color: '#991b1b', dot: '#dc2626' },
+    maintenance: { label: 'Maintenance', background: '#e7eeff', color: '#3d4a3d', dot: '#6d7b6c' },
+  }[normalizedStatus];
+
+  function openDetail() {
+    router.push(`/room/${id}`);
+  }
 
   return (
     <div
@@ -46,9 +69,11 @@ export default function RoomCard({
         transition: 'all 0.3s',
         display: 'flex',
         flexDirection: 'column',
+        cursor: 'pointer',
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={openDetail}
     >
       <div className="room-card-image" style={{ position: 'relative', height: '256px', overflow: 'hidden' }}>
         <img
@@ -59,8 +84,9 @@ export default function RoomCard({
             transform: isHovered ? 'scale(1.1)' : 'scale(1)',
             transition: 'transform 0.5s',
           }}
-          src={imageUrl}
+          src={displayedImageUrl}
           alt={name}
+          onError={() => setFailedImageUrl(resolvedImageUrl)}
         />
         <div className="room-status-wrap" style={{ position: 'absolute', top: '16px', left: '16px' }}>
           <span
@@ -70,8 +96,8 @@ export default function RoomCard({
               paddingRight: '12px',
               paddingTop: '4px',
               paddingBottom: '4px',
-              backgroundColor: '#22c55e',
-              color: '#004b1e',
+              backgroundColor: statusMeta.background,
+              color: statusMeta.color,
               fontSize: '0.75rem',
               fontWeight: 700,
               borderRadius: '9999px',
@@ -84,12 +110,12 @@ export default function RoomCard({
               style={{
                 width: '6px',
                 height: '6px',
-                backgroundColor: '#004b1e',
+                backgroundColor: statusMeta.dot,
                 borderRadius: '50%',
                 animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               }}
             ></span>
-            {status}
+            {statusMeta.label}
           </span>
         </div>
         <div className="room-favorite-wrap" style={{ position: 'absolute', top: '16px', right: '16px' }}>
@@ -108,6 +134,7 @@ export default function RoomCard({
             }}
             onMouseEnter={() => setButtonHoverStates({ ...buttonHoverStates, favoriteButton: true })}
             onMouseLeave={() => setButtonHoverStates({ ...buttonHoverStates, favoriteButton: false })}
+            onClick={(event) => event.stopPropagation()}
           >
             <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
               favorite
@@ -265,6 +292,23 @@ export default function RoomCard({
                   {roomType}
                 </span>
               )}
+              {genderType && (
+                <span
+                  style={{
+                    width: 'fit-content',
+                    padding: '3px 8px',
+                    borderRadius: '999px',
+                    backgroundColor: '#f0f3ff',
+                    color: '#3d4a3d',
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {genderType}
+                </span>
+              )}
             </div>
           </div>
           <div className="room-price-wrap" style={{ textAlign: 'right' }}>
@@ -346,6 +390,10 @@ export default function RoomCard({
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
+            onClick={(event) => {
+              event.stopPropagation();
+              openDetail();
+            }}
           >
             Lihat Detail
           </button>
@@ -372,6 +420,10 @@ export default function RoomCard({
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = '#006e2f';
               e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              openDetail();
             }}
           >
             Ajukan Sewa

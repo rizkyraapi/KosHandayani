@@ -1,6 +1,7 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getRooms, type ApiRoom } from '@/lib/api';
 
 /* ─── Inject Google Fonts + Material Symbols into <head> ─── */
 function useGlobalStyles() {
@@ -371,7 +372,14 @@ function Header() {
 }
 
 /* ─── Bento Stats ─── */
-function StatsRow() {
+type RoomStatusStats = {
+  total: number;
+  available: number;
+  occupied: number;
+  maintenance: number;
+};
+
+function StatsRow({ stats }: { stats: RoomStatusStats }) {
   const barHeights = ['40%', '60%', '50%', '80%', '70%', '95%'];
 
   return (
@@ -415,7 +423,7 @@ function StatsRow() {
               Status Kamar
             </p>
             <h3 style={{ fontSize: 36, fontWeight: 800, color: colors.onSurface, fontFamily: 'Manrope, sans-serif' }}>
-              48{' '}
+              {stats.total}{' '}
               <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>Total</span>
             </h3>
           </div>
@@ -433,11 +441,15 @@ function StatsRow() {
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: colors.primary, display: 'inline-block' }} />
-            <span style={{ fontSize: 14, fontWeight: 600 }}>43 Terisi</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{stats.occupied} Terisi</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#e2e8f0', display: 'inline-block' }} />
-            <span style={{ fontSize: 14, fontWeight: 600 }}>5 Kosong</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{stats.available} Kosong</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: colors.surfaceContainerHigh, display: 'inline-block' }} />
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{stats.maintenance} Maintenance</span>
           </div>
         </div>
         {/* Decorative bg */}
@@ -819,14 +831,18 @@ function QuickActions() {
 }
 
 /* ─── Occupancy Heatmap ─── */
-const rooms = [
+const fallbackOccupancy = [
   true, true, false, true, true, true,
   true, false, true, true, true, true,
   true, true, true, false, true, true,
   true, true, true, true, true, true,
 ];
 
-function OccupancyMap() {
+function OccupancyMap({ rooms }: { rooms: ApiRoom[] }) {
+  const occupancy = rooms.length > 0
+    ? rooms.slice(0, 24).map((room) => room.room_status === 'occupied')
+    : fallbackOccupancy;
+
   return (
     <div
       style={{
@@ -855,7 +871,7 @@ function OccupancyMap() {
           gap: 8,
         }}
       >
-        {rooms.map((occupied, i) => (
+        {occupancy.map((occupied, i) => (
           <div
             key={i}
             style={{
@@ -998,6 +1014,7 @@ const responsiveCSS = `
 /* ─── Page Root ─── */
 export default function Page() {
   useGlobalStyles();
+  const [rooms, setRooms] = useState<ApiRoom[]>([]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -1007,6 +1024,37 @@ export default function Page() {
       document.head.removeChild(style);
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRooms() {
+      try {
+        const data = await getRooms();
+
+        if (isMounted) {
+          setRooms(data);
+        }
+      } catch {
+        if (isMounted) {
+          setRooms([]);
+        }
+      }
+    }
+
+    loadRooms();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const roomStats = useMemo(() => ({
+    total: rooms.length,
+    available: rooms.filter((room) => room.room_status === 'available').length,
+    occupied: rooms.filter((room) => room.room_status === 'occupied').length,
+    maintenance: rooms.filter((room) => room.room_status === 'maintenance').length,
+  }), [rooms]);
 
   return (
     <>
@@ -1021,7 +1069,7 @@ export default function Page() {
         }}
       >
         <Header />
-        <StatsRow />
+        <StatsRow stats={roomStats} />
 
         {/* Secondary Row */}
         <section
@@ -1041,7 +1089,7 @@ export default function Page() {
           {/* Right col */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <QuickActions />
-            <OccupancyMap />
+            <OccupancyMap rooms={rooms} />
           </div>
         </section>
       </main>

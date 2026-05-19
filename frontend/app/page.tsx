@@ -49,7 +49,8 @@ type HomepageRoom = {
   price: string;
   imageUrl: string;
   roomType: string;
-  status: 'Kosong' | 'Terisi';
+  genderType: string;
+  status: ApiRoom['room_status'];
 };
 
 function formatRupiah(price: number) {
@@ -64,11 +65,12 @@ function mapRoomToCard(room: ApiRoom, index: number): HomepageRoom {
   return {
     id: room.id,
     name: room.room_name || room.name,
-    location: room.branch,
+    location: room.branch?.branch_name || 'Cabang belum diatur',
     price: formatRupiah(room.price),
-    imageUrl: room.thumbnail || room.image_url || room.images[0]?.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
+    imageUrl: room.thumbnail || fallbackRoomImages[index % fallbackRoomImages.length],
     roomType: room.room_type,
-    status: room.is_available ? 'Kosong' : 'Terisi',
+    genderType: room.gender_type,
+    status: room.room_status,
   };
 }
 
@@ -109,7 +111,10 @@ export default function Page() {
   }, []);
 
   const rooms = useMemo(() => apiRooms.map(mapRoomToCard), [apiRooms]);
-  const branchNames = useMemo(() => Array.from(new Set(apiRooms.map((room) => room.branch))), [apiRooms]);
+  const branchNames = useMemo(
+    () => Array.from(new Set(apiRooms.map((room) => room.branch?.branch_name).filter((name): name is string => Boolean(name)))),
+    [apiRooms],
+  );
   const roomNames = useMemo(() => Array.from(new Set(apiRooms.map((room) => room.room_name || room.name))), [apiRooms]);
 
   return (
@@ -805,11 +810,13 @@ export default function Page() {
               {rooms.map((room) => (
                 <RoomCard
                   key={room.id}
+                  id={room.id}
                   name={room.name}
                   location={room.location}
                   price={room.price}
                   imageUrl={room.imageUrl}
                   roomType={room.roomType}
+                  genderType={room.genderType}
                   status={room.status}
                 />
               ))}

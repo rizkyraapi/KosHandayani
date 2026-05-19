@@ -1,52 +1,106 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getProfile } from '@/lib/api';
+import Navbar from '@/components/Navbar';
+import RoomCard from '@/components/RoomCard';
+import { getProfile, getRoomById, getRooms, type ApiRoom } from '@/lib/api';
+
+const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1200';
+
+function formatRupiah(price: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(price);
+}
+
+function getFacilityIcon(facilityName: string) {
+  const normalized = facilityName.toLowerCase();
+
+  if (normalized.includes('wi')) return 'wifi';
+  if (normalized.includes('ac')) return 'ac_unit';
+  if (normalized.includes('mandi')) return 'bathroom';
+  if (normalized.includes('laundry')) return 'local_laundry_service';
+  if (normalized.includes('heater')) return 'hot_tub';
+  if (normalized.includes('meja')) return 'desk';
+  if (normalized.includes('lemari')) return 'checkroom';
+
+  return 'check_circle';
+}
+
+function statusLabel(status: ApiRoom['room_status']) {
+  return {
+    available: 'Available',
+    occupied: 'Occupied',
+    maintenance: 'Maintenance',
+  }[status];
+}
+
 export default function Page() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const [room, setRoom] = useState<ApiRoom | null>(null);
+  const [relatedRooms, setRelatedRooms] = useState<ApiRoom[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [profileWarning, setProfileWarning] = useState('');
 
   useEffect(() => {
-    const style = document.createElement('style');
-    style.innerHTML = `
-      @tailwind base;
-      @tailwind components;
-      @tailwind utilities;
+    let isMounted = true;
 
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-      }
+    async function loadRoom() {
+      try {
+        setIsLoading(true);
+        setError('');
 
-      ::-webkit-scrollbar {
-        width: 6px;
-      }
+        const detail = await getRoomById(params.id);
+        const related = detail.branch_id
+          ? await getRooms({ branch_id: detail.branch_id, exclude_id: detail.id, limit: 3 })
+          : [];
 
-      ::-webkit-scrollbar-track {
-        background: #f0f3ff;
+        if (isMounted) {
+          setRoom(detail);
+          setRelatedRooms(related);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Gagal memuat detail kamar.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
+    }
 
-      ::-webkit-scrollbar-thumb {
-        background: #bccbb9;
-        border-radius: 10px;
-      }
+    loadRoom();
 
-      .glass-effect {
-        backdrop-filter: blur(24px);
-        background-color: rgba(255, 255, 255, 0.8);
-      }
+    return () => {
+      isMounted = false;
+    };
+  }, [params.id]);
 
-      .primary-gradient {
-        background: linear-gradient(135deg, #006e2f 0%, #22c55e 100%);
-      }
-    `;
-    document.head.appendChild(style);
-  }, []);
+  const galleryImages = useMemo(() => {
+    if (!room) return [];
+
+    const urls = [
+      ...room.images.map((image) => image.image_url),
+      room.thumbnail,
+    ].filter((url): url is string => Boolean(url));
+
+    return Array.from(new Set(urls));
+  }, [room]);
+  const visibleGalleryImages = galleryImages.length > 0
+    ? [...galleryImages.slice(0, 4), ...Array(Math.max(0, 4 - galleryImages.length)).fill(fallbackImageUrl)]
+    : [fallbackImageUrl, fallbackImageUrl, fallbackImageUrl, fallbackImageUrl];
+  const remainingGalleryCount = Math.max(0, galleryImages.length - 4);
 
   const handleApplyClick = async () => {
+    if (!room) return;
+
     try {
       setIsCheckingProfile(true);
       setProfileWarning('');
@@ -57,7 +111,7 @@ export default function Page() {
         return;
       }
 
-      router.push(`/room/${params.id}/apply`);
+      router.push(`/room/${room.id}/apply`);
     } catch {
       router.push('/login');
     } finally {
@@ -65,320 +119,153 @@ export default function Page() {
     }
   };
 
-  return (
-    <div className="bg-surface font-body text-on-surface antialiased">
-      {/* Top Navigation Bar */}
-      <nav className="bg-white/80 backdrop-blur-md font-headline tracking-tight text-slate-900 sticky top-0 z-50 shadow-sm">
-        <div className="flex justify-between items-center px-4 sm:px-8 py-4 max-w-7xl mx-auto">
-          <div className="flex items-center">
-            <Image
-              src="/KosHandayani_Logo.png"
-              alt="KosHandayani Logo"
-              width={180}
-              height={56}
-              className="h-12 w-auto object-contain"
-              priority
-            />
-          </div>
-          <div className="hidden md:flex gap-8 items-center">
-            <a className="text-green-700 font-bold border-b-2 border-green-600 transition-colors" href="#">Beranda</a>
-            <a className="text-slate-600 font-medium hover:text-green-500 transition-colors" href="#">Bantuan</a>
-          </div>
-          <div className="flex gap-2 sm:gap-4">
-            <button className="px-3 sm:px-5 py-2 text-slate-600 font-medium hover:text-green-600 transition-colors text-sm sm:text-base">Login</button>
-            <button className="px-4 sm:px-6 py-2 primary-gradient text-white rounded-lg font-bold shadow-md hover:scale-95 duration-200 text-sm sm:text-base">Daftar</button>
-          </div>
-        </div>
-      </nav>
+  if (isLoading) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9f9ff', color: '#3d4a3d', fontFamily: 'Inter, sans-serif' }}>
+        Memuat detail kamar...
+      </main>
+    );
+  }
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Image Gallery Bento Grid */}
-        <section className="grid grid-cols-2 md:grid-cols-4 grid-rows-2 gap-2 sm:gap-4 h-75 sm:h-100 md:h-137.5 mb-8 sm:mb-10 overflow-hidden rounded-xl">
-          <div className="col-span-2 row-span-2 relative group overflow-hidden cursor-pointer">
-            <img
-              alt="Suite Room Interior"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhw2GbdcdAxyaA6YuzRDpRzIdp93vsGUai7Z0Au0xsM5Z8NMkY8wMc_ixi0b0hc_0xEVkCQPJezw7lbJuWtuR-0k396c4hl6BO86luEgg_Ewo1Q5EtvorJfsfa_Kyb-zP0IICLOFfvSl2Vq0LSVYE8jjzHUDmS5nCsMgDd6ctMWiggXjQKLAxLOID7iPtGfLaDTqks6ObCVrBkMDY5iAbXkGH5Jh_57N0dwHqUPveuRoAGOkfeJZk4tWZeJxR08qka5n6VWXmdY8-Z"
-            />
-            <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+  if (error || !room) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9f9ff', color: '#ba1a1a', fontFamily: 'Inter, sans-serif', padding: 24, textAlign: 'center' }}>
+        {error || 'Kamar tidak ditemukan.'}
+      </main>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f9f9ff', color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
+      <style>{`
+        .room-detail-gallery {
+          display: grid;
+          grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+          grid-template-rows: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+          min-height: 520px;
+        }
+
+        @media (max-width: 760px) {
+          .room-detail-gallery {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto;
+            min-height: 0;
+          }
+
+          .room-detail-gallery-main {
+            grid-row: auto !important;
+            min-height: 260px !important;
+          }
+        }
+      `}</style>
+      <Navbar />
+
+      <main style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 24px 72px' }}>
+        <section className="room-detail-gallery" style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 34 }}>
+          <img className="room-detail-gallery-main" src={visibleGalleryImages[0]} alt={room.room_name} style={{ gridRow: '1 / 4', width: '100%', height: '100%', objectFit: 'cover', minHeight: 520 }} />
+          <div style={{ position: 'relative', minHeight: 164 }}>
+            <img src={visibleGalleryImages[1]} alt={`${room.room_name} 2`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           </div>
-          <div className="col-span-1 row-span-1 relative group overflow-hidden cursor-pointer">
-            <img
-              alt="Modern Bathroom"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAio1yc-cV224k0TBpgewVm2uxUYQcncVSLxIahdhS5YjDSwt8ZMhIEQbqWcByUgERefHsdpUtU3RfP1PFCJF_zuZ5uKspwRpVvhGhh0KRGeYgIm0dJjcBSFNWeszhrjadfp0ghAmHzqYqpu_XuUX9cHuLm4vQmTbxm-HoHA1zvUzipUMIPGC_kNXlvdG3GvzzAd9nCPIC06Mm5fDx-P79fY3SmomLxBDYuJQ19UPaYwd047wkCWnri8f12dPwwFHN5XOD4fRJMQ6Yh"
-            />
+          <div style={{ position: 'relative', minHeight: 164 }}>
+            <img src={visibleGalleryImages[2]} alt={`${room.room_name} 3`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           </div>
-          <div className="col-span-1 row-span-1 relative group overflow-hidden cursor-pointer">
-            <img
-              alt="Study Desk Area"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoHGsfpyoLtzIBgcYYARkXF_U88Jp6x5CXC-2zWtkCbVMSkefVYdp_9y12tIzQ5H1pxovqRNixv2CTUcdtzYwtXZVmMJW-gnEVnDl8FU8M11BPMCBnqsnyt83OPJ_2xdVyRzkrB92W3Q9wR3eWyVKCdyK0Zqp4xvva0SP5xmvVLl9PcFOfQU56sB7SOzFiHwUavoMjOqAlJLKqeRs76LwNu441Zd_50r93D2iSy85KhMUAc4ClzW9_Dq3MioT47cqoKoM2KKm4zFvf"
-            />
-          </div>
-          <div className="col-span-2 row-span-1 relative group overflow-hidden cursor-pointer">
-            <img
-              alt="Balcony View"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0DbXdPqOxDviTu1TVHBp11qSE0NZOFR_flDGKq_aBrCMJnW48pmgEA-dSf1bpbd8ze_tpO7igZsXeqHxlvrSc_heP621llQDi9sovbDiirOKA1NKqndv0ukjVYQvcTWdaDijtfgDFSJpF98csBT8lcDIS5a1qhLufZXxhb5BjTEfFVnnqZUBGhfha83ZEl3L3TN8tcNrzblo_De1vIZXC2Ze56JYEheWIZq_gBezHWY4n3PWcFskWKOs1WbREaxtpZCvJcQjmesjd"
-            />
-            <div className="absolute inset-0 bg-primary/10 group-hover:bg-transparent transition-colors"></div>
-            <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 bg-white/90 backdrop-blur px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1 sm:gap-2 text-on-surface shadow-lg">
-              <span className="material-symbols-outlined text-xs sm:text-sm">photo_library</span>
-              <span className="hidden sm:inline">Lihat Semua Foto</span>
-              <span className="sm:hidden">Semua Foto</span>
-            </div>
+          <div style={{ position: 'relative', minHeight: 164 }}>
+            <img src={visibleGalleryImages[3]} alt={`${room.room_name} 4`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            {remainingGalleryCount > 0 && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(17,28,45,0.58)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 24, fontWeight: 900 }}>
+                +{remainingGalleryCount} more
+              </div>
+            )}
           </div>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-start">
-          {/* Left Column: Content */}
-          <div className="lg:col-span-8 space-y-8 sm:space-y-10">
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.7fr) minmax(300px, 0.8fr)', gap: 32, alignItems: 'start' }}>
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
             <header>
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className="px-3 py-1 bg-primary-container/20 text-on-primary-container text-xs font-bold rounded-full uppercase tracking-wider">Tersedia</span>
-                <span className="px-3 py-1 bg-surface-container-high text-on-surface-variant text-xs font-bold rounded-full uppercase tracking-wider">Wanita/Pria</span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' }}>{statusLabel(room.room_status)}</span>
+                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#e7eeff', color: '#3d4a3d', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' }}>{room.room_type}</span>
+                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#f0f3ff', color: '#3d4a3d', fontSize: 12, fontWeight: 900, textTransform: 'uppercase' }}>{room.gender_type}</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-headline font-extrabold text-on-surface tracking-tight mb-2">Suite Room B-12 Platinum</h1>
-              <div className="flex items-center gap-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-primary">location_on</span>
-                <span className="font-medium">Cabang Kebon Jeruk, Jakarta Barat</span>
-              </div>
+              <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(32px, 5vw, 52px)', lineHeight: 1.05, margin: 0 }}>{room.room_name}</h1>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3d4a3d', fontWeight: 700, marginTop: 12 }}>
+                <span className="material-symbols-outlined" style={{ color: '#006e2f' }}>location_on</span>
+                {room.branch?.branch_name || 'Cabang belum diatur'}{room.branch?.city ? `, ${room.branch.city}` : ''}
+              </p>
             </header>
 
-            <div className="p-6 sm:p-8 bg-surface-container-lowest rounded-xl shadow-sm border-l-4 border-primary">
-              <h2 className="text-xl font-headline font-bold mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">description</span>
-                Deskripsi Kamar
-              </h2>
-              <p className="text-on-surface-variant leading-relaxed mb-4">
-                Nikmati pengalaman tinggal premium di Suite Room B-12 Platinum. Kamar ini dirancang untuk profesional muda yang menginginkan kenyamanan hotel berbintang dengan fleksibilitas tempat tinggal. Dilengkapi dengan furnitur berkualitas tinggi dan pencahayaan yang dipikirkan matang untuk produktivitas sekaligus relaksasi.
-              </p>
-              <p className="text-on-surface-variant leading-relaxed">
-                Terletak di lantai dua dengan akses balkon pribadi yang menghadap ke taman dalam. Luas kamar 24m² memberikan ruang gerak yang sangat leluasa.
-              </p>
-            </div>
-
-            <section>
-              <h2 className="text-2xl font-headline font-bold mb-6">Fasilitas Kamar &amp; Gedung</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
-                {[
-                  { icon: 'wifi', label: 'Wi-fi 50Mbps' },
-                  { icon: 'ac_unit', label: 'AC 1 PK' },
-                  { icon: 'hot_tub', label: 'Water Heater' },
-                  { icon: 'king_bed', label: 'Springbed Queen' },
-                  { icon: 'desk', label: 'Meja Kerja' },
-                  { icon: 'kitchen', label: 'Kulkas Mini' },
-                  { icon: 'security', label: 'CCTV 24 Jam' },
-                  { icon: 'local_parking', label: 'Parkir Luas' },
-                ].map(({ icon, label }) => (
-                  <div key={label} className="flex flex-col items-center p-4 bg-surface-container-low rounded-xl group hover:bg-white hover:shadow-md transition-all">
-                    <span className="material-symbols-outlined text-primary text-3xl mb-2">{icon}</span>
-                    <span className="text-sm font-medium text-on-surface-variant text-center">{label}</span>
-                  </div>
-                ))}
-              </div>
+            <section style={{ background: '#fff', borderRadius: 12, padding: 24, borderLeft: '4px solid #006e2f', boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
+              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 22, margin: '0 0 12px' }}>Deskripsi Kamar</h2>
+              <p style={{ color: '#3d4a3d', lineHeight: 1.75, margin: 0 }}>{room.description || 'Belum ada deskripsi untuk kamar ini.'}</p>
             </section>
 
             <section>
-              <div className="flex justify-between items-end mb-6">
-                <h2 className="text-2xl font-headline font-bold">Lokasi Strategis</h2>
-                <a className="text-primary font-bold text-sm hover:underline" href="#">Lihat di Google Maps</a>
-              </div>
-              <div className="relative h-70 sm:h-87.5 rounded-xl overflow-hidden shadow-sm group">
-                <img
-                  alt="Location Map"
-                  className="w-full h-full object-cover"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFy0syikBgXEaZf5x9qpGJDB4QcIQVF7o-rGzn0cwJH-Q0pv7d1gV3wA0OPWKEpjzgkvGVHhQ3LMDdW_zY1KwgbCiuq9OXaP2K9VhclpibtJFD-b15q-YRXZonePSR1X0Chz_Yw3unVnx4tokjwhpNRmcFBHn0MOY95da7ugPCIthtFELriv8AwDql1SRX38Eb3_6gOk7vtqxEzSr4wJVkVxAcM4SN9rZgOLFsxeBEj6UH1lDNJWDpAz-gGT3rkDB4SpUeSEcVTLrg"
-                />
-                <div className="absolute inset-0 bg-primary/10 group-hover:bg-transparent transition-colors"></div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <div className="bg-white p-2 rounded-full shadow-2xl animate-bounce">
-                    <span className="material-symbols-outlined text-primary text-4xl">location_on</span>
+              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 24, margin: '0 0 16px' }}>Fasilitas</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+                {room.facilities.length > 0 ? room.facilities.map((facility) => (
+                  <div key={facility.id} style={{ minHeight: 82, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', borderRadius: 10, color: '#3d4a3d' }}>
+                    <span className="material-symbols-outlined" style={{ color: '#006e2f', fontSize: 28 }}>{getFacilityIcon(facility.facility_name)}</span>
+                    <span style={{ fontWeight: 800, textAlign: 'center', fontSize: 13 }}>{facility.facility_name}</span>
                   </div>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-start gap-3 p-4 bg-surface-container rounded-xl">
-                  <span className="material-symbols-outlined text-primary">directions_walk</span>
-                  <div>
-                    <h4 className="font-bold text-sm">3 Menit ke Halte TransJakarta</h4>
-                    <p className="text-xs text-on-surface-variant">Akses mudah ke pusat kota</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-surface-container rounded-xl">
-                  <span className="material-symbols-outlined text-primary">shopping_cart</span>
-                  <div>
-                    <h4 className="font-bold text-sm">5 Menit ke Mall Ciputra</h4>
-                    <p className="text-xs text-on-surface-variant">Pusat belanja dan hiburan</p>
-                  </div>
-                </div>
+                )) : (
+                  <p style={{ color: '#3d4a3d' }}>Belum ada fasilitas yang dicatat.</p>
+                )}
               </div>
             </section>
-          </div>
+          </section>
 
-          {/* Right Column: Sticky Pricing Card */}
-          <aside className="lg:col-span-4 lg:sticky lg:top-28 space-y-6">
-            <div className="bg-surface-container-lowest rounded-xl shadow-xl overflow-hidden border-t-8 border-primary">
-              <div className="p-6 sm:p-8">
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-on-surface-variant font-medium">Mulai dari</span>
-                  <div className="text-right">
-                    <div className="text-2xl sm:text-3xl font-headline font-extrabold text-primary">Rp 3.250.000</div>
-                    <div className="text-xs font-medium text-on-surface-variant">per bulan</div>
+          <aside style={{ position: 'sticky', top: 94 }}>
+            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', borderTop: '8px solid #006e2f', boxShadow: '0 20px 44px rgba(17,28,45,0.1)' }}>
+              <div style={{ padding: 24 }}>
+                <p style={{ color: '#3d4a3d', fontWeight: 700, margin: '0 0 6px' }}>Harga per bulan</p>
+                <h2 style={{ fontFamily: 'Manrope, sans-serif', color: '#006e2f', fontSize: 32, margin: 0 }}>{formatRupiah(room.price)}</h2>
+                <div style={{ display: 'grid', gap: 10, marginTop: 22 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: '#f0f3ff', borderRadius: 8 }}>
+                    <span>Maksimal tamu</span>
+                    <strong>{room.max_guest}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: '#f0f3ff', borderRadius: 8 }}>
+                    <span>Status</span>
+                    <strong>{statusLabel(room.room_status)}</strong>
                   </div>
                 </div>
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-secondary text-xl">event_available</span>
-                      <span className="text-sm font-semibold">Ready to move in</span>
-                    </div>
-                    <span className="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-secondary text-xl">verified_user</span>
-                      <span className="text-sm font-semibold">Pemilik Terverifikasi</span>
-                    </div>
-                    <span className="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {profileWarning && (
-                    <p className="text-sm font-semibold text-error bg-error-container rounded-lg p-3">
-                      {profileWarning}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleApplyClick}
-                    disabled={isCheckingProfile}
-                    className="w-full primary-gradient text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                  >
-                    <span className="material-symbols-outlined">flash_on</span>
-                    {isCheckingProfile ? 'Memeriksa Profil...' : 'Ajukan Sewa'}
-                  </button>
-                  <button className="w-full bg-white border-2 border-primary text-primary py-4 rounded-xl font-bold text-lg hover:bg-primary-container/10 transition-all flex items-center justify-center gap-2">
-                    <span className="material-symbols-outlined">chat</span>
-                    Tanya Pemilik
-                  </button>
-                </div>
-              </div>
-              <div className="bg-surface-container p-6 text-center">
-                <p className="text-xs text-on-surface-variant mb-1">Butuh bantuan reservasi?</p>
-                <a className="text-sm font-bold text-primary flex items-center justify-center gap-1" href="tel:08123456789">
-                  <span className="material-symbols-outlined text-sm">call</span>
-                  Hubungi CS KosHandayani
-                </a>
-              </div>
-            </div>
-
-            {/* Owner Card */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full overflow-hidden bg-slate-200 shrink-0">
-                <img
-                  alt="Owner Profile"
-                  className="w-full h-full object-cover"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuA97xPpdGtwi3XO9frjjWk-wEnDNUST1EH-1yaPovM7y2xH77br6gz-qHPSMAj0rFPyt0vJBWemmMAlrtp_OlScasahtwosVsbY8yw9CrU50LtxbdYpLL64VJ2Lk5GbjwI00hv5sPG7WgwImv_-fcc2awtdRRDCVvucfsdbIvE_Tl6OAtftfIzT5MhSxIOhcx5ZuQ-9cbYj1OSIgbtFqTXs6_EPvMSERlZSUhbj8fNIHztvr9skkWC4hlR00JjfYhgm6JNIr_Ow5_mO"
-                />
-              </div>
-              <div>
-                <h4 className="font-bold text-on-surface">Bp. Handayani</h4>
-                <p className="text-xs text-on-surface-variant mb-1">Pemilik Properti</p>
-                <div className="flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full w-fit">
-                  <span className="material-symbols-outlined" style={{ fontSize: '10px' }}>verified</span>
-                  Super Host
-                </div>
+                {profileWarning && <p style={{ margin: '16px 0 0', padding: 12, borderRadius: 8, color: '#93000a', background: '#ffdad6', fontWeight: 700 }}>{profileWarning}</p>}
+                <button type="button" onClick={handleApplyClick} disabled={isCheckingProfile || room.room_status !== 'available'} style={{ width: '100%', minHeight: 52, border: 0, borderRadius: 10, marginTop: 20, background: room.room_status === 'available' ? 'linear-gradient(135deg, #006e2f, #22c55e)' : '#bccbb9', color: '#fff', fontWeight: 900, fontSize: 16, cursor: room.room_status === 'available' ? 'pointer' : 'not-allowed' }}>
+                  {isCheckingProfile ? 'Memeriksa Profil...' : room.room_status === 'available' ? 'Ajukan Sewa' : 'Belum Bisa Disewa'}
+                </button>
               </div>
             </div>
           </aside>
         </div>
 
-        {/* Similar Rooms */}
-        <section className="mt-16 sm:mt-20">
-          <h2 className="text-2xl sm:text-3xl font-headline font-extrabold mb-6 sm:mb-8">Kamar Lain di Cabang Ini</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {/* Room Card 1 */}
-            <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
-              <div className="h-48 overflow-hidden relative">
-                <img
-                  alt="Superior Room"
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQI4kt5WBVPk8pz63A41YfZsoG9jNTstZryBwAojlKlyahtvecVETRgIxfQlFHNM6uVPNlFREzAk0TyoCYY9VbUJjEeqTM9pD569xLi2cdN7ibbqYYDyer4osa63ZtIfBCcNQZFgCejjRKvwKk8LroDGjIE6665MXMU2F7LcSyGC9X7W7d2rShvbNFUZ2Y80SkyqzIg_vaNYDjVG8KfWyLGashqTTwe9luwNW-z4ZIGnl2KOt0b-LA5HPdvzXBLLVC4M40Y6nOpbkZ"
+        <section style={{ marginTop: 56 }}>
+          <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 28, margin: '0 0 18px' }}>Kamar Lain di Cabang Ini</h2>
+          {relatedRooms.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
+              {relatedRooms.map((related) => (
+                <RoomCard
+                  key={related.id}
+                  id={related.id}
+                  name={related.room_name}
+                  location={related.branch?.branch_name || 'Cabang belum diatur'}
+                  price={formatRupiah(related.price)}
+                  imageUrl={related.thumbnail || fallbackImageUrl}
+                  roomType={related.room_type}
+                  genderType={related.gender_type}
+                  status={related.room_status}
+                  amenities={related.facilities.slice(0, 3).map((facility) => ({
+                    icon: getFacilityIcon(facility.facility_name),
+                    label: facility.facility_name,
+                  }))}
                 />
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase text-on-surface">Superior</div>
-              </div>
-              <div className="p-6">
-                <h3 className="font-bold text-lg mb-1 group-hover:text-primary transition-colors">Superior Room B-05</h3>
-                <p className="text-xs text-on-surface-variant mb-4">Lantai 1 • Kamar Mandi Dalam</p>
-                <div className="flex justify-between items-end">
-                  <div className="text-primary font-bold">Rp 2.800.000<span className="text-[10px] text-on-surface-variant font-normal">/bln</span></div>
-                  <button className="p-2 bg-surface-container-high rounded-full hover:bg-primary-container/20 hover:text-primary transition-all">
-                    <span className="material-symbols-outlined">arrow_forward</span>
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
-
-            {/* Room Card 2 */}
-            <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
-              <div className="h-48 overflow-hidden relative">
-                <img
-                  alt="Deluxe Room"
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbi7vtUoHGFHhZbWCn6T7EFsnbxeDvzZl6BJ8aP04Phyock_5otcB0-tlaLjVQVkJJsOEuBvv9rcerbp5rsiJHLWpqsnZj6LOzeUFzYxti08-80-vxgLB6i8DPGyVPWJvwILsvR6luBk98AKp855yNTKMHmiiF5OnSLU7gVxXwXtWzsphv2pPb7P7L_OE4lzy3jsdNjIdpEXs8jnj5f5WqXCLBYE-qGmblSM6jM4DeqpCXHkRkyTx6MMhBdoV2bLkXXK6Kp8vSrnoy"
-                />
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase text-on-surface">Deluxe</div>
-              </div>
-              <div className="p-6">
-                <h3 className="font-bold text-lg mb-1 group-hover:text-primary transition-colors">Deluxe Loft A-02</h3>
-                <p className="text-xs text-on-surface-variant mb-4">Lantai 3 • Mezzanine Area</p>
-                <div className="flex justify-between items-end">
-                  <div className="text-primary font-bold">Rp 3.500.000<span className="text-[10px] text-on-surface-variant font-normal">/bln</span></div>
-                  <button className="p-2 bg-surface-container-high rounded-full hover:bg-primary-container/20 hover:text-primary transition-all">
-                    <span className="material-symbols-outlined">arrow_forward</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Room Card 3 */}
-            <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
-              <div className="h-48 overflow-hidden relative">
-                <img
-                  alt="Standard Room"
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmh5IcEs6NCbNgyRellYfbkzGL_ZIQM527h6jCIUscxsNOz53ZthjPRTHskcS_0lol5ezNsfBhswPOd6DOLCQCjC00hRndIt_gDNFj_0-7juoHBY-lm8pJpWlFDrex_4T_M0uZtqgMQxzG63jeHEjIvR3sVUHJJ3o8YH0lqrIzqc8r0IlerKbfA2h6KkVIAN8bsK3wKBGcwdY33IkZlmvKyC1K7mJLA3-Qs0LDH_ESMSaFWcXlJb1VgzY3ookxpE2hHmQMgsramY8k"
-                />
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase text-on-surface">Standard</div>
-              </div>
-              <div className="p-6">
-                <h3 className="font-bold text-lg mb-1 group-hover:text-primary transition-colors">Standard Room C-08</h3>
-                <p className="text-xs text-on-surface-variant mb-4">Lantai 1 • Dekat Pintu Masuk</p>
-                <div className="flex justify-between items-end">
-                  <div className="text-primary font-bold">Rp 2.200.000<span className="text-[10px] text-on-surface-variant font-normal">/bln</span></div>
-                  <button className="p-2 bg-surface-container-high rounded-full hover:bg-primary-container/20 hover:text-primary transition-all">
-                    <span className="material-symbols-outlined">arrow_forward</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          ) : (
+            <p style={{ color: '#3d4a3d' }}>Belum ada kamar terkait di cabang ini.</p>
+          )}
         </section>
       </main>
-
-      {/* Footer */}
-      <footer className="w-full py-8 mt-auto bg-white border-t border-slate-100 font-body text-xs text-slate-500">
-        <div className="flex flex-col items-center gap-4 px-8 max-w-7xl mx-auto">
-          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mb-2">
-            <a className="text-slate-400 hover:text-slate-600 transition-colors duration-200" href="#">Tentang Kami</a>
-            <a className="text-slate-400 hover:text-slate-600 transition-colors duration-200" href="#">Syarat &amp; Ketentuan</a>
-            <a className="text-slate-400 hover:text-slate-600 transition-colors duration-200" href="#">Kebijakan Privasi</a>
-          </div>
-          <p className="text-center">© 2024 KosHandayani. Digital Concierge Property Management.</p>
-        </div>
-      </footer>
     </div>
   );
 }

@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RentalApplicationController;
 
@@ -13,6 +14,7 @@ use App\Http\Controllers\RoomController;
 // PUBLIC
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/branches', [BranchController::class, 'index']);
 Route::get('/rooms', [RoomController::class, 'index']);
 Route::get('/rooms/{room}', [RoomController::class, 'show']);
 

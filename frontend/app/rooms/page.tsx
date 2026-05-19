@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import RoomCard from '../../components/RoomCard';
-import { getRooms } from '../../lib/api';
-import type { ApiRoom } from '../../lib/api';
+import { getBranches, getRooms } from '../../lib/api';
+import type { ApiBranch, ApiRoom } from '../../lib/api';
 
 const roomTypeFilters = [
   { label: 'Semua', value: 'semua' },
@@ -35,16 +35,15 @@ const legalitasLinks = ['Syarat & Ketentuan', 'Kebijakan Privasi'];
 type ListingRoom = {
   id: number;
   image: string;
-  statusAvailable: boolean;
   branch: string;
+  branchId: number | null;
   name: string;
   amenities: Amenity[];
   roomType: 'single' | 'double' | 'suite';
+  genderType: 'male' | 'female' | 'mixed';
+  roomStatus: 'available' | 'occupied' | 'maintenance';
   price: string;
   priceValue: number;
-  priceGreen: boolean;
-  perMonth: string;
-  available: boolean;
 };
 
 function formatRupiah(price: number) {
@@ -87,17 +86,16 @@ function getRoomAmenities(room: ApiRoom): Amenity[] {
 function mapRoomToListing(room: ApiRoom, index: number): ListingRoom {
   return {
     id: room.id,
-    image: room.thumbnail || room.image_url || room.images[0]?.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
-    statusAvailable: room.is_available,
-    branch: room.branch,
+    image: room.thumbnail || fallbackRoomImages[index % fallbackRoomImages.length],
+    branch: room.branch?.branch_name || 'Cabang belum diatur',
+    branchId: room.branch_id,
     name: room.room_name || room.name,
     amenities: getRoomAmenities(room),
     roomType: room.room_type,
+    genderType: room.gender_type,
+    roomStatus: room.room_status,
     price: formatRupiah(room.price),
     priceValue: room.price,
-    priceGreen: room.is_available,
-    perMonth: '/ bulan',
-    available: room.is_available,
   };
 }
 
@@ -136,10 +134,15 @@ function StyledSelect({
 
 export default function Page() {
   const [apiRooms, setApiRooms] = useState<ApiRoom[]>([]);
+  const [branches, setBranches] = useState<ApiBranch[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [roomsError, setRoomsError] = useState('');
   const [activeRoomType, setActiveRoomType] = useState('semua');
   const [branch, setBranch] = useState('semua-cabang');
+  const [activeGenderType, setActiveGenderType] = useState('semua');
+  const [activeRoomStatus, setActiveRoomStatus] = useState('semua');
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
   const [sortBy, setSortBy] = useState('harga-termurah');
   const [activePage, setActivePage] = useState(1);
   const roomsPerPage = 6;
@@ -152,10 +155,11 @@ export default function Page() {
         setIsLoadingRooms(true);
         setRoomsError('');
 
-        const data = await getRooms();
+        const [data, branchData] = await Promise.all([getRooms(), getBranches()]);
 
         if (isMounted) {
           setApiRooms(data);
+          setBranches(branchData);
         }
       } catch (error) {
         if (isMounted) {
@@ -179,19 +183,25 @@ export default function Page() {
   const branchOptions = useMemo(
     () => [
       { value: 'semua-cabang', label: 'Semua Cabang' },
-      ...Array.from(new Set(apiRooms.map((room) => room.branch))).map((branchName) => ({
-        value: branchName,
-        label: branchName,
+      ...branches.map((branchItem) => ({
+        value: String(branchItem.id),
+        label: branchItem.branch_name,
       })),
     ],
-    [apiRooms],
+    [branches],
   );
   const filteredRooms = useMemo(() => {
+    const min = priceMin ? Number(priceMin) : null;
+    const max = priceMax ? Number(priceMax) : null;
     const filtered = allRooms.filter((room) => {
-      const matchesBranch = branch === 'semua-cabang' || room.branch === branch;
+      const matchesBranch = branch === 'semua-cabang' || String(room.branchId) === branch;
       const matchesRoomType = activeRoomType === 'semua' || room.roomType === activeRoomType;
+      const matchesGenderType = activeGenderType === 'semua' || room.genderType === activeGenderType;
+      const matchesRoomStatus = activeRoomStatus === 'semua' || room.roomStatus === activeRoomStatus;
+      const matchesMinPrice = min === null || room.priceValue >= min;
+      const matchesMaxPrice = max === null || room.priceValue <= max;
 
-      return matchesBranch && matchesRoomType;
+      return matchesBranch && matchesRoomType && matchesGenderType && matchesRoomStatus && matchesMinPrice && matchesMaxPrice;
     });
 
     return [...filtered].sort((a, b) => {
@@ -205,7 +215,7 @@ export default function Page() {
 
       return a.priceValue - b.priceValue;
     });
-  }, [activeRoomType, allRooms, branch, sortBy]);
+  }, [activeGenderType, activeRoomStatus, activeRoomType, allRooms, branch, priceMax, priceMin, sortBy]);
   const totalPages = Math.max(1, Math.ceil(filteredRooms.length / roomsPerPage));
   const currentPage = Math.min(activePage, totalPages);
   const visibleRooms = filteredRooms.slice((currentPage - 1) * roomsPerPage, currentPage * roomsPerPage);
@@ -271,6 +281,56 @@ export default function Page() {
               </div>
             </div>
 
+            <div className="flex flex-col items-start gap-3 w-full">
+              <span className="text-[#3d4a3d] text-sm tracking-[0.7px] leading-5">GENDER</span>
+              <StyledSelect
+                className="w-full h-12"
+                value={activeGenderType}
+                onChange={(value) => { setActiveGenderType(value); setActivePage(1); }}
+                options={[
+                  { value: 'semua', label: 'Semua Gender' },
+                  { value: 'male', label: 'Male' },
+                  { value: 'female', label: 'Female' },
+                  { value: 'mixed', label: 'Mixed' },
+                ]}
+              />
+            </div>
+
+            <div className="flex flex-col items-start gap-3 w-full">
+              <span className="text-[#3d4a3d] text-sm tracking-[0.7px] leading-5">STATUS</span>
+              <StyledSelect
+                className="w-full h-12"
+                value={activeRoomStatus}
+                onChange={(value) => { setActiveRoomStatus(value); setActivePage(1); }}
+                options={[
+                  { value: 'semua', label: 'Semua Status' },
+                  { value: 'available', label: 'Available' },
+                  { value: 'occupied', label: 'Occupied' },
+                  { value: 'maintenance', label: 'Maintenance' },
+                ]}
+              />
+            </div>
+
+            <div className="flex flex-col items-start gap-3 w-full">
+              <span className="text-[#3d4a3d] text-sm tracking-[0.7px] leading-5">RENTANG HARGA</span>
+              <input
+                value={priceMin}
+                onChange={(event) => { setPriceMin(event.target.value); setActivePage(1); }}
+                type="number"
+                min={0}
+                placeholder="Harga minimum"
+                className="w-full h-12 bg-[#f0f3ff] border-0 rounded-lg px-3 text-[#111c2d] text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <input
+                value={priceMax}
+                onChange={(event) => { setPriceMax(event.target.value); setActivePage(1); }}
+                type="number"
+                min={0}
+                placeholder="Harga maksimum"
+                className="w-full h-12 bg-[#f0f3ff] border-0 rounded-lg px-3 text-[#111c2d] text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
             {/* Action buttons */}
             <div className="flex flex-col items-start gap-3 pt-4 w-full">
               <button
@@ -282,7 +342,15 @@ export default function Page() {
                 Terapkan Filter
               </button>
               <button
-                onClick={() => { setActiveRoomType('semua'); setBranch('semua-cabang'); setSortBy('harga-termurah'); }}
+                onClick={() => {
+                  setActiveRoomType('semua');
+                  setActiveGenderType('semua');
+                  setActiveRoomStatus('semua');
+                  setBranch('semua-cabang');
+                  setPriceMin('');
+                  setPriceMax('');
+                  setSortBy('harga-termurah');
+                }}
                 className="w-full py-2 rounded-lg text-[#006e2f] text-sm text-center leading-5 font-normal bg-transparent border-0 cursor-pointer hover:bg-green-50 transition-colors"
               >
                 Reset Filter
@@ -330,12 +398,14 @@ export default function Page() {
                 {visibleRooms.map((room) => (
                   <RoomCard
                     key={room.id}
+                    id={room.id}
                     name={room.name}
                     location={room.branch}
                     price={room.price}
                     imageUrl={room.image}
                     roomType={room.roomType}
-                    status={room.statusAvailable ? 'Kosong' : 'Terisi'}
+                    genderType={room.genderType}
+                    status={room.roomStatus}
                     amenities={room.amenities}
                   />
                 ))}

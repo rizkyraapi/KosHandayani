@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createRoom, type ApiRoom } from '@/lib/api';
+import { createRoom, getBranches, type ApiBranch, type ApiRoom } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 
 const facilityOptions = [
@@ -21,6 +21,21 @@ const roomTypes: Array<{ label: string; value: ApiRoom['room_type'] }> = [
   { label: 'Double', value: 'double' },
   { label: 'Suite', value: 'suite' },
 ];
+
+const genderTypes: Array<{ label: string; value: ApiRoom['gender_type'] }> = [
+  { label: 'Male', value: 'male' },
+  { label: 'Female', value: 'female' },
+  { label: 'Mixed', value: 'mixed' },
+];
+
+const roomStatuses: Array<{ label: string; value: ApiRoom['room_status'] }> = [
+  { label: 'Available', value: 'available' },
+  { label: 'Occupied', value: 'occupied' },
+  { label: 'Maintenance', value: 'maintenance' },
+];
+
+const minRoomImages = 4;
+const maxRoomImages = 10;
 
 const colors = {
   primary: '#006e2f',
@@ -43,13 +58,16 @@ export default function Page() {
   const router = useRouter();
   const [form, setForm] = useState({
     room_name: '',
-    branch: '',
+    branch_id: '',
     room_type: 'single' as ApiRoom['room_type'],
+    gender_type: 'mixed' as ApiRoom['gender_type'],
+    room_status: 'available' as ApiRoom['room_status'],
     price: '',
     max_guest: '1',
     description: '',
-    is_available: true,
   });
+  const [branches, setBranches] = useState<ApiBranch[]>([]);
+  const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +85,39 @@ export default function Page() {
     };
   }, [previews]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBranches() {
+      try {
+        setIsLoadingBranches(true);
+        const data = await getBranches();
+
+        if (isMounted) {
+          setBranches(data);
+          setForm((current) => ({
+            ...current,
+            branch_id: current.branch_id || (data[0] ? String(data[0].id) : ''),
+          }));
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(formatError(loadError));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingBranches(false);
+        }
+      }
+    }
+
+    loadBranches();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   function toggleFacility(facility: string) {
     setSelectedFacilities((current) =>
       current.includes(facility)
@@ -79,11 +130,26 @@ export default function Page() {
     if (!fileList) return;
 
     const nextImages = Array.from(fileList).filter((file) => file.type.startsWith('image/'));
-    setImages((current) => [...current, ...nextImages].slice(0, 8));
+    setImages((current) => [...current, ...nextImages].slice(0, maxRoomImages));
   }
 
   function removeImage(index: number) {
     setImages((current) => current.filter((_, imageIndex) => imageIndex !== index));
+  }
+
+  function moveImage(index: number, direction: -1 | 1) {
+    setImages((current) => {
+      const targetIndex = index + direction;
+
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+
+      const nextImages = [...current];
+      [nextImages[index], nextImages[targetIndex]] = [nextImages[targetIndex], nextImages[index]];
+
+      return nextImages;
+    });
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -96,8 +162,18 @@ export default function Page() {
       return;
     }
 
-    if (!form.branch.trim()) {
+    if (!form.branch_id) {
       setError('Cabang wajib diisi.');
+      return;
+    }
+
+    if (images.length < minRoomImages) {
+      setError(`Minimal upload ${minRoomImages} foto kamar.`);
+      return;
+    }
+
+    if (images.length > maxRoomImages) {
+      setError(`Maksimal upload ${maxRoomImages} foto kamar.`);
       return;
     }
 
@@ -112,23 +188,25 @@ export default function Page() {
       await createRoom({
         room_name: form.room_name.trim(),
         room_type: form.room_type,
-        branch: form.branch.trim(),
+        branch_id: Number(form.branch_id),
+        gender_type: form.gender_type,
+        room_status: form.room_status,
         price,
         max_guest: Number(form.max_guest) || 1,
         description: form.description.trim(),
-        is_available: form.is_available,
         facilities: selectedFacilities,
         images,
       });
       setSuccess('Kamar berhasil disimpan.');
       setForm({
         room_name: '',
-        branch: '',
+        branch_id: branches[0] ? String(branches[0].id) : '',
         room_type: 'single',
+        gender_type: 'mixed',
+        room_status: 'available',
         price: '',
         max_guest: '1',
         description: '',
-        is_available: true,
       });
       setSelectedFacilities([]);
       setImages([]);
@@ -276,13 +354,19 @@ export default function Page() {
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span style={labelStyle}>Cabang</span>
-                <input
+                <select
                   style={inputStyle}
-                  value={form.branch}
-                  disabled={isSubmitting}
-                  placeholder="Contoh: Cabang Setiabudi"
-                  onChange={(event) => setForm((current) => ({ ...current, branch: event.target.value }))}
-                />
+                  value={form.branch_id}
+                  disabled={isSubmitting || isLoadingBranches}
+                  onChange={(event) => setForm((current) => ({ ...current, branch_id: event.target.value }))}
+                >
+                  <option value="">{isLoadingBranches ? 'Memuat cabang...' : 'Pilih Cabang'}</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.branch_name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -339,6 +423,36 @@ export default function Page() {
               </div>
             </div>
 
+            <div style={{ marginTop: 18 }} className="room-create-grid">
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={labelStyle}>Gender Type</span>
+                <select
+                  style={inputStyle}
+                  value={form.gender_type}
+                  disabled={isSubmitting}
+                  onChange={(event) => setForm((current) => ({ ...current, gender_type: event.target.value as ApiRoom['gender_type'] }))}
+                >
+                  {genderTypes.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={labelStyle}>Room Status</span>
+                <select
+                  style={inputStyle}
+                  value={form.room_status}
+                  disabled={isSubmitting}
+                  onChange={(event) => setForm((current) => ({ ...current, room_status: event.target.value as ApiRoom['room_status'] }))}
+                >
+                  {roomStatuses.map((status) => (
+                    <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <label style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <span style={labelStyle}>Deskripsi</span>
               <textarea
@@ -348,17 +462,6 @@ export default function Page() {
                 placeholder="Tuliskan detail kamar, suasana, atau catatan khusus."
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
               />
-            </label>
-
-            <label style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, width: 'fit-content', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={form.is_available}
-                disabled={isSubmitting}
-                onChange={(event) => setForm((current) => ({ ...current, is_available: event.target.checked }))}
-                style={{ width: 18, height: 18, accentColor: colors.primary }}
-              />
-              <span style={{ color: colors.muted, fontWeight: 800 }}>Kamar tersedia</span>
             </label>
           </section>
 
@@ -422,7 +525,9 @@ export default function Page() {
             >
               <span className="material-symbols-outlined" style={{ fontSize: 34, color: colors.primary }}>add_photo_alternate</span>
               Pilih beberapa foto kamar
-              <span style={{ fontSize: 12, fontWeight: 600 }}>JPG, PNG, atau WEBP. Foto pertama menjadi thumbnail.</span>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                Minimal 4 photos. Maximum 10 photos. First uploaded photo becomes room thumbnail.
+              </span>
               <input
                 type="file"
                 accept="image/*"
@@ -441,11 +546,50 @@ export default function Page() {
                 {previews.map((preview, index) => (
                   <div key={`${preview.file.name}-${index}`} style={{ position: 'relative', aspectRatio: '4 / 3', borderRadius: 8, overflow: 'hidden', background: colors.fieldStrong }}>
                     <img src={preview.url} alt={preview.file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <span style={{ position: 'absolute', left: 8, bottom: 8, minWidth: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17,28,45,0.78)', color: '#fff', borderRadius: 999, fontSize: 12, fontWeight: 900 }}>
+                      {index + 1}
+                    </span>
                     {index === 0 && (
                       <span style={{ position: 'absolute', left: 8, top: 8, background: colors.primary, color: '#fff', borderRadius: 999, padding: '4px 8px', fontSize: 11, fontWeight: 900 }}>
-                        Thumbnail
+                        Thumbnail Utama
                       </span>
                     )}
+                    <div style={{ position: 'absolute', right: 46, top: 8, display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        aria-label="Geser foto ke kiri"
+                        disabled={isSubmitting || index === 0}
+                        onClick={() => moveImage(index, -1)}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 999,
+                          border: 0,
+                          background: index === 0 ? 'rgba(17,28,45,0.32)' : 'rgba(17,28,45,0.72)',
+                          color: '#fff',
+                          cursor: isSubmitting || index === 0 ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Geser foto ke kanan"
+                        disabled={isSubmitting || index === previews.length - 1}
+                        onClick={() => moveImage(index, 1)}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 999,
+                          border: 0,
+                          background: index === previews.length - 1 ? 'rgba(17,28,45,0.32)' : 'rgba(17,28,45,0.72)',
+                          color: '#fff',
+                          cursor: isSubmitting || index === previews.length - 1 ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
+                      </button>
+                    </div>
                     <button
                       type="button"
                       disabled={isSubmitting}
