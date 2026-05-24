@@ -1,6 +1,6 @@
 'use client';
 import Image from 'next/image';
-import { CSSProperties, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import RoomCard from '../components/RoomCard';
 import { getRooms } from '../lib/api';
@@ -78,44 +78,36 @@ export default function Page() {
   const [apiRooms, setApiRooms] = useState<ApiRoom[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [roomsError, setRoomsError] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [activeSearchKeyword, setActiveSearchKeyword] = useState('');
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadRooms = useCallback(async (keyword = '') => {
+    try {
+      setIsLoadingRooms(true);
+      setRoomsError('');
 
-    async function loadRooms() {
-      try {
-        setIsLoadingRooms(true);
-        setRoomsError('');
+      const normalizedKeyword = keyword.trim();
+      const data = await getRooms(normalizedKeyword ? { search: normalizedKeyword } : undefined);
 
-        const data = await getRooms();
-
-        if (isMounted) {
-          setApiRooms(data);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setRoomsError(error instanceof Error ? error.message : 'Gagal fetch data kamar');
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingRooms(false);
-        }
-      }
+      setApiRooms(data);
+      setActiveSearchKeyword(normalizedKeyword);
+    } catch (error) {
+      setRoomsError(error instanceof Error ? error.message : 'Gagal fetch data kamar');
+    } finally {
+      setIsLoadingRooms(false);
     }
-
-    loadRooms();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
+  useEffect(() => {
+    void Promise.resolve().then(() => loadRooms());
+  }, [loadRooms]);
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void loadRooms(searchKeyword);
+  }
+
   const rooms = useMemo(() => apiRooms.map(mapRoomToCard), [apiRooms]);
-  const branchNames = useMemo(
-    () => Array.from(new Set(apiRooms.map((room) => room.branch?.branch_name).filter((name): name is string => Boolean(name)))),
-    [apiRooms],
-  );
-  const roomNames = useMemo(() => Array.from(new Set(apiRooms.map((room) => room.room_name || room.name))), [apiRooms]);
 
   return (
     <div
@@ -157,7 +149,7 @@ export default function Page() {
         }
         .search-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(180px, 1fr));
+          grid-template-columns: minmax(180px, 1fr);
           gap: 8px;
           padding: 8px;
           flex: 1;
@@ -577,7 +569,8 @@ export default function Page() {
               bersama KosHandayani.
             </p>
 
-            <div
+            <form
+              onSubmit={handleSearchSubmit}
               className="search-panel"
               style={{
                 marginTop: '48px',
@@ -605,7 +598,7 @@ export default function Page() {
                     paddingTop: '8px',
                     paddingBottom: '8px',
                     borderRadius: '0.75rem',
-                    cursor: 'pointer',
+                    cursor: 'text',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#f0f3ff';
@@ -624,85 +617,32 @@ export default function Page() {
                       marginBottom: '4px',
                     }}
                   >
-                    CABANG
+                    PENCARIAN
                   </label>
                   <div className="select-wrap">
-                    <select
+                    <input
+                      type="text"
+                      value={searchKeyword}
+                      onChange={(event) => setSearchKeyword(event.target.value)}
+                      placeholder="Cari nama kamar, fasilitas, cabang, tipe, deskripsi..."
                       style={{
+                        width: '100%',
                         backgroundColor: 'transparent',
                         border: 'none',
-                        padding: '0 28px 0 0',
+                        padding: '0 32px 0 0',
                         fontWeight: 600,
                         color: '#006e2f',
-                        appearance: 'none',
-                        cursor: 'pointer',
                         fontSize: '1rem',
+                        outline: 'none',
                       }}
-                    >
-                      <option>Semua Cabang</option>
-                      {branchNames.map((branchName) => (
-                        <option key={branchName}>{branchName}</option>
-                      ))}
-                    </select>
-                    <span className="material-symbols-outlined select-dropdown-icon">expand_more</span>
+                    />
+                    <span className="material-symbols-outlined select-dropdown-icon">search</span>
                   </div>
                 </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    paddingLeft: '16px',
-                    paddingRight: '16px',
-                    paddingTop: '8px',
-                    paddingBottom: '8px',
-                    borderRadius: '0.75rem',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f0f3ff';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: '0.625rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      fontWeight: 700,
-                      color: '#3d4a3d',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    TIPE KAMAR
-                  </label>
-                  <div className="select-wrap">
-                    <select
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        padding: '0 28px 0 0',
-                        fontWeight: 600,
-                        color: '#006e2f',
-                        appearance: 'none',
-                        cursor: 'pointer',
-                        fontSize: '1rem',
-                      }}
-                    >
-                      <option>Semua Tipe</option>
-                      {roomNames.map((roomName) => (
-                        <option key={roomName}>{roomName}</option>
-                      ))}
-                    </select>
-                    <span className="material-symbols-outlined select-dropdown-icon">expand_more</span>
-                  </div>
-                </div>
-
               </div>
 
               <button
+                type="submit"
                 className="search-button"
                 style={{
                   background: 'linear-gradient(to right, #006e2f, #22c55e)',
@@ -734,7 +674,7 @@ export default function Page() {
                 </span>
                 Cari Sekarang
               </button>
-            </div>
+            </form>
           </div>
         </section>
 
@@ -752,7 +692,9 @@ export default function Page() {
                 Kamar Tersedia
               </h2>
               <p style={{ color: '#3d4a3d', marginTop: '8px' }}>
-                Daftar kamar kos terbaik yang siap kamu huni hari ini.
+                {activeSearchKeyword
+                  ? `Hasil pencarian dari "${activeSearchKeyword}".`
+                  : 'Daftar kamar kos terbaik yang siap kamu huni hari ini.'}
               </p>
             </div>
             <div className="view-toggle" style={{ display: 'flex', gap: '8px' }}>
@@ -823,7 +765,9 @@ export default function Page() {
             </div>
           ) : (
             <div style={{ marginBottom: '64px', textAlign: 'center', color: '#3d4a3d' }}>
-              Belum ada kamar tersedia dari database.
+              {activeSearchKeyword
+                ? `Tidak ada kamar yang cocok dengan pencarian "${activeSearchKeyword}".`
+                : 'Belum ada kamar tersedia dari database.'}
             </div>
           )}
 

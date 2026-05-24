@@ -38,6 +38,7 @@ export interface ApiBranch {
 }
 
 export type RoomFilters = Partial<{
+  search: string;
   branch_id: number | string;
   room_type: ApiRoom['room_type'];
   gender_type: ApiRoom['gender_type'];

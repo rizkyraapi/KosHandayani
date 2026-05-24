@@ -100,4 +100,58 @@ class RoomManagementTest extends TestCase
             ->assertJsonPath('0.facilities.0.facility_name', 'Wi-Fi')
             ->assertJsonCount(0, '0.images');
     }
+
+    public function test_room_list_can_search_across_room_branch_and_facility_fields(): void
+    {
+        $branch = Branch::create([
+            'branch_name' => 'Cabang Menteng',
+            'city' => 'Jakarta Pusat',
+            'address' => 'Dekat stasiun',
+            'description' => 'Cabang premium untuk pekerja.',
+        ]);
+
+        $matchingRoom = Room::create([
+            'room_name' => 'Suite Cendana',
+            'branch_id' => $branch->id,
+            'branch' => $branch->branch_name,
+            'room_type' => 'suite',
+            'gender_type' => 'mixed',
+            'room_status' => 'available',
+            'description' => 'Kamar luas dengan meja kerja.',
+            'price' => 2500000,
+            'max_guest' => 2,
+            'is_available' => true,
+        ]);
+        $matchingRoom->facilities()->create(['facility_name' => 'Water Heater']);
+
+        Room::create([
+            'room_name' => 'Kamar Melati',
+            'branch_id' => $branch->id,
+            'branch' => $branch->branch_name,
+            'room_type' => 'single',
+            'gender_type' => 'female',
+            'room_status' => 'available',
+            'description' => 'Kamar hemat.',
+            'price' => 900000,
+            'max_guest' => 1,
+            'is_available' => true,
+        ]);
+
+        $this
+            ->getJson('/api/rooms?search=heater')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.room_name', 'Suite Cendana');
+
+        $this
+            ->getJson('/api/rooms?search=menteng')
+            ->assertOk()
+            ->assertJsonCount(2);
+
+        $this
+            ->getJson('/api/rooms?search=meja')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.room_name', 'Suite Cendana');
+    }
 }

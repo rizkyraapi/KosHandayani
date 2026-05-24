@@ -15,7 +15,32 @@ class RoomController extends Controller
 {
     public function index(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
+        $searchTerm = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
+
         $rooms = Room::with(['branch', 'facilities'])
+            ->when($search !== '', function ($query) use ($searchTerm) {
+                $query->where(function ($query) use ($searchTerm) {
+                    $query
+                        ->where('room_name', 'like', $searchTerm)
+                        ->orWhere('room_type', 'like', $searchTerm)
+                        ->orWhere('gender_type', 'like', $searchTerm)
+                        ->orWhere('room_status', 'like', $searchTerm)
+                        ->orWhere('description', 'like', $searchTerm)
+                        ->orWhere('price', 'like', $searchTerm)
+                        ->orWhere('max_guest', 'like', $searchTerm)
+                        ->orWhereHas('branch', function ($branchQuery) use ($searchTerm) {
+                            $branchQuery
+                                ->where('branch_name', 'like', $searchTerm)
+                                ->orWhere('city', 'like', $searchTerm)
+                                ->orWhere('address', 'like', $searchTerm)
+                                ->orWhere('description', 'like', $searchTerm);
+                        })
+                        ->orWhereHas('facilities', function ($facilityQuery) use ($searchTerm) {
+                            $facilityQuery->where('facility_name', 'like', $searchTerm);
+                        });
+                });
+            })
             ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
             ->when($request->filled('room_type'), fn ($query) => $query->where('room_type', $request->input('room_type')))
             ->when($request->filled('gender_type'), fn ($query) => $query->where('gender_type', $request->input('gender_type')))
