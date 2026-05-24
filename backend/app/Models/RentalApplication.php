@@ -13,9 +13,20 @@ class RentalApplication extends Model
     protected $fillable = [
         'user_id',
         'room_id',
+        'move_in_date',
         'duration',
+        'ktp_file',
+        'kk_file',
         'status',
+        'owner_notes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'move_in_date' => 'date',
+        ];
+    }
 
     public function user(): BelongsTo
     {

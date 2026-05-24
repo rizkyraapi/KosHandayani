@@ -47,4 +47,9 @@ class Room extends Model
             ->orderByDesc('is_primary')
             ->orderBy('id');
     }
+
+    public function rentalApplications(): HasMany
+    {
+        return $this->hasMany(RentalApplication::class);
+    }
 }

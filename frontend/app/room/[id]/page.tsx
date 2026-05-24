@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import RentalApplicationForm from '@/components/RentalApplicationForm';
 import RoomCard from '@/components/RoomCard';
-import { getProfile, getRoomById, getRooms, type ApiRoom } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { getRoomById, getRooms, type ApiRoom } from '@/lib/api';
 
 const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1200';
 
@@ -41,12 +43,14 @@ function statusLabel(status: ApiRoom['room_status']) {
 export default function Page() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [room, setRoom] = useState<ApiRoom | null>(null);
   const [relatedRooms, setRelatedRooms] = useState<ApiRoom[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [isCheckingProfile, setIsCheckingProfile] = useState(false);
   const [profileWarning, setProfileWarning] = useState('');
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -101,22 +105,27 @@ export default function Page() {
   const handleApplyClick = async () => {
     if (!room) return;
 
-    try {
-      setIsCheckingProfile(true);
-      setProfileWarning('');
-      const profile = await getProfile();
+    setIsCheckingProfile(true);
+    setProfileWarning('');
 
-      if (!profile.profile_completed) {
-        router.push('/tenant/profil');
-        return;
-      }
-
-      router.push(`/room/${room.id}/apply`);
-    } catch {
+    if (!user) {
       router.push('/login');
-    } finally {
-      setIsCheckingProfile(false);
+      return;
     }
+
+    if (user.role !== 'tenant') {
+      setProfileWarning('Hanya tenant yang dapat mengajukan sewa.');
+      setIsCheckingProfile(false);
+      return;
+    }
+
+    if (!user.profile_completed) {
+      router.push('/tenant/profil');
+      return;
+    }
+
+    setIsApplyModalOpen(true);
+    setIsCheckingProfile(false);
   };
 
   if (isLoading) {
@@ -231,8 +240,19 @@ export default function Page() {
                   </div>
                 </div>
                 {profileWarning && <p style={{ margin: '16px 0 0', padding: 12, borderRadius: 8, color: '#93000a', background: '#ffdad6', fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>{profileWarning}</p>}
-                <button type="button" onClick={handleApplyClick} disabled={isCheckingProfile || room.room_status !== 'available'} style={{ width: '100%', minHeight: 50, border: 0, borderRadius: 10, marginTop: 20, background: room.room_status === 'available' ? 'linear-gradient(135deg, #006e2f, #22c55e)' : '#bccbb9', color: '#fff', fontWeight: 700, fontSize: 15, cursor: room.room_status === 'available' ? 'pointer' : 'not-allowed' }}>
-                  {isCheckingProfile ? 'Memeriksa Profil...' : room.room_status === 'available' ? 'Ajukan Sewa' : 'Belum Bisa Disewa'}
+                <button
+                  type="button"
+                  onClick={handleApplyClick}
+                  disabled={isAuthLoading || isCheckingProfile || room.room_status !== 'available' || user?.role === 'owner'}
+                  style={{ width: '100%', minHeight: 50, border: 0, borderRadius: 10, marginTop: 20, background: room.room_status === 'available' && user?.role !== 'owner' ? 'linear-gradient(135deg, #006e2f, #22c55e)' : '#bccbb9', color: '#fff', fontWeight: 700, fontSize: 15, cursor: room.room_status === 'available' && user?.role !== 'owner' ? 'pointer' : 'not-allowed' }}
+                >
+                  {isCheckingProfile || isAuthLoading
+                    ? 'Memeriksa Profil...'
+                    : room.room_status !== 'available'
+                      ? 'Kamar Tidak Tersedia'
+                      : user?.role === 'owner'
+                        ? 'Khusus Tenant'
+                        : 'Ajukan Sewa'}
                 </button>
               </div>
             </div>
@@ -266,6 +286,42 @@ export default function Page() {
           )}
         </section>
       </main>
+
+      {isApplyModalOpen && room && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(17,28,45,0.48)', display: 'grid', placeItems: 'center', padding: 20 }}
+          onClick={() => setIsApplyModalOpen(false)}
+        >
+          <div
+            style={{ width: 'min(620px, 100%)', maxHeight: '90vh', overflowY: 'auto', background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 24px 60px rgba(17,28,45,0.24)' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 24 }}>Formulir Pengajuan Sewa</h2>
+                <p style={{ margin: '6px 0 0', color: '#3d4a3d' }}>Lengkapi tanggal masuk, durasi, dan dokumen pendukung.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsApplyModalOpen(false)}
+                aria-label="Tutup formulir"
+                style={{ border: 'none', background: '#f0f3ff', color: '#3d4a3d', borderRadius: 8, width: 36, height: 36, cursor: 'pointer', fontWeight: 800 }}
+              >
+                X
+              </button>
+            </div>
+            <RentalApplicationForm
+              room={room}
+              onCancel={() => setIsApplyModalOpen(false)}
+              onSuccess={() => {
+                setTimeout(() => setIsApplyModalOpen(false), 900);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

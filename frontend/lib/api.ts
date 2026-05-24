@@ -161,8 +161,95 @@ export async function updateProfile(payload: ProfilePayload): Promise<AuthUser> 
   return unwrapProfile(data);
 }
 
-export async function createRentalApplication(payload: { room_id?: number; duration?: string }) {
-  const { data } = await apiClient.post('/rental-applications', payload);
+export type RentalApplicationStatus = 'pending' | 'approved' | 'rejected';
 
-  return data;
+export type RentalApplication = {
+  id: number;
+  user_id: number;
+  room_id: number | null;
+  move_in_date?: string | null;
+  duration: string;
+  status: RentalApplicationStatus;
+  owner_notes?: string | null;
+  ktp_file?: string | null;
+  ktp_file_url?: string | null;
+  kk_file?: string | null;
+  kk_file_url?: string | null;
+  created_at: string;
+  updated_at?: string;
+  tenant?: AuthUser | null;
+  room?: Partial<ApiRoom> | null;
+};
+
+export type CreateRentalApplicationPayload = {
+  room_id: number;
+  move_in_date: string;
+  duration: string;
+  ktp_file: File;
+  kk_file: File;
+};
+
+type ApiEnvelope<T> = {
+  success?: boolean;
+  message?: string;
+  data?: T;
+};
+
+function unwrapData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
+  if (typeof response.data === 'undefined') {
+    throw new Error(fallbackMessage);
+  }
+
+  return response.data;
+}
+
+export async function createRentalApplication(payload: CreateRentalApplicationPayload): Promise<RentalApplication> {
+  const formData = new FormData();
+  formData.append('room_id', String(payload.room_id));
+  formData.append('move_in_date', payload.move_in_date);
+  formData.append('duration', payload.duration);
+  formData.append('ktp_file', payload.ktp_file);
+  formData.append('kk_file', payload.kk_file);
+
+  const { data } = await apiClient.post<ApiEnvelope<RentalApplication>>('/rental-applications', formData);
+
+  return unwrapData(data, 'Data pengajuan sewa tidak ditemukan.');
+}
+
+export async function getMyRentalApplications(): Promise<RentalApplication[]> {
+  const { data } = await apiClient.get<ApiEnvelope<RentalApplication[]>>('/my-rental-applications');
+
+  return unwrapData(data, 'Data pengajuan sewa tidak ditemukan.');
+}
+
+export async function getMyRentalApplication(id: number | string): Promise<RentalApplication> {
+  const { data } = await apiClient.get<ApiEnvelope<RentalApplication>>(`/my-rental-applications/${id}`);
+
+  return unwrapData(data, 'Detail pengajuan sewa tidak ditemukan.');
+}
+
+export async function getOwnerRentalApplications(): Promise<RentalApplication[]> {
+  const { data } = await apiClient.get<ApiEnvelope<RentalApplication[]>>('/owner/rental-applications');
+
+  return unwrapData(data, 'Data pengajuan sewa tidak ditemukan.');
+}
+
+export async function getOwnerRentalApplication(id: number | string): Promise<RentalApplication> {
+  const applications = await getOwnerRentalApplications();
+  const application = applications.find((item) => item.id === Number(id));
+
+  if (!application) {
+    throw new Error('Detail pengajuan sewa tidak ditemukan.');
+  }
+
+  return application;
+}
+
+export async function updateOwnerRentalApplication(
+  id: number | string,
+  payload: { status: Exclude<RentalApplicationStatus, 'pending'>; owner_notes?: string },
+): Promise<RentalApplication> {
+  const { data } = await apiClient.put<ApiEnvelope<RentalApplication>>(`/owner/rental-applications/${id}`, payload);
+
+  return unwrapData(data, 'Data pengajuan sewa tidak ditemukan.');
 }

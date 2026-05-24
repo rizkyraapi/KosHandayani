@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, LogOut, ReceiptText, ScrollText, UserRound } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, LogOut, ReceiptText, ScrollText, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const tenantNavItems = [
   { label: 'Dashboard', href: '/tenant/dashboard', icon: LayoutDashboard },
+  { label: 'Pengajuan Sewa', href: '/tenant/rental-applications', icon: ClipboardList },
   { label: 'Tagihan', href: '/tenant/tagihan', icon: ReceiptText },
   { label: 'Riwayat', href: '/tenant/riwayat', icon: ScrollText },
   { label: 'Profil', href: '/tenant/profil', icon: UserRound },
@@ -28,7 +29,7 @@ export default function TenantSidebar() {
       <nav className="flex flex-col gap-2">
         {tenantNavItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href;
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <Link

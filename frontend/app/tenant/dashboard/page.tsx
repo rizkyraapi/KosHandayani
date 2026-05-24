@@ -1,6 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
+import { getMyRentalApplications, type RentalApplication } from '@/lib/api';
 
 /* ═══════════════════════════════════════════════════════════════
    ALL CUSTOM STYLES — fonts, colors, utilities, Material Symbols,
@@ -264,6 +267,8 @@ const ANNOUNCEMENTS = [
 export default function Page() {
   const { user, logout, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [applications, setApplications] = useState<RentalApplication[]>([]);
+  const [applicationsError, setApplicationsError] = useState('');
   const displayName = user?.full_name || 'Tenant';
   const isProfileComplete = Boolean(user?.profile_completed);
 
@@ -275,6 +280,32 @@ export default function Page() {
     document.head.insertBefore(el, document.head.firstChild);
     return () => { document.getElementById('kos-styles')?.remove(); };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadApplications() {
+      try {
+        const data = await getMyRentalApplications();
+        if (isMounted) {
+          setApplications(data.slice(0, 3));
+          setApplicationsError('');
+        }
+      } catch {
+        if (isMounted) {
+          setApplicationsError('Pengajuan sewa belum dapat dimuat.');
+        }
+      }
+    }
+
+    if (user?.role === 'tenant') {
+      void loadApplications();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.role]);
 
   return (
     <div className="bg-background text-on-background min-h-screen flex">
@@ -605,6 +636,40 @@ export default function Page() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div className="col-span-12 mt-8">
+            <div className="bg-surface-container-lowest rounded-2xl p-6 lg:p-8 shadow-sm">
+              <div className="flex justify-between items-center mb-6">
+                <h4 className="text-xl font-bold font-manrope text-on-surface">
+                  Pengajuan Sewa
+                </h4>
+                <Link href="/tenant/rental-applications" className="text-primary font-bold text-sm">
+                  Lihat Semua
+                </Link>
+              </div>
+              {applicationsError ? (
+                <p className="text-error text-sm font-bold">{applicationsError}</p>
+              ) : applications.length === 0 ? (
+                <p className="text-on-surface-variant text-sm">Belum ada pengajuan sewa.</p>
+              ) : (
+                <div className="space-y-3">
+                  {applications.map((application) => (
+                    <Link
+                      key={application.id}
+                      href={`/tenant/rental-applications/${application.id}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-container-low p-4 text-on-surface no-underline"
+                    >
+                      <div>
+                        <p className="font-bold">{application.room?.room_name || 'Kamar tidak tersedia'}</p>
+                        <p className="text-sm text-on-surface-variant">{application.room?.branch?.branch_name || 'Cabang belum diatur'} - {application.duration}</p>
+                      </div>
+                      <RentalApplicationStatusBadge status={application.status} />
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

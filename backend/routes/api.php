@@ -32,8 +32,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/update', [ProfileController::class, 'update']);
 
-    Route::post('/rental-applications', [RentalApplicationController::class, 'store'])
-        ->middleware('check.profile.complete');
+    Route::post('/rental-applications', [RentalApplicationController::class, 'store']);
+    Route::get('/my-rental-applications', [RentalApplicationController::class, 'myApplications']);
+    Route::get('/my-rental-applications/{id}', [RentalApplicationController::class, 'myApplicationDetail']);
+
+    Route::get('/owner/rental-applications', [RentalApplicationController::class, 'ownerIndex']);
+    Route::put('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerUpdate']);
 
     Route::post('/rooms', [RoomController::class, 'store']);
 });
