@@ -368,27 +368,27 @@ export default function RoomCard({
           ))}
         </div>
 
-        <div className="room-actions" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: 'auto' }}>
+        <div className="room-actions" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: 'auto', width: '100%' }}>
           <button
             style={{
-              paddingLeft: '16px',
-              paddingRight: '16px',
+              width: '100%',
               paddingTop: '10px',
               paddingBottom: '10px',
               borderRadius: '0.75rem',
-              border: '1px solid #006e2f',
-              color: '#006e2f',
+              border: 'none',
+              color: '#ffffff',
               fontWeight: 700,
               fontSize: '0.875rem',
-              backgroundColor: 'transparent',
+              backgroundColor: '#006e2f',
               cursor: 'pointer',
-              transition: 'background-color 0.2s',
+              transition: 'background-color 0.15s',
+              boxSizing: 'border-box',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(0, 110, 47, 0.05)';
+              e.currentTarget.style.backgroundColor = '#005823';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.backgroundColor = '#006e2f';
             }}
             onClick={(event) => {
               event.stopPropagation();
@@ -396,37 +396,6 @@ export default function RoomCard({
             }}
           >
             Lihat Detail
-          </button>
-          <button
-            style={{
-              paddingLeft: '16px',
-              paddingRight: '16px',
-              paddingTop: '10px',
-              paddingBottom: '10px',
-              borderRadius: '0.75rem',
-              backgroundColor: '#006e2f',
-              color: '#ffffff',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              border: 'none',
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#004b1e';
-              e.currentTarget.style.boxShadow = '0 10px 15px rgba(0, 0, 0, 0.2)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#006e2f';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              openDetail();
-            }}
-          >
-            Ajukan Sewa
           </button>
         </div>
       </div>
