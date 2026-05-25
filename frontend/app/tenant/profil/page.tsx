@@ -1,6 +1,7 @@
 'use client';
+import axios from 'axios';
 import { useEffect, useState } from 'react';
-import { getProfile, updateProfile, type ProfilePayload } from '@/lib/api';
+import { changePassword, getProfile, updateProfile, type ChangePasswordPayload, type ProfilePayload } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -129,6 +130,23 @@ const C = {
   error: '#ba1a1a',
   errorContainer: '#ffdad6',
 };
+
+function getApiErrorMessages(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined;
+    const validationMessages = data?.errors ? Object.values(data.errors).flat() : [];
+
+    if (validationMessages.length > 0) {
+      return validationMessages;
+    }
+
+    if (data?.message) {
+      return [data.message];
+    }
+  }
+
+  return [getAuthErrorMessage(error, fallback)];
+}
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
@@ -425,11 +443,25 @@ function ProfileIdentityCard({
   );
 }
 
-function SecurityCard() {
-  const actions = [
-    { icon: 'lock', label: 'Ganti Kata Sandi' },
-  ];
-
+function SecurityCard({
+  form,
+  isOpen,
+  isSubmitting,
+  errors,
+  success,
+  onToggle,
+  onChange,
+  onSubmit,
+}: {
+  form: ChangePasswordPayload;
+  isOpen: boolean;
+  isSubmitting: boolean;
+  errors: string[];
+  success: string;
+  onToggle: () => void;
+  onChange: (field: keyof ChangePasswordPayload, value: string) => void;
+  onSubmit: () => void;
+}) {
   return (
     <div
       className="surface-shift-shadow"
@@ -457,38 +489,123 @@ function SecurityCard() {
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {actions.map((action) => (
-          <button
-            key={action.label}
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              padding: '0.75rem',
-              borderRadius: '0.5rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#f8fafc')}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span className="material-symbols-outlined" style={{ color: '#94a3b8' }}>
-                {action.icon}
-              </span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 500, color: C.onSurfaceVariant }}>
-                {action.label}
-              </span>
-            </div>
-            <span className="material-symbols-outlined" style={{ color: '#cbd5e1' }}>
-              chevron_right
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{
+            width: '100%',
+            textAlign: 'left',
+            padding: '0.75rem',
+            borderRadius: '0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#f8fafc')}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = 'transparent')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span className="material-symbols-outlined" style={{ color: '#94a3b8' }}>
+              lock
             </span>
-          </button>
-        ))}
+            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: C.onSurfaceVariant }}>
+              Ganti Kata Sandi
+            </span>
+          </div>
+          <span className="material-symbols-outlined" style={{ color: '#cbd5e1' }}>
+            {isOpen ? 'expand_less' : 'chevron_right'}
+          </span>
+        </button>
+
+        {isOpen && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit();
+            }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+          >
+            {errors.length > 0 && (
+              <div
+                style={{
+                  padding: '0.875rem',
+                  borderRadius: '0.75rem',
+                  background: C.errorContainer,
+                  color: C.error,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  lineHeight: 1.5,
+                }}
+              >
+                {errors.map((message) => (
+                  <div key={message}>{message}</div>
+                ))}
+              </div>
+            )}
+
+            {success && (
+              <div
+                style={{
+                  padding: '0.875rem',
+                  borderRadius: '0.75rem',
+                  background: 'rgba(175,239,180,0.35)',
+                  color: C.onSecondaryContainer,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                }}
+              >
+                {success}
+              </div>
+            )}
+
+            <FormField
+              label="Password Saat Ini"
+              type="password"
+              value={form.current_password}
+              icon="lock"
+              disabled={isSubmitting}
+              onChange={(value) => onChange('current_password', value)}
+            />
+            <FormField
+              label="Password Baru"
+              type="password"
+              value={form.new_password}
+              icon="key"
+              disabled={isSubmitting}
+              onChange={(value) => onChange('new_password', value)}
+            />
+            <FormField
+              label="Konfirmasi Password Baru"
+              type="password"
+              value={form.new_password_confirmation}
+              icon="verified_user"
+              disabled={isSubmitting}
+              onChange={(value) => onChange('new_password_confirmation', value)}
+            />
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                padding: '0.75rem 1rem',
+                borderRadius: '0.75rem',
+                background: C.primary,
+                color: C.onPrimary,
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                border: 'none',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                boxShadow: '0 10px 15px -3px rgba(0,110,47,0.2)',
+              }}
+            >
+              {isSubmitting ? 'Menyimpan...' : 'Simpan Password'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -956,6 +1073,15 @@ export default function Page() {
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState<ChangePasswordPayload>({
+    current_password: '',
+    new_password: '',
+    new_password_confirmation: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
   const isComplete = Boolean(form.whatsapp && form.pekerjaan && form.address);
 
   const loadProfile = async () => {
@@ -1045,6 +1171,27 @@ export default function Page() {
     }
   };
 
+  const submitPasswordChange = async () => {
+    try {
+      setPasswordErrors([]);
+      setPasswordSuccess('');
+      setIsChangingPassword(true);
+
+      const response = await changePassword(passwordForm);
+
+      setPasswordForm({
+        current_password: '',
+        new_password: '',
+        new_password_confirmation: '',
+      });
+      setPasswordSuccess(response.message || 'Password berhasil diubah');
+    } catch (passwordError) {
+      setPasswordErrors(getApiErrorMessages(passwordError, 'Gagal mengganti password.'));
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <div style={{ background: C.background, color: C.onBackground, minHeight: '100vh' }}>
       <SideNav />
@@ -1124,7 +1271,20 @@ export default function Page() {
               isDisabled={isFetching || isSaving || !isEditing}
               onPhotoChange={handlePhotoChange}
             />
-            <SecurityCard />
+            <SecurityCard
+              form={passwordForm}
+              isOpen={isPasswordFormOpen}
+              isSubmitting={isChangingPassword}
+              errors={passwordErrors}
+              success={passwordSuccess}
+              onToggle={() => setIsPasswordFormOpen((current) => !current)}
+              onChange={(field, value) => {
+                setPasswordErrors([]);
+                setPasswordSuccess('');
+                setPasswordForm((current) => ({ ...current, [field]: value }));
+              }}
+              onSubmit={submitPasswordChange}
+            />
           </div>
 
           {/* Right column: personal info form */}

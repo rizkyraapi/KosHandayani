@@ -162,6 +162,18 @@ export async function updateProfile(payload: ProfilePayload): Promise<AuthUser> 
   return unwrapProfile(data);
 }
 
+export type ChangePasswordPayload = {
+  current_password: string;
+  new_password: string;
+  new_password_confirmation: string;
+};
+
+export async function changePassword(payload: ChangePasswordPayload): Promise<ApiEnvelope<null>> {
+  const { data } = await apiClient.put<ApiEnvelope<null>>('/change-password', payload);
+
+  return data;
+}
+
 export type RentalApplicationStatus = 'pending' | 'approved' | 'rejected';
 
 export type RentalApplication = {

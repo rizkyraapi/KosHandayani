@@ -107,6 +107,14 @@ export default function Page() {
     void loadRooms(searchKeyword);
   }
 
+  function clearSearch() {
+    setSearchKeyword('');
+
+    if (activeSearchKeyword) {
+      void loadRooms();
+    }
+  }
+
   const rooms = useMemo(() => apiRooms.map(mapRoomToCard), [apiRooms]);
 
   return (
@@ -168,6 +176,24 @@ export default function Page() {
           color: #006e2f;
           font-size: 22px;
           pointer-events: none;
+        }
+        .search-clear-button {
+          position: absolute;
+          right: 0;
+          width: 28px;
+          height: 28px;
+          border: none;
+          border-radius: 9999px;
+          background: transparent;
+          color: #006e2f;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        .search-clear-button:hover {
+          background-color: rgba(0, 110, 47, 0.08);
         }
         .section-heading-row {
           display: flex;
@@ -636,7 +662,16 @@ export default function Page() {
                         outline: 'none',
                       }}
                     />
-                    <span className="material-symbols-outlined select-dropdown-icon">search</span>
+                    {searchKeyword || activeSearchKeyword ? (
+                      <button
+                        type="button"
+                        className="search-clear-button"
+                        aria-label="Hapus pencarian"
+                        onClick={clearSearch}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
