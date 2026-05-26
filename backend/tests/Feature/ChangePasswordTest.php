@@ -21,8 +21,8 @@ class ChangePasswordTest extends TestCase
             ->actingAs($user)
             ->putJson('/api/change-password', [
                 'current_password' => 'old-password',
-                'new_password' => 'new-password',
-                'new_password_confirmation' => 'new-password',
+                'new_password' => 'Newpassword1',
+                'new_password_confirmation' => 'Newpassword1',
             ])
             ->assertOk()
             ->assertJson([
@@ -30,7 +30,7 @@ class ChangePasswordTest extends TestCase
                 'message' => 'Password changed successfully',
             ]);
 
-        $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertTrue(Hash::check('Newpassword1', $user->refresh()->password));
     }
 
     public function test_change_password_rejects_incorrect_current_password(): void
@@ -43,8 +43,8 @@ class ChangePasswordTest extends TestCase
             ->actingAs($user)
             ->putJson('/api/change-password', [
                 'current_password' => 'wrong-password',
-                'new_password' => 'new-password',
-                'new_password_confirmation' => 'new-password',
+                'new_password' => 'Newpassword1',
+                'new_password_confirmation' => 'Newpassword1',
             ])
             ->assertStatus(422)
             ->assertJson([
@@ -65,10 +65,29 @@ class ChangePasswordTest extends TestCase
             ->actingAs($user)
             ->putJson('/api/change-password', [
                 'current_password' => 'old-password',
-                'new_password' => 'new-password',
+                'new_password' => 'Newpassword1',
                 'new_password_confirmation' => 'different-password',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['new_password']);
+    }
+
+    public function test_change_password_requires_capital_letter_and_number(): void
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('old-password'),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->putJson('/api/change-password', [
+                'current_password' => 'old-password',
+                'new_password' => 'weakpassword',
+                'new_password_confirmation' => 'weakpassword',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['new_password']);
+
+        $this->assertTrue(Hash::check('old-password', $user->refresh()->password));
     }
 }

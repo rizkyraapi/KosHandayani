@@ -76,6 +76,10 @@ const colors = {
   onError: '#ffffff',
 };
 
+function isPasswordStrong(password: string) {
+  return password.length >= 8 && /[A-Z]/.test(password) && /\d/.test(password);
+}
+
 interface InputFieldProps {
   label: string;
   icon: string;
@@ -152,12 +156,10 @@ export default function Page() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
+    whatsapp: '',
     email: '',
     password: '',
     password_confirmation: '',
-    whatsapp: '',
-    pekerjaan: '',
-    address: '',
   });
   const errorMessage = localError || authError;
 
@@ -173,6 +175,11 @@ export default function Page() {
 
     if (form.password !== form.password_confirmation) {
       setLocalError('Konfirmasi password tidak sama.');
+      return;
+    }
+
+    if (!isPasswordStrong(form.password)) {
+      setLocalError('Password minimal 8 karakter, harus memiliki huruf kapital dan angka.');
       return;
     }
 
@@ -296,10 +303,19 @@ export default function Page() {
                 <InputField
                   label="Nama Lengkap"
                   icon="person"
-                  placeholder="Masukkan nama lengkap"
+                  placeholder="Masukkan nama lengkap sesuai KTP"
                   type="text"
                   value={form.full_name}
                   onChange={(full_name) => setForm((current) => ({ ...current, full_name }))}
+                  disabled={isSubmitting}
+                />
+                <InputField
+                  label="No WhatsApp"
+                  icon="call"
+                  placeholder="08xxxxxxxxxx"
+                  type="tel"
+                  value={form.whatsapp}
+                  onChange={(whatsapp) => setForm((current) => ({ ...current, whatsapp }))}
                   disabled={isSubmitting}
                 />
                 <InputField
@@ -312,63 +328,27 @@ export default function Page() {
                   disabled={isSubmitting}
                 />
 
-                {/* Password Grid */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: '16px',
-                  }}
-                >
-                  <InputField
-                    label="Password"
-                    icon="lock"
-                    placeholder="••••••••"
-                    type="password"
-                    value={form.password}
-                    onChange={(password) => setForm((current) => ({ ...current, password }))}
-                    disabled={isSubmitting}
-                  />
-                  <InputField
-                    label="Konfirmasi"
-                    icon="shield"
-                    placeholder="••••••••"
-                    type="password"
-                    value={form.password_confirmation}
-                    onChange={(password_confirmation) =>
-                      setForm((current) => ({ ...current, password_confirmation }))
-                    }
-                    disabled={isSubmitting}
-                  />
-                </div>
-
                 <InputField
-                  label="WhatsApp"
-                  icon="call"
-                  placeholder="08xxxxxxxxxx"
-                  type="tel"
-                  value={form.whatsapp}
-                  onChange={(whatsapp) => setForm((current) => ({ ...current, whatsapp }))}
+                  label="Password"
+                  icon="lock"
+                  placeholder="Masukkan password"
+                  type="password"
+                  value={form.password}
+                  onChange={(password) => setForm((current) => ({ ...current, password }))}
                   disabled={isSubmitting}
                 />
-
+                <p style={{ margin: '-16px 4px 0', color: colors.onSurfaceVariant, fontSize: '12px', lineHeight: 1.5 }}>
+                  Minimal 8 karakter, harus ada huruf kapital dan angka.
+                </p>
                 <InputField
-                  label="Pekerjaan"
-                  icon="work"
-                  placeholder="Masukkan pekerjaan"
-                  type="text"
-                  value={form.pekerjaan}
-                  onChange={(pekerjaan) => setForm((current) => ({ ...current, pekerjaan }))}
-                  disabled={isSubmitting}
-                />
-
-                <InputField
-                  label="Alamat"
-                  icon="home"
-                  placeholder="Masukkan alamat"
-                  type="text"
-                  value={form.address}
-                  onChange={(address) => setForm((current) => ({ ...current, address }))}
+                  label="Ulangi Password"
+                  icon="shield"
+                  placeholder="Ulangi password"
+                  type="password"
+                  value={form.password_confirmation}
+                  onChange={(password_confirmation) =>
+                    setForm((current) => ({ ...current, password_confirmation }))
+                  }
                   disabled={isSubmitting}
                 />
 
@@ -399,7 +379,7 @@ export default function Page() {
                       cursor: 'pointer',
                     }}
                   >
-                    Saya menyetujui{' '}
+                    Dengan klik Saya Setuju, saya menyatakan bahwa saya telah membaca dan menyetujui{' '}
                     <a
                       href="#"
                       style={{
@@ -425,7 +405,7 @@ export default function Page() {
                     >
                       Kebijakan Privasi
                     </a>{' '}
-                    yang berlaku di KosHandayani.
+                    KosHandayani.
                   </label>
                 </div>
 

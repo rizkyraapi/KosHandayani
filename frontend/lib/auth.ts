@@ -34,8 +34,6 @@ export type RegisterPayload = {
   password: string;
   password_confirmation: string;
   whatsapp?: string;
-  pekerjaan?: string;
-  address?: string;
 };
 
 type ApiUser = {
@@ -178,7 +176,6 @@ export const authService = {
       ...payload,
       name: payload.full_name,
       phone: payload.whatsapp,
-      job: payload.pekerjaan,
       role: 'tenant',
     });
     const apiUser = getAuthUser(data);
