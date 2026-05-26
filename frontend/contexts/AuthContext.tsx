@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   authService,
@@ -24,12 +24,15 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const SESSION_HEARTBEAT_INTERVAL_MS = 60_000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const lastHeartbeatAtRef = useRef(0);
+  const heartbeatInFlightRef = useRef(false);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -54,6 +57,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     Promise.resolve().then(refreshUser);
   }, [refreshUser]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const touchSession = () => {
+      const now = Date.now();
+
+      if (
+        heartbeatInFlightRef.current ||
+        now - lastHeartbeatAtRef.current < SESSION_HEARTBEAT_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      lastHeartbeatAtRef.current = now;
+      heartbeatInFlightRef.current = true;
+
+      authService
+        .touchSession()
+        .then((currentUser) => {
+          setUser(currentUser);
+        })
+        .catch((heartbeatError) => {
+          if (isUnauthorizedError(heartbeatError)) {
+            authService.clearSession();
+            setUser(null);
+          }
+        })
+        .finally(() => {
+          heartbeatInFlightRef.current = false;
+        });
+    };
+
+    const touchWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        touchSession();
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'click',
+      'keydown',
+      'mousemove',
+      'scroll',
+      'touchstart',
+      'pointerdown',
+    ];
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, touchSession, { passive: true });
+    });
+    document.addEventListener('visibilitychange', touchWhenVisible);
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, touchSession);
+      });
+      document.removeEventListener('visibilitychange', touchWhenVisible);
+    };
+  }, [user]);
 
   const login = useCallback(
     async (credentials: LoginCredentials) => {

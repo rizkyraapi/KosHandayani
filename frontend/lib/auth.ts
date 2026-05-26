@@ -62,6 +62,13 @@ type AuthResponse = {
   message?: string;
 };
 
+const SESSION_IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES ?? 120);
+const REMEMBER_SESSION_DAYS = 30;
+
+function idleMinutesToCookieDays(minutes: number) {
+  return minutes / 60 / 24;
+}
+
 export class AuthError extends Error {
   errors?: Record<string, string[]>;
 
@@ -98,6 +105,7 @@ function getAuthUser(response: AuthResponse) {
 function persistSession(user: AuthUser, remember = false) {
   const options: Cookies.CookieAttributes = {
     sameSite: 'lax',
+    expires: remember ? REMEMBER_SESSION_DAYS : idleMinutesToCookieDays(SESSION_IDLE_MINUTES),
   };
 
   if (remember) {
@@ -111,6 +119,10 @@ function persistSession(user: AuthUser, remember = false) {
   }
 
   Cookies.set(AUTH_ROLE_COOKIE, user.role, options);
+}
+
+function isRememberedSession() {
+  return Cookies.get(AUTH_REMEMBER_COOKIE) === '1';
 }
 
 function clearSessionCookies() {
@@ -184,7 +196,18 @@ export const authService = {
   async me() {
     const { data } = await apiClient.get<{ user?: ApiUser; data?: { user?: ApiUser } }>('/me');
 
-    return normalizeUser(data.user ?? data.data?.user);
+    const user = normalizeUser(data.user ?? data.data?.user);
+    persistSession(user, isRememberedSession());
+
+    return user;
+  },
+
+  async touchSession() {
+    const { data } = await apiClient.get<{ user?: ApiUser; data?: { user?: ApiUser } }>('/me');
+    const user = normalizeUser(data.user ?? data.data?.user);
+    persistSession(user, isRememberedSession());
+
+    return user;
   },
 
   async logout() {
