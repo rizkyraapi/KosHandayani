@@ -154,4 +154,104 @@ class RoomManagementTest extends TestCase
             ->assertJsonCount(1)
             ->assertJsonPath('0.room_name', 'Suite Cendana');
     }
+
+    public function test_owner_can_update_room_with_existing_images(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create(['role' => 'owner']);
+        $branch = Branch::create([
+            'branch_name' => 'Cabang Tebet',
+            'city' => 'Jakarta Selatan',
+        ]);
+        $room = Room::create([
+            'room_name' => 'Kamar Lama',
+            'branch_id' => $branch->id,
+            'branch' => $branch->branch_name,
+            'room_type' => 'single',
+            'gender_type' => 'male',
+            'room_status' => 'available',
+            'price' => 1000000,
+            'max_guest' => 1,
+            'is_available' => true,
+        ]);
+
+        foreach (range(1, 4) as $index) {
+            $path = "rooms/existing-{$index}.png";
+            Storage::disk('public')->put($path, 'image-content');
+            $image = $room->images()->create([
+                'image_url' => $path,
+                'is_primary' => $index === 1,
+            ]);
+
+            if ($index === 1) {
+                $room->update(['thumbnail' => $image->image_url]);
+            }
+        }
+
+        $response = $this
+            ->actingAs($owner)
+            ->put('/api/rooms/'.$room->id, [
+                'room_name' => 'Kamar Baru',
+                'branch_id' => $branch->id,
+                'room_type' => 'suite',
+                'gender_type' => 'mixed',
+                'room_status' => 'maintenance',
+                'price' => 1750000,
+                'description' => 'Deskripsi diperbarui.',
+                'max_guest' => 3,
+                'facilities' => ['AC', 'Wi-Fi'],
+                'existing_image_ids' => $room->images()->pluck('id')->all(),
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.room_name', 'Kamar Baru')
+            ->assertJsonPath('data.room_type', 'suite')
+            ->assertJsonPath('data.room_status', 'maintenance')
+            ->assertJsonPath('data.price', 1750000)
+            ->assertJsonCount(2, 'data.facilities')
+            ->assertJsonCount(4, 'data.images');
+
+        $room->refresh();
+
+        $this->assertSame('Kamar Baru', $room->room_name);
+        $this->assertFalse($room->is_available);
+        $this->assertCount(4, $room->images);
+    }
+
+    public function test_owner_can_delete_room_and_stored_images(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create(['role' => 'owner']);
+        $branch = Branch::create([
+            'branch_name' => 'Cabang Kemang',
+            'city' => 'Jakarta Selatan',
+        ]);
+        $room = Room::create([
+            'room_name' => 'Kamar Hapus',
+            'branch_id' => $branch->id,
+            'branch' => $branch->branch_name,
+            'room_type' => 'single',
+            'gender_type' => 'female',
+            'room_status' => 'available',
+            'price' => 900000,
+            'max_guest' => 1,
+            'is_available' => true,
+        ]);
+        Storage::disk('public')->put('rooms/delete-me.png', 'image-content');
+        $room->images()->create([
+            'image_url' => 'rooms/delete-me.png',
+            'is_primary' => true,
+        ]);
+        $room->update(['thumbnail' => 'rooms/delete-me.png']);
+
+        $this
+            ->actingAs($owner)
+            ->delete('/api/rooms/'.$room->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Kamar berhasil dihapus');
+
+        $this->assertDatabaseMissing('rooms', ['id' => $room->id]);
+        Storage::disk('public')->assertMissing('rooms/delete-me.png');
+    }
 }

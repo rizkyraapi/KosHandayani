@@ -41,4 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerUpdate']);
 
     Route::post('/rooms', [RoomController::class, 'store']);
+    Route::put('/rooms/{room}', [RoomController::class, 'update']);
+    Route::post('/rooms/{room}', [RoomController::class, 'update']);
+    Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);
 });

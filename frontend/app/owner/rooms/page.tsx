@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { getRooms, type ApiRoom } from '@/lib/api';
+import { deleteRoom, getRooms, type ApiRoom } from '@/lib/api';
 
 function formatRupiah(price: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -20,11 +21,14 @@ function statusLabel(status: ApiRoom['room_status']) {
 }
 
 export default function KosHandayaniPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [apiRooms, setApiRooms] = useState<ApiRoom[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [roomsError, setRoomsError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
 
   const fallbackRooms = useMemo(() => [
     { id: 1, name: 'Kamar A-101', floor: 'Lantai 1 • King Bed', branch: 'Emerald Heights', price: 'Rp 2.500.000', status: 'Lunas / Terisi', statusType: 'occupied' },
@@ -70,6 +74,7 @@ export default function KosHandayaniPage() {
 
     return apiRooms.map((room) => ({
       id: room.id,
+      isApiRoom: true,
       name: room.room_name,
       floor: `${room.room_type} - ${room.gender_type} - Maks ${room.max_guest} tamu`,
       branch: room.branch?.branch_name || 'Cabang belum diatur',
@@ -79,6 +84,27 @@ export default function KosHandayaniPage() {
       statusType: room.room_status,
     }));
   }, [apiRooms, fallbackRooms]);
+
+  async function handleDeleteRoom(roomId: number, roomName: string) {
+    const confirmed = window.confirm(`Hapus ${roomName}? Data kamar dan foto yang tersimpan akan dihapus.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingRoomId(roomId);
+      setRoomsError('');
+      setActionMessage('');
+      await deleteRoom(roomId);
+      setApiRooms((current) => current.filter((room) => room.id !== roomId));
+      setActionMessage('Kamar berhasil dihapus.');
+    } catch (error) {
+      setRoomsError(error instanceof Error ? error.message : 'Gagal menghapus kamar.');
+    } finally {
+      setDeletingRoomId(null);
+    }
+  }
 
   const filteredRooms = useMemo(() => rooms.filter((room) => {
     const matchesBranch = selectedBranch === 'all' || ('branchId' in room && room.branchId === selectedBranch);
@@ -594,6 +620,11 @@ export default function KosHandayaniPage() {
           <div className="rooms-table-card">
             {/* Filter Bar */}
             <div className="rooms-filter">
+              {actionMessage && (
+                <p style={{ margin: 0, padding: '10px 12px', borderRadius: 8, background: '#e7f8eb', color: '#006e2f', fontSize: 13, fontWeight: 800 }}>
+                  {actionMessage}
+                </p>
+              )}
               <div className="rooms-tabs">
                 <button
                   onClick={() => setSelectedBranch('all')}
@@ -684,11 +715,21 @@ export default function KosHandayaniPage() {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-2 text-[#006e2f] hover:bg-[#006e2f]/10 rounded-lg transition-colors" title="Edit">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            className="p-2 text-[#006e2f] hover:bg-[#006e2f]/10 rounded-lg transition-colors"
+                            title="Edit"
+                            disabled={!('isApiRoom' in room)}
+                            onClick={() => router.push(`/owner/rooms/create?edit=${room.id}`)}
+                          >
                             <span className="material-symbols-outlined text-lg">edit</span>
                           </button>
-                          <button className="p-2 text-[#ba1a1a] hover:bg-[#ba1a1a]/10 rounded-lg transition-colors" title="Hapus">
+                          <button
+                            className="p-2 text-[#ba1a1a] hover:bg-[#ba1a1a]/10 rounded-lg transition-colors disabled:opacity-40"
+                            title="Hapus"
+                            disabled={!('isApiRoom' in room) || deletingRoomId === room.id}
+                            onClick={() => handleDeleteRoom(room.id, room.name)}
+                          >
                             <span className="material-symbols-outlined text-lg">delete</span>
                           </button>
                         </div>

@@ -132,6 +132,134 @@ class RoomController extends Controller
         ], 201);
     }
 
+    public function update(Request $request, Room $room)
+    {
+        $validated = $request->validate([
+            'room_name' => ['required', 'string', 'max:255'],
+            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'room_type' => ['required', Rule::in(['single', 'double', 'suite'])],
+            'gender_type' => ['required', Rule::in(['male', 'female', 'mixed'])],
+            'room_status' => ['required', Rule::in(['available', 'occupied', 'maintenance'])],
+            'price' => ['required', 'integer', 'min:0'],
+            'description' => ['nullable', 'string'],
+            'max_guest' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'facilities' => ['nullable', 'array'],
+            'facilities.*' => ['string', 'max:255'],
+            'existing_image_ids' => ['nullable', 'array'],
+            'existing_image_ids.*' => ['integer', 'exists:room_images,id'],
+            'images' => ['nullable', 'array', 'max:10'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $requestedExistingImageIds = collect($validated['existing_image_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->values();
+        $existingImageIds = $room->images()
+            ->whereIn('id', $requestedExistingImageIds)
+            ->pluck('id')
+            ->values();
+        $newImages = $request->file('images', []);
+        $totalImages = $existingImageIds->count() + count($newImages);
+
+        if ($totalImages < 4) {
+            return response()->json([
+                'message' => 'The images field must have at least 4 items.',
+                'errors' => [
+                    'images' => ['The images field must have at least 4 items.'],
+                ],
+            ], 422);
+        }
+
+        if ($totalImages > 10) {
+            return response()->json([
+                'message' => 'The images field must not have more than 10 items.',
+                'errors' => [
+                    'images' => ['The images field must not have more than 10 items.'],
+                ],
+            ], 422);
+        }
+
+        $room = DB::transaction(function () use ($request, $validated, $room, $existingImageIds, $newImages): Room {
+            $branch = Branch::findOrFail($validated['branch_id']);
+
+            $roomData = [
+                'room_name' => $validated['room_name'],
+                'branch_id' => $validated['branch_id'],
+                'room_type' => $validated['room_type'],
+                'gender_type' => $validated['gender_type'],
+                'price' => $validated['price'],
+                'room_status' => $validated['room_status'],
+                'description' => $validated['description'] ?? null,
+                'max_guest' => $validated['max_guest'] ?? 1,
+                'is_available' => $validated['room_status'] === 'available',
+            ];
+
+            if (Schema::hasColumn('rooms', 'branch')) {
+                $roomData['branch'] = $branch->branch_name;
+            }
+
+            $room->update($roomData);
+
+            $room->facilities()->delete();
+            foreach (array_values(array_filter($validated['facilities'] ?? [])) as $facility) {
+                $room->facilities()->create([
+                    'facility_name' => $facility,
+                ]);
+            }
+
+            $imagesToDelete = $room->images()
+                ->whereNotIn('id', $existingImageIds)
+                ->get();
+
+            foreach ($imagesToDelete as $image) {
+                Storage::disk('public')->delete($image->image_url);
+                $image->delete();
+            }
+
+            $room->images()->update(['is_primary' => false]);
+            Storage::disk('public')->makeDirectory('rooms');
+
+            foreach ($newImages as $image) {
+                $room->images()->create([
+                    'image_url' => $image->store('rooms', 'public'),
+                    'is_primary' => false,
+                ]);
+            }
+
+            $primaryImage = $room->images()->first();
+            $room->update([
+                'thumbnail' => $primaryImage?->image_url,
+            ]);
+            $primaryImage?->update(['is_primary' => true]);
+
+            return $room;
+        });
+
+        return response()->json([
+            'message' => 'Kamar berhasil diperbarui',
+            'data' => $this->formatRoom($room->load(['branch', 'facilities', 'images'])),
+        ]);
+    }
+
+    public function destroy(Room $room)
+    {
+        DB::transaction(function () use ($room): void {
+            foreach ($room->images as $image) {
+                Storage::disk('public')->delete($image->image_url);
+            }
+
+            if ($room->thumbnail) {
+                Storage::disk('public')->delete($room->thumbnail);
+            }
+
+            $room->delete();
+        });
+
+        return response()->json([
+            'message' => 'Kamar berhasil dihapus',
+        ]);
+    }
+
     private function formatRoom(Room $room, bool $includeImages = true): array
     {
         $thumbnailUrl = $this->publicFileUrl($room->thumbnail);

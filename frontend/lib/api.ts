@@ -80,6 +80,11 @@ export type CreateRoomPayload = {
   images: File[];
 };
 
+export type UpdateRoomPayload = Omit<CreateRoomPayload, 'images'> & {
+  existing_image_ids: number[];
+  images: File[];
+};
+
 type CreateRoomResponse = {
   message?: string;
   data?: ApiRoom;
@@ -114,6 +119,46 @@ export async function createRoom(payload: CreateRoomPayload): Promise<ApiRoom> {
   }
 
   return data.data;
+}
+
+export async function updateRoom(id: number | string, payload: UpdateRoomPayload): Promise<ApiRoom> {
+  const formData = new FormData();
+  formData.append('_method', 'PUT');
+  formData.append('room_name', payload.room_name);
+  formData.append('branch_id', String(payload.branch_id));
+  formData.append('room_type', payload.room_type);
+  formData.append('gender_type', payload.gender_type);
+  formData.append('room_status', payload.room_status);
+  formData.append('price', String(payload.price));
+  formData.append('max_guest', String(payload.max_guest ?? 1));
+
+  if (payload.description) {
+    formData.append('description', payload.description);
+  }
+
+  payload.facilities.forEach((facility) => {
+    formData.append('facilities[]', facility);
+  });
+
+  payload.existing_image_ids.forEach((imageId) => {
+    formData.append('existing_image_ids[]', String(imageId));
+  });
+
+  payload.images.forEach((image) => {
+    formData.append('images[]', image);
+  });
+
+  const { data } = await apiClient.post<CreateRoomResponse>(`/rooms/${id}`, formData);
+
+  if (!data.data) {
+    throw new Error('Data kamar tidak ditemukan.');
+  }
+
+  return data.data;
+}
+
+export async function deleteRoom(id: number | string): Promise<void> {
+  await apiClient.delete(`/rooms/${id}`);
 }
 
 export type ProfilePayload = {

@@ -1,9 +1,9 @@
 'use client';
 
 import axios from 'axios';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createRoom, getBranches, type ApiBranch, type ApiRoom } from '@/lib/api';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createRoom, getBranches, getRoomById, updateRoom, type ApiBranch, type ApiRoom } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 
 const facilityOptions = [
@@ -122,8 +122,11 @@ function formatError(error: unknown) {
   return getAuthErrorMessage(error, 'Gagal menyimpan kamar. Periksa kembali data yang diisi.');
 }
 
-export default function Page() {
+function RoomFormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editRoomId = searchParams.get('edit');
+  const isEditMode = Boolean(editRoomId);
   const [form, setForm] = useState({
     room_name: '',
     branch_id: '',
@@ -137,7 +140,9 @@ export default function Page() {
   const [branches, setBranches] = useState<ApiBranch[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(true);
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<ApiRoom['images']>([]);
   const [images, setImages] = useState<File[]>([]);
+  const [isLoadingRoom, setIsLoadingRoom] = useState(Boolean(editRoomId));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -186,6 +191,54 @@ export default function Page() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!editRoomId) {
+      return;
+    }
+
+    const roomId = editRoomId;
+    let isMounted = true;
+
+    async function loadRoom() {
+      try {
+        setIsLoadingRoom(true);
+        setError('');
+        const room = await getRoomById(roomId);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setForm({
+          room_name: room.room_name || '',
+          branch_id: room.branch_id ? String(room.branch_id) : '',
+          room_type: room.room_type,
+          gender_type: room.gender_type,
+          room_status: room.room_status,
+          price: String(room.price ?? ''),
+          max_guest: String(room.max_guest ?? 1),
+          description: room.description || '',
+        });
+        setSelectedFacilities(room.facilities.map((facility) => facility.facility_name || facility.name || '').filter(Boolean));
+        setExistingImages(room.images);
+      } catch (loadError) {
+        if (isMounted) {
+          setError(formatError(loadError));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingRoom(false);
+        }
+      }
+    }
+
+    loadRoom();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [editRoomId]);
+
   function toggleFacility(facility: string) {
     setSelectedFacilities((current) =>
       current.includes(facility)
@@ -213,11 +266,15 @@ export default function Page() {
     }
 
     setError('');
-    setImages((current) => [...current, ...files].slice(0, maxRoomImages));
+    setImages((current) => [...current, ...files].slice(0, Math.max(0, maxRoomImages - existingImages.length)));
   }
 
   function removeImage(index: number) {
     setImages((current) => current.filter((_, imageIndex) => imageIndex !== index));
+  }
+
+  function removeExistingImage(imageId: number) {
+    setExistingImages((current) => current.filter((image) => image.id !== imageId));
   }
 
   function moveImage(index: number, direction: -1 | 1) {
@@ -250,12 +307,12 @@ export default function Page() {
       return;
     }
 
-    if (images.length < minRoomImages) {
+    if (existingImages.length + images.length < minRoomImages) {
       setError(`Minimal upload ${minRoomImages} foto kamar.`);
       return;
     }
 
-    if (images.length > maxRoomImages) {
+    if (existingImages.length + images.length > maxRoomImages) {
       setError(`Maksimal upload ${maxRoomImages} foto kamar.`);
       return;
     }
@@ -268,7 +325,7 @@ export default function Page() {
 
     try {
       setIsSubmitting(true);
-      await createRoom({
+      const payload = {
         room_name: form.room_name.trim(),
         room_type: form.room_type,
         branch_id: Number(form.branch_id),
@@ -279,8 +336,18 @@ export default function Page() {
         description: form.description.trim(),
         facilities: selectedFacilities,
         images,
-      });
-      setSuccess('Kamar berhasil disimpan.');
+      };
+
+      if (isEditMode && editRoomId) {
+        await updateRoom(editRoomId, {
+          ...payload,
+          existing_image_ids: existingImages.map((image) => image.id),
+        });
+      } else {
+        await createRoom(payload);
+      }
+
+      setSuccess(isEditMode ? 'Kamar berhasil diperbarui.' : 'Kamar berhasil disimpan.');
       setForm({
         room_name: '',
         branch_id: branches[0] ? String(branches[0].id) : '',
@@ -292,6 +359,7 @@ export default function Page() {
         description: '',
       });
       setSelectedFacilities([]);
+      setExistingImages([]);
       setImages([]);
       setTimeout(() => router.push('/owner/rooms'), 700);
     } catch (submitError) {
@@ -384,10 +452,12 @@ export default function Page() {
             Manajemen Properti
           </p>
           <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 40px)', color: colors.text, margin: 0, lineHeight: 1.1 }}>
-            Tambah Kamar Baru
+            {isEditMode ? 'Edit Kamar' : 'Tambah Kamar Baru'}
           </h1>
           <p style={{ color: colors.muted, marginTop: 10, maxWidth: 620, lineHeight: 1.6 }}>
-            Lengkapi detail kamar, fasilitas, dan galeri foto agar data kamar langsung tampil di daftar kamar.
+            {isEditMode
+              ? 'Perbarui detail kamar, fasilitas, dan galeri foto dengan form yang sama seperti tambah kamar.'
+              : 'Lengkapi detail kamar, fasilitas, dan galeri foto agar data kamar langsung tampil di daftar kamar.'}
           </p>
         </header>
 
@@ -419,6 +489,21 @@ export default function Page() {
             </p>
           )}
 
+          {isLoadingRoom && (
+            <p
+              style={{
+                margin: 0,
+                padding: '12px 14px',
+                borderRadius: 8,
+                fontWeight: 800,
+                color: colors.muted,
+                background: colors.field,
+              }}
+            >
+              Memuat data kamar...
+            </p>
+          )}
+
           <section>
             <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
               Detail Kamar
@@ -429,7 +514,7 @@ export default function Page() {
                 <input
                   style={inputStyle}
                   value={form.room_name}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isLoadingRoom}
                   placeholder="Contoh: A-101"
                   onChange={(event) => setForm((current) => ({ ...current, room_name: event.target.value }))}
                 />
@@ -440,7 +525,7 @@ export default function Page() {
                 <select
                   style={inputStyle}
                   value={form.branch_id}
-                  disabled={isSubmitting || isLoadingBranches}
+                  disabled={isSubmitting || isLoadingBranches || isLoadingRoom}
                   onChange={(event) => setForm((current) => ({ ...current, branch_id: event.target.value }))}
                 >
                   <option value="">{isLoadingBranches ? 'Memuat cabang...' : 'Pilih Cabang'}</option>
@@ -459,7 +544,7 @@ export default function Page() {
                   type="number"
                   min={0}
                   value={form.price}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isLoadingRoom}
                   placeholder="1500000"
                   onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
                 />
@@ -472,7 +557,7 @@ export default function Page() {
                   type="number"
                   min={1}
                   value={form.max_guest}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isLoadingRoom}
                   onChange={(event) => setForm((current) => ({ ...current, max_guest: event.target.value }))}
                 />
               </label>
@@ -487,7 +572,7 @@ export default function Page() {
                     <button
                       key={type.value}
                       type="button"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isLoadingRoom}
                       onClick={() => setForm((current) => ({ ...current, room_type: type.value }))}
                       style={{
                         minHeight: 46,
@@ -496,7 +581,7 @@ export default function Page() {
                         background: active ? colors.primarySoft : colors.field,
                         color: active ? colors.primary : colors.muted,
                         fontWeight: 900,
-                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
                       }}
                     >
                       {type.label}
@@ -512,7 +597,7 @@ export default function Page() {
                 <select
                   style={inputStyle}
                   value={form.gender_type}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isLoadingRoom}
                   onChange={(event) => setForm((current) => ({ ...current, gender_type: event.target.value as ApiRoom['gender_type'] }))}
                 >
                   {genderTypes.map((type) => (
@@ -526,7 +611,7 @@ export default function Page() {
                 <select
                   style={inputStyle}
                   value={form.room_status}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isLoadingRoom}
                   onChange={(event) => setForm((current) => ({ ...current, room_status: event.target.value as ApiRoom['room_status'] }))}
                 >
                   {roomStatuses.map((status) => (
@@ -541,7 +626,7 @@ export default function Page() {
               <textarea
                 style={{ ...inputStyle, minHeight: 120, resize: 'vertical' }}
                 value={form.description}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isLoadingRoom}
                 placeholder="Tuliskan detail kamar, suasana, atau catatan khusus."
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
               />
@@ -568,13 +653,13 @@ export default function Page() {
                       gap: 10,
                       padding: '12px 14px',
                       fontWeight: 800,
-                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={active}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isLoadingRoom}
                       onChange={() => toggleFacility(facility)}
                       style={{ width: 18, height: 18, accentColor: colors.primary }}
                     />
@@ -600,7 +685,7 @@ export default function Page() {
                 justifyContent: 'center',
                 flexDirection: 'column',
                 gap: 8,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
                 textAlign: 'center',
                 color: colors.muted,
                 fontWeight: 800,
@@ -615,7 +700,7 @@ export default function Page() {
                 type="file"
                 accept="image/*"
                 multiple
-                disabled={isSubmitting}
+                disabled={isSubmitting || isLoadingRoom}
                 onChange={(event) => {
                   addImages(event.target.files);
                   event.currentTarget.value = '';
@@ -624,15 +709,47 @@ export default function Page() {
               />
             </label>
 
-            {previews.length > 0 && (
+            {(existingImages.length > 0 || previews.length > 0) && (
               <div className="preview-grid" style={{ marginTop: 16 }}>
-                {previews.map((preview, index) => (
-                  <div key={`${preview.file.name}-${index}`} style={{ position: 'relative', aspectRatio: '4 / 3', borderRadius: 8, overflow: 'hidden', background: colors.fieldStrong }}>
-                    <img src={preview.url} alt={preview.file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {existingImages.map((image, index) => (
+                  <div key={image.id} style={{ position: 'relative', aspectRatio: '4 / 3', borderRadius: 8, overflow: 'hidden', background: colors.fieldStrong }}>
+                    <img src={image.image_url} alt={`Foto kamar ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     <span style={{ position: 'absolute', left: 8, bottom: 8, minWidth: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17,28,45,0.78)', color: '#fff', borderRadius: 999, fontSize: 12, fontWeight: 900 }}>
                       {index + 1}
                     </span>
                     {index === 0 && (
+                      <span style={{ position: 'absolute', left: 8, top: 8, background: colors.primary, color: '#fff', borderRadius: 999, padding: '4px 8px', fontSize: 11, fontWeight: 900 }}>
+                        Thumbnail Utama
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      disabled={isSubmitting || isLoadingRoom}
+                      onClick={() => removeExistingImage(image.id)}
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: 8,
+                        width: 30,
+                        height: 30,
+                        borderRadius: 999,
+                        border: 0,
+                        background: 'rgba(17,28,45,0.72)',
+                        color: '#fff',
+                        cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      x
+                    </button>
+                  </div>
+                ))}
+                {previews.map((preview, index) => (
+                  <div key={`${preview.file.name}-${index}`} style={{ position: 'relative', aspectRatio: '4 / 3', borderRadius: 8, overflow: 'hidden', background: colors.fieldStrong }}>
+                    <img src={preview.url} alt={preview.file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <span style={{ position: 'absolute', left: 8, bottom: 8, minWidth: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17,28,45,0.78)', color: '#fff', borderRadius: 999, fontSize: 12, fontWeight: 900 }}>
+                      {existingImages.length + index + 1}
+                    </span>
+                    {existingImages.length === 0 && index === 0 && (
                       <span style={{ position: 'absolute', left: 8, top: 8, background: colors.primary, color: '#fff', borderRadius: 999, padding: '4px 8px', fontSize: 11, fontWeight: 900 }}>
                         Thumbnail Utama
                       </span>
@@ -675,7 +792,7 @@ export default function Page() {
                     </div>
                     <button
                       type="button"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isLoadingRoom}
                       onClick={() => removeImage(index)}
                       style={{
                         position: 'absolute',
@@ -701,7 +818,7 @@ export default function Page() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap', borderTop: `1px solid ${colors.fieldStrong}`, paddingTop: 24 }}>
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLoadingRoom}
               onClick={() => router.push('/owner/rooms')}
               style={{
                 minHeight: 46,
@@ -711,14 +828,14 @@ export default function Page() {
                 background: colors.field,
                 color: colors.muted,
                 fontWeight: 900,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
               }}
             >
               Batal
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLoadingRoom}
               style={{
                 minHeight: 46,
                 padding: '0 28px',
@@ -728,18 +845,26 @@ export default function Page() {
                 color: '#fff',
                 fontWeight: 900,
                 boxShadow: '0 12px 24px rgba(0,110,47,0.22)',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 8,
               }}
             >
-              {isSubmitting ? 'Menyimpan...' : 'Simpan Kamar'}
+              {isSubmitting ? 'Menyimpan...' : isEditMode ? 'Perbarui Kamar' : 'Simpan Kamar'}
               <span className="material-symbols-outlined" style={{ fontSize: 20 }}>save</span>
             </button>
           </div>
         </form>
       </div>
     </main>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <RoomFormPage />
+    </Suspense>
   );
 }
