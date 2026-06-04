@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import type { AuthUser } from '@/lib/auth';
 
 /* ─── Inject global styles (fonts, material symbols, scrollbar, etc.) ─── */
 const globalStyles = `
@@ -263,7 +265,25 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
 }
 
 /* ─── Sidebar ─── */
-function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+function Sidebar({
+  mobileOpen,
+  onClose,
+  currentUser,
+  onLogout,
+  isLoggingOut,
+}: {
+  mobileOpen: boolean;
+  onClose: () => void;
+  currentUser: AuthUser | null;
+  onLogout: () => Promise<void>;
+  isLoggingOut: boolean;
+}) {
+  const displayName = currentUser?.full_name || currentUser?.email || 'Owner';
+  const displaySubtitle = currentUser?.email || 'Owner';
+  const profilePhoto =
+    currentUser?.profile_photo_url ||
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDE9J74knCQKD_9Xv3PO5iL-9VoqhmGULTMYAAeLswvuzMRhak6qIRoBBGUqT84H4MvggE5-sXYD5rVGa36jVrpiHsxJ8craDb6el9BepEaGQ42K2IJw2dc_5AZFHf2mMSwtGhbi8xOAo5949zDb4LYkG8MLis7A8kjIkcH89ernSS3Xmfdm3eJ8z7J7-imaxVOGdJAtH-FtE9FxOjZRaRllUy70tdBJzUmovhGbuny8N1loVrT8kdXnYTxWUBN6FYMHqQS6Bg8NOFo';
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -306,13 +326,13 @@ function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => 
         {/* Profile */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32, padding: '0 8px' }}>
           <img
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDE9J74knCQKD_9Xv3PO5iL-9VoqhmGULTMYAAeLswvuzMRhak6qIRoBBGUqT84H4MvggE5-sXYD5rVGa36jVrpiHsxJ8craDb6el9BepEaGQ42K2IJw2dc_5AZFHf2mMSwtGhbi8xOAo5949zDb4LYkG8MLis7A8kjIkcH89ernSS3Xmfdm3eJ8z7J7-imaxVOGdJAtH-FtE9FxOjZRaRllUy70tdBJzUmovhGbuny8N1loVrT8kdXnYTxWUBN6FYMHqQS6Bg8NOFo"
-            alt="Admin"
+            src={profilePhoto}
+            alt={displayName}
             style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
           />
           <div>
-            <p style={{ fontWeight: 700, color: '#111c2d' }}>Budi Santoso</p>
-            <p style={{ fontSize: 12, color: '#3d4a3d', opacity: 0.7 }}>Super Admin</p>
+            <p style={{ fontWeight: 700, color: '#111c2d' }}>{displayName}</p>
+            <p style={{ fontSize: 12, color: '#3d4a3d', opacity: 0.7 }}>{displaySubtitle}</p>
           </div>
         </div>
 
@@ -376,12 +396,12 @@ function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => 
             <Icon name="help" />
             <span>Bantuan</span>
           </a>
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 8, textDecoration: 'none', color: '#ba1a1a', transition: 'background 0.15s' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,218,214,0.2)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'; }}>
+          <button type="button" disabled={isLoggingOut} onClick={() => void onLogout()} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 8, textDecoration: 'none', color: '#ba1a1a', transition: 'background 0.15s', border: 'none', background: 'transparent', cursor: isLoggingOut ? 'wait' : 'pointer', opacity: isLoggingOut ? 0.7 : 1 }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,218,214,0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
             <Icon name="logout" />
             <span>Keluar</span>
-          </a>
+          </button>
         </div>
       </aside>
 
@@ -481,6 +501,7 @@ function TenantRow({ tenant }: { tenant: Tenant }) {
 
 /* ─── Main Page Component ─── */
 export default function Page() {
+  const { user, logout, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -489,7 +510,13 @@ export default function Page() {
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
 
       <div style={{ display: 'flex', minHeight: '100vh', background: '#f9f9ff' }}>
-        <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          mobileOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          currentUser={user}
+          onLogout={logout}
+          isLoggingOut={isLoading}
+        />
 
         {/* Main */}
         <main

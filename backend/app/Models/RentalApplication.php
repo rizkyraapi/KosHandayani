@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RentalApplication extends Model
 {
@@ -19,12 +20,17 @@ class RentalApplication extends Model
         'kk_file',
         'status',
         'owner_notes',
+        'payment_status',
+        'approved_at',
+        'paid_at',
     ];
 
     protected function casts(): array
     {
         return [
             'move_in_date' => 'date',
+            'approved_at' => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -36,5 +42,15 @@ class RentalApplication extends Model
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function payment(): HasOne
+    {
+        return $this->hasOne(Payment::class);
+    }
+
+    public function roomOccupancy(): HasOne
+    {
+        return $this->hasOne(RoomOccupancy::class);
     }
 }

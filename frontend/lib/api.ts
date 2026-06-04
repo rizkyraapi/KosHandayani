@@ -220,6 +220,7 @@ export async function changePassword(payload: ChangePasswordPayload): Promise<Ap
 }
 
 export type RentalApplicationStatus = 'pending' | 'approved' | 'rejected';
+export type PaymentStatus = 'pending' | 'unpaid' | 'paid' | 'failed';
 
 export type RentalApplication = {
   id: number;
@@ -228,6 +229,9 @@ export type RentalApplication = {
   move_in_date?: string | null;
   duration: string;
   status: RentalApplicationStatus;
+  payment_status?: PaymentStatus | null;
+  approved_at?: string | null;
+  paid_at?: string | null;
   owner_notes?: string | null;
   ktp_file?: string | null;
   ktp_file_url?: string | null;
@@ -251,6 +255,29 @@ type ApiEnvelope<T> = {
   success?: boolean;
   message?: string;
   data?: T;
+};
+
+export type Payment = {
+  id: number;
+  rental_application_id: number;
+  order_id: string;
+  transaction_id?: string | null;
+  gross_amount: number;
+  payment_type?: string | null;
+  transaction_status: 'pending' | 'settlement' | 'capture' | 'expire' | 'cancel' | 'deny' | string;
+  snap_token?: string | null;
+  paid_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  rental_application?: RentalApplication | null;
+};
+
+type CreatePaymentResponse = {
+  success?: boolean;
+  snap_token?: string;
+  order_id?: string;
+  payment?: Payment;
+  message?: string;
 };
 
 function unwrapData<T>(response: ApiEnvelope<T>, fallbackMessage: string): T {
@@ -284,6 +311,33 @@ export async function getMyRentalApplication(id: number | string): Promise<Renta
   const { data } = await apiClient.get<ApiEnvelope<RentalApplication>>(`/my-rental-applications/${id}`);
 
   return unwrapData(data, 'Detail pengajuan sewa tidak ditemukan.');
+}
+
+export async function createPayment(rentalApplicationId: number): Promise<{ snap_token: string; order_id: string }> {
+  const { data } = await apiClient.post<CreatePaymentResponse>('/payments/create', {
+    rental_application_id: rentalApplicationId,
+  });
+
+  if (!data.snap_token || !data.order_id) {
+    throw new Error(data.message ?? 'Token pembayaran tidak ditemukan.');
+  }
+
+  return {
+    snap_token: data.snap_token,
+    order_id: data.order_id,
+  };
+}
+
+export async function getMyPayments(): Promise<Payment[]> {
+  const { data } = await apiClient.get<ApiEnvelope<Payment[]>>('/my-payments');
+
+  return unwrapData(data, 'Data tagihan tidak ditemukan.');
+}
+
+export async function getPayment(id: number | string): Promise<Payment> {
+  const { data } = await apiClient.get<ApiEnvelope<Payment>>(`/payments/${id}`);
+
+  return unwrapData(data, 'Detail pembayaran tidak ditemukan.');
 }
 
 export async function getOwnerRentalApplications(): Promise<RentalApplication[]> {

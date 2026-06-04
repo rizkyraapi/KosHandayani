@@ -31,6 +31,7 @@ class RentalApplicationController extends Controller
             'ktp_file' => $ktpPath,
             'kk_file' => $kkPath,
             'status' => 'pending',
+            'payment_status' => 'pending',
         ])->load(['user', 'room.branch', 'room.facilities', 'room.images']);
 
         return response()->json([
@@ -119,13 +120,29 @@ class RentalApplicationController extends Controller
 
         $application = DB::transaction(function () use ($id, $validated): RentalApplication {
             $application = RentalApplication::with('room')->lockForUpdate()->findOrFail($id);
+            $statusChanged = $application->status !== $validated['status'];
 
-            $application->update([
-                'status' => $validated['status'],
+            $updates = [
                 'owner_notes' => $validated['owner_notes'] ?? $application->owner_notes,
-            ]);
+            ];
 
-            if ($validated['status'] === 'approved' && $application->room) {
+            if ($statusChanged) {
+                $updates['status'] = $validated['status'];
+
+                if ($validated['status'] === 'approved') {
+                    // approved = menunggu pembayaran tenant; unpaid = siap dibuat transaksi Midtrans.
+                    $updates['payment_status'] = 'unpaid';
+                    $updates['approved_at'] = now();
+                }
+
+                if ($validated['status'] === 'rejected') {
+                    $updates['payment_status'] = 'pending';
+                }
+            }
+
+            $application->update($updates);
+
+            if ($statusChanged && $validated['status'] === 'approved' && $application->room) {
                 $application->room->update([
                     'is_available' => false,
                     'room_status' => 'occupied',
@@ -170,6 +187,9 @@ class RentalApplicationController extends Controller
             'duration' => $application->duration,
             'status' => $application->status,
             'owner_notes' => $application->owner_notes,
+            'payment_status' => $application->payment_status,
+            'approved_at' => $application->approved_at,
+            'paid_at' => $application->paid_at,
             'ktp_file' => $application->ktp_file,
             'ktp_file_url' => $this->publicFileUrl($application->ktp_file),
             'kk_file' => $application->kk_file,

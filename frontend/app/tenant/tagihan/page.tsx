@@ -1,5 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { createPayment, getMyPayments, type Payment } from '@/lib/api';
+import type { AuthUser } from '@/lib/auth';
+import { payWithMidtransSnap } from '@/lib/midtrans';
 
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
@@ -133,17 +137,40 @@ const navItems = [
   { icon: 'account_circle', label: 'Profil', active: false },
 ];
 
-const billItems = [
-  { label: 'Sewa Kamar 204', amount: 'Rp 2.100.000' },
-  { label: 'Biaya Kebersihan & Wifi', amount: 'Rp 150.000' },
-  { label: 'Biaya Layanan', amount: 'Gratis', isGratis: true },
-];
-
 const paymentMethods = [
   { icon: 'account_balance', label: 'Transfer Bank' },
   { icon: 'smartphone', label: 'E-Wallet' },
   { icon: 'qr_code_2', label: 'QRIS' },
 ];
+
+function formatRupiah(value?: number | null) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
+}
+
+function normalizePaymentStatus(payment?: Payment | null) {
+  if (!payment) return 'pending';
+  if (payment.rental_application?.payment_status === 'paid' || ['settlement', 'capture'].includes(payment.transaction_status)) return 'paid';
+  if (payment.rental_application?.payment_status === 'failed' || ['expire', 'cancel', 'deny'].includes(payment.transaction_status)) return 'failed';
+
+  return 'pending';
+}
+
+function paymentStatusLabel(payment?: Payment | null) {
+  const status = normalizePaymentStatus(payment);
+  if (status === 'paid') return 'Pembayaran Berhasil';
+  if (status === 'failed') return 'Pembayaran Gagal';
+
+  return 'Menunggu Pembayaran';
+}
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -171,7 +198,12 @@ const Icon = ({
   </span>
 );
 
-function Sidebar() {
+function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
+  const displayName = currentUser?.full_name || currentUser?.email || 'Tenant';
+  const profilePhoto =
+    currentUser?.profile_photo_url ||
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuBxHlmogJT2E4aPWpZrwi8tDGS-f5SPJOAG6IzqDRlvMsTCf6v9mOSeE_oQx7sSj5ku0MZ5UPQ_sW9O1mQK5NfHnbjiHuW8CgV9oUiFi72IKkb9_R0E6kfEpQG97bCp-_WCZaTQGvd4W6CIpZu94A8zInMrCVeqHDcQG3ciZk2Rd1jAXSIH3dOzJkyHGwkzi6KFQR52Y5OnRWDNF_E_lW83OR3_AVyV_pcq_leeRnMUllzNgjyZIa_gGN3UU90HBQsJhj8NDyLGgTbT';
+
   return (
     <aside
       style={{
@@ -277,14 +309,14 @@ function Sidebar() {
           }}
         >
           <img
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxHlmogJT2E4aPWpZrwi8tDGS-f5SPJOAG6IzqDRlvMsTCf6v9mOSeE_oQx7sSj5ku0MZ5UPQ_sW9O1mQK5NfHnbjiHuW8CgV9oUiFi72IKkb9_R0E6kfEpQG97bCp-_WCZaTQGvd4W6CIpZu94A8zInMrCVeqHDcQG3ciZk2Rd1jAXSIH3dOzJkyHGwkzi6KFQR52Y5OnRWDNF_E_lW83OR3_AVyV_pcq_leeRnMUllzNgjyZIa_gGN3UU90HBQsJhj8NDyLGgTbT"
-            alt="Budi Santoso"
+            src={profilePhoto}
+            alt={displayName}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         </div>
         <div style={{ overflow: 'hidden' }}>
           <p style={{ fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Budi Santoso
+            {displayName}
           </p>
           <p style={{ fontSize: '0.625rem', color: '#3d4a3d' }}>Kamar 204 • Emerald</p>
         </div>
@@ -293,7 +325,19 @@ function Sidebar() {
   );
 }
 
-function BillSummaryCard() {
+function BillSummaryCard({
+  payment,
+  isLoading,
+  error,
+  message,
+}: {
+  payment?: Payment | null;
+  isLoading: boolean;
+  error: string;
+  message: string;
+}) {
+  const room = payment?.rental_application?.room;
+
   return (
     <section
       style={{
@@ -344,7 +388,7 @@ function BillSummaryCard() {
                 marginBottom: '0.75rem',
               }}
             >
-              Menunggu Pembayaran
+              {isLoading ? 'Memuat Tagihan' : paymentStatusLabel(payment)}
             </span>
             <h3
               style={{
@@ -354,9 +398,16 @@ function BillSummaryCard() {
                 fontFamily: 'Manrope, sans-serif',
               }}
             >
-              Sewa Bulan September
+              {room?.room_name ? `Sewa ${room.room_name}` : 'Belum Ada Tagihan'}
             </h3>
-            <p style={{ fontSize: '0.875rem', color: '#3d4a3d' }}>Periode: 1 Sep - 30 Sep 2024</p>
+            <p style={{ fontSize: '0.875rem', color: '#3d4a3d' }}>
+              Tanggal pembayaran: {formatDate(payment?.paid_at)}
+            </p>
+            {(error || message) && (
+              <p style={{ fontSize: '0.875rem', color: error ? '#93000a' : '#166534', fontWeight: 700, marginTop: '0.5rem' }}>
+                {error || message}
+              </p>
+            )}
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#3d4a3d' }}>Total Tagihan</p>
@@ -369,7 +420,7 @@ function BillSummaryCard() {
                 fontFamily: 'Manrope, sans-serif',
               }}
             >
-              Rp 2.250.000
+              {formatRupiah(payment?.gross_amount)}
             </p>
           </div>
         </div>
@@ -391,11 +442,11 @@ function BillSummaryCard() {
                 marginBottom: '0.25rem',
               }}
             >
-              Jatuh Tempo
+              Status Pembayaran
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9e4036' }}>
               <Icon name="event" style={{ fontSize: '1.125rem' }} />
-              <span style={{ fontWeight: 700 }}>5 Sept 2024</span>
+              <span style={{ fontWeight: 700 }}>{normalizePaymentStatus(payment)}</span>
             </div>
           </div>
           <div
@@ -418,7 +469,7 @@ function BillSummaryCard() {
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#111c2d' }}>
               <Icon name="fingerprint" style={{ fontSize: '1.125rem' }} />
-              <span style={{ fontWeight: 700 }}>INV-928374-24</span>
+              <span style={{ fontWeight: 700 }}>{payment?.order_id ?? '-'}</span>
             </div>
           </div>
         </div>
@@ -546,7 +597,23 @@ function PaymentMethodSection() {
   );
 }
 
-function ConfirmationSidebar() {
+function ConfirmationSidebar({
+  payment,
+  isPaying,
+  onPay,
+}: {
+  payment?: Payment | null;
+  isPaying: boolean;
+  onPay: () => void;
+}) {
+  const room = payment?.rental_application?.room;
+  const isPending = normalizePaymentStatus(payment) === 'pending' && Boolean(payment);
+  const summaryItems = [
+    { label: room?.room_name ? `Sewa ${room.room_name}` : 'Sewa kamar', amount: formatRupiah(payment?.gross_amount) },
+    { label: 'Status Pembayaran', amount: normalizePaymentStatus(payment) },
+    { label: 'Biaya Layanan', amount: 'Gratis', isGratis: true },
+  ];
+
   return (
     <div style={{ position: 'sticky', top: '2rem' }}>
       <section
@@ -570,7 +637,7 @@ function ConfirmationSidebar() {
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0', marginBottom: '2.5rem' }}>
-          {billItems.map((item, idx) => (
+          {summaryItems.map((item, idx) => (
             <div
               key={item.label}
               style={{
@@ -578,7 +645,7 @@ function ConfirmationSidebar() {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '0.75rem 0',
-                borderBottom: idx < billItems.length - 1 ? '1px solid rgba(188,203,185,0.15)' : 'none',
+                borderBottom: idx < summaryItems.length - 1 ? '1px solid rgba(188,203,185,0.15)' : 'none',
               }}
             >
               <span style={{ fontSize: '0.875rem', color: '#3d4a3d' }}>{item.label}</span>
@@ -614,46 +681,55 @@ function ConfirmationSidebar() {
                 fontFamily: 'Manrope, sans-serif',
               }}
             >
-              Rp 2.250.000
+              {formatRupiah(payment?.gross_amount)}
             </span>
           </div>
         </div>
 
-        <button
-          style={{
-            width: '100%',
-            background: 'linear-gradient(to right, #006e2f, #22c55e)',
-            color: '#ffffff',
-            padding: '1.25rem',
-            borderRadius: '0.75rem',
-            fontWeight: 700,
-            fontSize: '1.125rem',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.75rem',
-            transition: 'all 0.15s',
-            fontFamily: 'Inter, sans-serif',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 25px rgba(0,110,47,0.3)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
-          }}
-          onMouseDown={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = 'scale(0.98)';
-          }}
-          onMouseUp={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-          }}
-        >
-          <Icon name="security" filled />
-          Bayar Sekarang
-        </button>
+        {isPending ? (
+          <button
+            disabled={isPaying}
+            onClick={onPay}
+            style={{
+              width: '100%',
+              background: 'linear-gradient(to right, #006e2f, #22c55e)',
+              color: '#ffffff',
+              padding: '1.25rem',
+              borderRadius: '0.75rem',
+              fontWeight: 700,
+              fontSize: '1.125rem',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+              border: 'none',
+              cursor: isPaying ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.75rem',
+              transition: 'all 0.15s',
+              fontFamily: 'Inter, sans-serif',
+              opacity: isPaying ? 0.7 : 1,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 25px rgba(0,110,47,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
+            }}
+            onMouseDown={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = 'scale(0.98)';
+            }}
+            onMouseUp={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+            }}
+          >
+            <Icon name="security" filled />
+            {isPaying ? 'Memproses...' : 'Lanjutkan Pembayaran'}
+          </button>
+        ) : (
+          <p style={{ margin: 0, color: '#3d4a3d', fontWeight: 700 }}>
+            {payment ? paymentStatusLabel(payment) : 'Belum ada tagihan aktif.'}
+          </p>
+        )}
 
         <div
           style={{
@@ -866,6 +942,22 @@ const responsiveStyle = `
 // ─── Page Component ────────────────────────────────────────────────────────────
 
 export default function Page() {
+  const { user } = useAuth();
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(true);
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const activePayment = payments.find((payment) => normalizePaymentStatus(payment) === 'pending') ?? payments[0] ?? null;
+
+  async function refreshPayments() {
+    setIsLoadingPayments(true);
+    setPaymentError('');
+    const data = await getMyPayments();
+    setPayments(data);
+    setIsLoadingPayments(false);
+  }
+
   useEffect(() => {
     const fontLink1 = document.createElement('link');
     fontLink1.rel = 'stylesheet';
@@ -895,9 +987,71 @@ export default function Page() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPayments() {
+      try {
+        setIsLoadingPayments(true);
+        setPaymentError('');
+        const data = await getMyPayments();
+        if (isMounted) setPayments(data);
+      } catch (loadError) {
+        if (isMounted) setPaymentError(loadError instanceof Error ? loadError.message : 'Gagal memuat tagihan.');
+      } finally {
+        if (isMounted) setIsLoadingPayments(false);
+      }
+    }
+
+    void loadPayments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleContinuePayment() {
+    if (!activePayment) return;
+
+    try {
+      setIsPaying(true);
+      setPaymentMessage('');
+      setPaymentError('');
+
+      let snapToken = activePayment.snap_token;
+
+      if (!snapToken) {
+        const payment = await createPayment(activePayment.rental_application_id);
+        snapToken = payment.snap_token;
+      }
+
+      await payWithMidtransSnap(snapToken, {
+        onSuccess: () => {
+          setPaymentMessage('Pembayaran berhasil. Data tagihan diperbarui.');
+          void refreshPayments();
+        },
+        onPending: () => {
+          setPaymentMessage('Pembayaran sedang diproses.');
+          void refreshPayments();
+        },
+        onError: () => {
+          setPaymentMessage('Pembayaran gagal diproses.');
+          void refreshPayments();
+        },
+        onClose: () => {
+          setPaymentMessage('Pembayaran dibatalkan.');
+        },
+      });
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Gagal membuka pembayaran.');
+    } finally {
+      setIsPaying(false);
+    }
+  }
+
   return (
     <div style={{ backgroundColor: '#f9f9ff', minHeight: '100vh', color: '#111c2d' }}>
-      <Sidebar />
+      <Sidebar currentUser={user} />
 
       <main className="main-content" style={{ maxWidth: '80rem', marginRight: 'auto' }}>
         {/* Header */}
@@ -950,12 +1104,12 @@ export default function Page() {
         <div className="bento-grid">
           {/* Left Column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <BillSummaryCard />
+            <BillSummaryCard payment={activePayment} isLoading={isLoadingPayments} error={paymentError} message={paymentMessage} />
             <PaymentMethodSection />
           </div>
 
           {/* Right Column */}
-          <ConfirmationSidebar />
+          <ConfirmationSidebar payment={activePayment} isPaying={isPaying} onPay={() => void handleContinuePayment()} />
         </div>
 
         {/* Footer */}

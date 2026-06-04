@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import type { AuthUser } from '@/lib/auth';
 
 /* ─────────────────────────────────────────────
    INJECT FONTS & MATERIAL SYMBOLS
@@ -212,7 +214,25 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
   );
 }
 
-function SideNav({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+function SideNav({
+  mobileOpen,
+  onClose,
+  currentUser,
+  onLogout,
+  isLoggingOut,
+}: {
+  mobileOpen: boolean;
+  onClose: () => void;
+  currentUser: AuthUser | null;
+  onLogout: () => Promise<void>;
+  isLoggingOut: boolean;
+}) {
+  const displayName = currentUser?.full_name || currentUser?.email || 'Tenant';
+  const displaySubtitle = currentUser?.email || 'Tenant Area';
+  const profilePhoto =
+    currentUser?.profile_photo_url ||
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuC96Sewl9eO6LFyL4YtlIUyYYMGLK9sxB841-UdivA4BJkrj_LBrQ2jvTAm4tRJKB--5zXLDZbJ7GMtN-EMkjWaowmWT8SKehRa6YGK6KqT-AYWNFEHSAAkEtAPCEv0oC-iGZi0Pq1upDFDZWxkfsAMADQKBkPB1FNZRH8EKCKOZ2QkaXNRym1AcXzD1w8SNH4ZSZW0n6Zo5UDVZo2USk8diEqUyOEwJQBoGufzXKtsXIlNn9mg8c30HMnA7oNPehqmozp1A7YQBbLL';
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -287,17 +307,19 @@ function SideNav({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => 
             <img
               className="w-10 h-10 rounded-full"
               style={{ border: '2px solid #ffffff' }}
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuC96Sewl9eO6LFyL4YtlIUyYYMGLK9sxB841-UdivA4BJkrj_LBrQ2jvTAm4tRJKB--5zXLDZbJ7GMtN-EMkjWaowmWT8SKehRa6YGK6KqT-AYWNFEHSAAkEtAPCEv0oC-iGZi0Pq1upDFDZWxkfsAMADQKBkPB1FNZRH8EKCKOZ2QkaXNRym1AcXzD1w8SNH4ZSZW0n6Zo5UDVZo2USk8diEqUyOEwJQBoGufzXKtsXIlNn9mg8c30HMnA7oNPehqmozp1A7YQBbLL"
-              alt="Budi Santoso"
+              src={profilePhoto}
+              alt={displayName}
             />
             <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate" style={{ color: '#111c2d' }}>Budi Santoso</p>
-              <p className="text-[10px]" style={{ color: '#3d4a3d' }}>Penghuni Room 302</p>
+              <p className="text-sm font-bold truncate" style={{ color: '#111c2d' }}>{displayName}</p>
+              <p className="text-[10px]" style={{ color: '#3d4a3d' }}>{displaySubtitle}</p>
             </div>
           </div>
           <button
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-sm font-medium"
-            style={{ color: '#ef4444' }}
+            style={{ color: '#ef4444', cursor: isLoggingOut ? 'wait' : 'pointer', opacity: isLoggingOut ? 0.7 : 1 }}
+            disabled={isLoggingOut}
+            onClick={() => void onLogout()}
             onMouseEnter={(e) => (e.currentTarget.style.background = '#fef2f2')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
@@ -724,6 +746,7 @@ function Footer() {
 export default function Page() {
   useInjectLink(GOOGLE_FONTS_URL);
   useInjectLink(MATERIAL_SYMBOLS_URL);
+  const { user, logout, isLoading } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
@@ -732,7 +755,13 @@ export default function Page() {
       <style>{inlineCSS + cssVarsCSS}</style>
 
       <div style={{ background: '#f9f9ff', color: '#111c2d', minHeight: '100vh' }}>
-        <SideNav mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+        <SideNav
+          mobileOpen={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          currentUser={user}
+          onLogout={logout}
+          isLoggingOut={isLoading}
+        />
 
         {/* Main content offset by sidebar on large screens */}
         <main className="lg:ml-64 min-h-screen">

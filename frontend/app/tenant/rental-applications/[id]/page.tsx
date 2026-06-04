@@ -3,13 +3,24 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import RentalApplicationDetailView from '@/components/RentalApplicationDetailView';
-import { getMyRentalApplication, type RentalApplication } from '@/lib/api';
+import { createPayment, getMyRentalApplication, type RentalApplication } from '@/lib/api';
+import { payWithMidtransSnap } from '@/lib/midtrans';
 
 export default function Page() {
   const params = useParams<{ id: string }>();
   const [application, setApplication] = useState<RentalApplication | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paymentMessage, setPaymentMessage] = useState('');
+  const [isPaying, setIsPaying] = useState(false);
+
+  async function refreshApplication() {
+    setIsLoading(true);
+    setError('');
+    const data = await getMyRentalApplication(params.id);
+    setApplication(data);
+    setIsLoading(false);
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -33,6 +44,39 @@ export default function Page() {
     };
   }, [params.id]);
 
+  async function handlePayment() {
+    if (!application) return;
+
+    try {
+      setIsPaying(true);
+      setPaymentMessage('');
+      setError('');
+
+      const payment = await createPayment(application.id);
+      await payWithMidtransSnap(payment.snap_token, {
+        onSuccess: () => {
+          setPaymentMessage('Pembayaran berhasil. Detail pengajuan diperbarui.');
+          void refreshApplication();
+        },
+        onPending: () => {
+          setPaymentMessage('Pembayaran sedang diproses.');
+          void refreshApplication();
+        },
+        onError: () => {
+          setPaymentMessage('Pembayaran gagal diproses.');
+          void refreshApplication();
+        },
+        onClose: () => {
+          setPaymentMessage('Pembayaran dibatalkan.');
+        },
+      });
+    } catch (paymentError) {
+      setError(paymentError instanceof Error ? paymentError.message : 'Gagal membuka pembayaran.');
+    } finally {
+      setIsPaying(false);
+    }
+  }
+
   return (
     <main style={{ minHeight: '100vh', background: '#f9f9ff', padding: '32px 24px 72px', color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 1120, margin: '0 auto' }}>
@@ -41,7 +85,7 @@ export default function Page() {
         ) : error ? (
           <p style={{ color: '#93000a', background: '#ffdad6', padding: 16, borderRadius: 10, fontWeight: 700 }}>{error}</p>
         ) : application ? (
-          <RentalApplicationDetailView application={application} />
+          <RentalApplicationDetailView application={application} onPay={() => void handlePayment()} isPaying={isPaying} paymentMessage={paymentMessage} />
         ) : null}
       </div>
     </main>

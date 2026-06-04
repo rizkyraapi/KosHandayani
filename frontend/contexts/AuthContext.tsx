@@ -33,26 +33,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState('');
   const lastHeartbeatAtRef = useRef(0);
   const heartbeatInFlightRef = useRef(false);
+  const authVersionRef = useRef(0);
+
+  const resetHeartbeat = useCallback(() => {
+    heartbeatInFlightRef.current = false;
+    lastHeartbeatAtRef.current = 0;
+  }, []);
 
   const refreshUser = useCallback(async () => {
+    const requestVersion = authVersionRef.current;
+
     try {
       setIsLoading(true);
       const currentUser = await authService.me();
-      setUser(currentUser);
+
+      if (authVersionRef.current === requestVersion) {
+        setUser(currentUser);
+      }
+
       return currentUser;
     } catch (refreshError) {
-      authService.clearSession();
-      setUser(null);
+      if (authVersionRef.current === requestVersion) {
+        authService.clearSession();
+        resetHeartbeat();
+        setUser(null);
 
-      if (!isUnauthorizedError(refreshError)) {
-        setError(getAuthErrorMessage(refreshError, 'Sesi berakhir. Silakan login kembali.'));
+        if (!isUnauthorizedError(refreshError)) {
+          setError(getAuthErrorMessage(refreshError, 'Sesi berakhir. Silakan login kembali.'));
+        }
       }
 
       return null;
     } finally {
-      setIsLoading(false);
+      if (authVersionRef.current === requestVersion) {
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [resetHeartbeat]);
 
   useEffect(() => {
     Promise.resolve().then(refreshUser);
@@ -75,14 +92,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       lastHeartbeatAtRef.current = now;
       heartbeatInFlightRef.current = true;
+      const requestVersion = authVersionRef.current;
 
       authService
         .touchSession()
         .then((currentUser) => {
-          setUser(currentUser);
+          if (authVersionRef.current === requestVersion) {
+            setUser(currentUser);
+          }
         })
         .catch((heartbeatError) => {
-          if (isUnauthorizedError(heartbeatError)) {
+          if (authVersionRef.current === requestVersion && isUnauthorizedError(heartbeatError)) {
             authService.clearSession();
             setUser(null);
           }
@@ -122,62 +142,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (credentials: LoginCredentials) => {
+      const requestVersion = authVersionRef.current + 1;
+      authVersionRef.current = requestVersion;
+      resetHeartbeat();
+
       try {
         setError('');
         setIsLoading(true);
+        setUser(null);
         const loggedInUser = await authService.login(credentials);
-        setUser(loggedInUser);
-        router.replace(getRedirectPathForRole(loggedInUser.role));
+
+        if (authVersionRef.current === requestVersion) {
+          setUser(loggedInUser);
+          router.replace(getRedirectPathForRole(loggedInUser.role));
+        }
+
         return loggedInUser;
       } catch (loginError) {
-        const message = getAuthErrorMessage(loginError, 'Login gagal. Periksa email dan password.');
-        setError(message);
+        if (authVersionRef.current === requestVersion) {
+          const message = getAuthErrorMessage(loginError, 'Login gagal. Periksa email dan password.');
+          setError(message);
+          setUser(null);
+        }
+
         throw loginError;
       } finally {
-        setIsLoading(false);
+        if (authVersionRef.current === requestVersion) {
+          setIsLoading(false);
+        }
       }
     },
-    [router]
+    [resetHeartbeat, router]
   );
 
   const register = useCallback(
     async (payload: RegisterPayload) => {
+      const requestVersion = authVersionRef.current + 1;
+      authVersionRef.current = requestVersion;
+      resetHeartbeat();
+
       try {
         setError('');
         setIsLoading(true);
+        setUser(null);
         const registeredUser = await authService.register(payload);
-        setUser(registeredUser);
 
-        if (registeredUser) {
-          router.replace(getRedirectPathForRole(registeredUser.role));
-        } else {
-          router.replace('/login?registered=1');
+        if (authVersionRef.current === requestVersion) {
+          setUser(registeredUser);
+
+          if (registeredUser) {
+            router.replace(getRedirectPathForRole(registeredUser.role));
+          } else {
+            router.replace('/login?registered=1');
+          }
         }
 
         return registeredUser;
       } catch (registerError) {
-        const message = getAuthErrorMessage(registerError, 'Register gagal. Periksa data yang diisi.');
-        setError(message);
+        if (authVersionRef.current === requestVersion) {
+          const message = getAuthErrorMessage(registerError, 'Register gagal. Periksa data yang diisi.');
+          setError(message);
+          setUser(null);
+        }
+
         throw registerError;
       } finally {
-        setIsLoading(false);
+        if (authVersionRef.current === requestVersion) {
+          setIsLoading(false);
+        }
       }
     },
-    [router]
+    [resetHeartbeat, router]
   );
 
   const logout = useCallback(async () => {
+    const requestVersion = authVersionRef.current + 1;
+    authVersionRef.current = requestVersion;
+    resetHeartbeat();
+
     setError('');
     setIsLoading(true);
+    setUser(null);
 
     try {
       await authService.logout();
-      setUser(null);
-      router.replace('/');
     } finally {
-      setIsLoading(false);
+      if (authVersionRef.current === requestVersion) {
+        setUser(null);
+        router.replace('/login');
+        setIsLoading(false);
+      }
     }
-  }, [router]);
+  }, [resetHeartbeat, router]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

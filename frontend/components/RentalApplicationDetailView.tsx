@@ -11,6 +11,21 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
 }
 
+function isAwaitingPayment(application: RentalApplication) {
+  return application.status === 'approved'
+    && (application.payment_status === 'pending' || application.payment_status === 'unpaid');
+}
+
+function paymentStatusLabel(application: RentalApplication) {
+  if (application.status === 'pending') return 'Menunggu Persetujuan Owner';
+  if (isAwaitingPayment(application)) return 'Menunggu Pembayaran';
+  if (application.status === 'approved' && application.payment_status === 'paid') return 'Pembayaran Berhasil';
+  if (application.payment_status === 'failed') return 'Pembayaran Gagal';
+  if (application.status === 'rejected') return 'Pengajuan Ditolak';
+
+  return application.payment_status ?? '-';
+}
+
 function DocumentPreview({ label, url }: { label: string; url?: string | null }) {
   if (!url) {
     return (
@@ -36,11 +51,22 @@ function DocumentPreview({ label, url }: { label: string; url?: string | null })
   );
 }
 
-export default function RentalApplicationDetailView({ application }: { application: RentalApplication }) {
+export default function RentalApplicationDetailView({
+  application,
+  onPay,
+  isPaying = false,
+  paymentMessage = '',
+}: {
+  application: RentalApplication;
+  onPay?: () => void;
+  isPaying?: boolean;
+  paymentMessage?: string;
+}) {
   const room = application.room;
   const tenant = application.tenant;
   const facilities = room?.facilities ?? [];
   const images = room?.images ?? [];
+  const canPay = isAwaitingPayment(application);
 
   return (
     <div style={{ display: 'grid', gap: 24 }}>
@@ -54,6 +80,12 @@ export default function RentalApplicationDetailView({ application }: { applicati
         <RentalApplicationStatusBadge status={application.status} />
       </div>
 
+      {paymentMessage && (
+        <p style={{ margin: 0, padding: 14, borderRadius: 10, background: '#dcfce7', color: '#166534', fontWeight: 800 }}>
+          {paymentMessage}
+        </p>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
         <section style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
           <img src={room?.thumbnail || room?.image_url || fallbackImageUrl} alt={room?.room_name || 'Kamar'} style={{ width: '100%', height: 210, objectFit: 'cover', borderRadius: 10, marginBottom: 16 }} />
@@ -61,6 +93,17 @@ export default function RentalApplicationDetailView({ application }: { applicati
           <p style={{ color: '#3d4a3d' }}>{room?.branch?.branch_name || 'Cabang belum diatur'}</p>
           <p style={{ color: '#3d4a3d' }}>Tanggal masuk: <strong>{formatDate(application.move_in_date)}</strong></p>
           <p style={{ color: '#3d4a3d' }}>Durasi: <strong>{application.duration}</strong></p>
+          <p style={{ color: '#3d4a3d' }}>Status pembayaran: <strong>{paymentStatusLabel(application)}</strong></p>
+          {canPay && onPay && (
+            <button
+              type="button"
+              disabled={isPaying}
+              onClick={onPay}
+              style={{ border: 'none', background: '#006e2f', color: '#fff', borderRadius: 8, padding: '11px 16px', fontWeight: 800, cursor: isPaying ? 'not-allowed' : 'pointer', opacity: isPaying ? 0.7 : 1, marginTop: 6 }}
+            >
+              {isPaying ? 'Memproses...' : 'Bayar Sekarang'}
+            </button>
+          )}
           {facilities.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
               {facilities.map((facility) => (

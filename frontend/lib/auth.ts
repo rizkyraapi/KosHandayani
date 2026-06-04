@@ -3,11 +3,12 @@ import Cookies from 'js-cookie';
 import {
   AUTH_REMEMBER_COOKIE,
   AUTH_ROLE_COOKIE,
+  AUTH_TOKEN_COOKIE,
   getRoleDashboardPath,
   isUserRole,
   type UserRole,
 } from './auth-constants';
-import apiClient, { csrfClient } from './axios';
+import apiClient from './axios';
 
 export type AuthUser = {
   id: number;
@@ -53,8 +54,10 @@ type ApiUser = {
 };
 
 type AuthResponse = {
+  token?: string;
   user?: ApiUser;
   data?: {
+    token?: string;
     user?: ApiUser;
   };
   message?: string;
@@ -100,8 +103,13 @@ function getAuthUser(response: AuthResponse) {
   return response.user ?? response.data?.user;
 }
 
-function persistSession(user: AuthUser, remember = false) {
+function getAuthToken(response: AuthResponse) {
+  return response.token ?? response.data?.token;
+}
+
+function persistSession(user: AuthUser, remember = false, token?: string) {
   const options: Cookies.CookieAttributes = {
+    path: '/',
     sameSite: 'lax',
     expires: remember ? REMEMBER_SESSION_DAYS : idleMinutesToCookieDays(SESSION_IDLE_MINUTES),
   };
@@ -109,27 +117,61 @@ function persistSession(user: AuthUser, remember = false) {
   if (remember) {
     options.expires = 30;
     Cookies.set(AUTH_REMEMBER_COOKIE, '1', {
+      path: '/',
       expires: 30,
       sameSite: 'lax',
     });
   } else {
-    Cookies.remove(AUTH_REMEMBER_COOKIE);
+    Cookies.remove(AUTH_REMEMBER_COOKIE, { path: '/' });
   }
 
   Cookies.set(AUTH_ROLE_COOKIE, user.role, options);
+
+  if (token) {
+    Cookies.set(AUTH_TOKEN_COOKIE, token, options);
+  }
 }
 
 function isRememberedSession() {
   return Cookies.get(AUTH_REMEMBER_COOKIE) === '1';
 }
 
-function clearSessionCookies() {
-  Cookies.remove(AUTH_ROLE_COOKIE);
-  Cookies.remove(AUTH_REMEMBER_COOKIE);
+function clearBrowserStorage() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.clear();
+  } catch {
+    // Storage can be unavailable in private browsing or restricted contexts.
+  }
+
+  try {
+    window.sessionStorage.clear();
+  } catch {
+    // Storage can be unavailable in private browsing or restricted contexts.
+  }
 }
 
-async function ensureCsrfCookie() {
-  await csrfClient.get('/sanctum/csrf-cookie');
+function clearSessionCookies() {
+  [
+    AUTH_ROLE_COOKIE,
+    AUTH_REMEMBER_COOKIE,
+    AUTH_TOKEN_COOKIE,
+    'XSRF-TOKEN',
+    'laravel_session',
+    'koshandayani_session',
+    'kos_handayani_session',
+  ].forEach((cookieName) => {
+    Cookies.remove(cookieName);
+    Cookies.remove(cookieName, { path: '/' });
+  });
+}
+
+function clearLocalSession() {
+  clearSessionCookies();
+  clearBrowserStorage();
 }
 
 export function getRedirectPathForRole(role: UserRole) {
@@ -161,17 +203,19 @@ export function isUnauthorizedError(error: unknown) {
 
 export const authService = {
   async login(credentials: LoginCredentials) {
-    await ensureCsrfCookie();
+    clearLocalSession();
+
     const { data } = await apiClient.post<AuthResponse>('/login', credentials);
     const user = normalizeUser(getAuthUser(data));
 
-    persistSession(user, Boolean(credentials.remember));
+    persistSession(user, Boolean(credentials.remember), getAuthToken(data));
 
     return user;
   },
 
   async register(payload: RegisterPayload) {
-    await ensureCsrfCookie();
+    clearLocalSession();
+
     const { data } = await apiClient.post<AuthResponse>('/register', {
       ...payload,
       name: payload.full_name,
@@ -185,7 +229,7 @@ export const authService = {
     }
 
     const user = normalizeUser(apiUser);
-    persistSession(user);
+    persistSession(user, false, getAuthToken(data));
 
     return user;
   },
@@ -209,12 +253,13 @@ export const authService = {
 
   async logout() {
     try {
-      await ensureCsrfCookie();
       await apiClient.post('/logout');
+    } catch {
+      // Logout lokal tetap harus berhasil meski token sudah invalid/expired di server.
     } finally {
-      clearSessionCookies();
+      clearLocalSession();
     }
   },
 
-  clearSession: clearSessionCookies,
+  clearSession: clearLocalSession,
 };

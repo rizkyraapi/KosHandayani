@@ -52,4 +52,9 @@ class Room extends Model
     {
         return $this->hasMany(RentalApplication::class);
     }
+
+    public function roomOccupancies(): HasMany
+    {
+        return $this->hasMany(RoomOccupancy::class);
+    }
 }

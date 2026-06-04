@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -35,14 +35,12 @@ class AuthController extends Controller
             'profile_completed' => false,
         ]);
 
-        Auth::login($user);
-        if ($request->hasSession()) {
-            $request->session()->regenerate();
-        }
+        $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'success' => true,
             'message' => 'Register berhasil',
+            'token' => $token,
             'user' => $this->authUser($user),
         ]);
     }
@@ -53,36 +51,26 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
-            'remember' => 'sometimes|boolean',
         ]);
 
         $user = User::where('email', $request->email)->first();
 
         // cek user
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
 
             throw ValidationException::withMessages([
                 'email' => ['Email atau password salah'],
             ]);
         }
 
-        $remember = $request->boolean('remember');
-
-        if ($remember) {
-            config(['session.lifetime' => 60 * 24 * 30]);
-        }
-
-        Auth::login($user, $remember);
-        if ($request->hasSession()) {
-            $request->session()->regenerate();
-            $request->session()->put('remember_me', $remember);
-        }
+        $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
 
             'success' => true,
             'message' => 'Login berhasil',
 
+            'token' => $token,
             'user' => $this->authUser($user),
         ]);
     }
@@ -90,10 +78,11 @@ class AuthController extends Controller
     // LOGOUT
     public function logout(Request $request)
     {
-        Auth::guard('web')->logout();
+        $accessToken = $request->bearerToken()
+            ? PersonalAccessToken::findToken($request->bearerToken())
+            : $request->user()->currentAccessToken();
 
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $accessToken?->delete();
 
         return response()->json([
             'success' => true,
