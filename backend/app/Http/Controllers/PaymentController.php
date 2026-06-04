@@ -61,16 +61,20 @@ class PaymentController extends Controller
                     ], 422));
                 }
 
+                $durationMonths = $this->getDurationInMonths($application);
+                $roomPrice = (int) $application->room->price;
+                $grossAmount = $roomPrice * $durationMonths;
+
                 $payment = $application->payment ?? new Payment([
                     'rental_application_id' => $application->id,
                     'order_id' => $this->generateOrderId($application),
-                    'gross_amount' => $application->room->price,
+                    'gross_amount' => $grossAmount,
                     'transaction_status' => 'pending',
                 ]);
 
                 if (! $payment->snap_token) {
                     $payment->order_id ??= $this->generateOrderId($application);
-                    $payment->gross_amount = $application->room->price;
+                    $payment->gross_amount = $grossAmount;
                     $payment->transaction_status = 'pending';
                     $payment->snap_token = $this->midtrans->createSnapToken(
                         $this->buildSnapPayload($payment, $application)
@@ -251,6 +255,9 @@ class PaymentController extends Controller
 
     private function buildSnapPayload(Payment $payment, RentalApplication $application): array
     {
+        $durationMonths = $this->getDurationInMonths($application);
+        $roomPrice = (int) $application->room->price;
+
         return [
             'transaction_details' => [
                 'order_id' => $payment->order_id,
@@ -264,12 +271,19 @@ class PaymentController extends Controller
             'item_details' => [
                 [
                     'id' => 'ROOM-'.$application->room->id,
-                    'price' => $payment->gross_amount,
-                    'quantity' => 1,
+                    'price' => $roomPrice,
+                    'quantity' => $durationMonths,
                     'name' => $application->room->room_name,
                 ],
             ],
         ];
+    }
+
+    private function getDurationInMonths(RentalApplication $application): int
+    {
+        preg_match('/\d+/', (string) $application->duration, $matches);
+
+        return max(1, (int) ($matches[0] ?? 1));
     }
 
     private function calculateEndDate(RentalApplication $application): ?string
@@ -278,8 +292,7 @@ class PaymentController extends Controller
             return null;
         }
 
-        preg_match('/\d+/', (string) $application->duration, $matches);
-        $months = max(1, (int) ($matches[0] ?? 1));
+        $months = $this->getDurationInMonths($application);
 
         return $application->move_in_date->copy()->addMonthsNoOverflow($months)->toDateString();
     }

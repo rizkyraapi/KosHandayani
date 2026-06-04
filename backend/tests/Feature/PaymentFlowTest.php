@@ -24,6 +24,13 @@ class PaymentFlowTest extends TestCase
         $midtrans = Mockery::mock(MidtransService::class);
         $midtrans->shouldReceive('createSnapToken')
             ->once()
+            ->with(Mockery::on(function (array $payload) use ($application, $room): bool {
+                return str_starts_with($payload['transaction_details']['order_id'], 'KH-'.$application->id.'-')
+                    && $payload['transaction_details']['gross_amount'] === 4500000
+                    && $payload['item_details'][0]['id'] === 'ROOM-'.$room->id
+                    && $payload['item_details'][0]['price'] === 1500000
+                    && $payload['item_details'][0]['quantity'] === 3;
+            }))
             ->andReturn('snap-token-123');
         $this->app->instance(MidtransService::class, $midtrans);
         $token = $tenant->createToken('auth_token')->plainTextToken;
@@ -42,7 +49,7 @@ class PaymentFlowTest extends TestCase
 
         $this->assertDatabaseHas('payments', [
             'rental_application_id' => $application->id,
-            'gross_amount' => 1500000,
+            'gross_amount' => 4500000,
             'snap_token' => 'snap-token-123',
             'transaction_status' => 'pending',
         ]);
