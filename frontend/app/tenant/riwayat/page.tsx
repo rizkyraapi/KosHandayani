@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
 
 /* ─────────────────────────────────────────────
@@ -138,12 +139,61 @@ interface Transaction {
   status: 'Lunas' | 'Gagal' | 'Pending';
 }
 
-const transactions: Transaction[] = [
-  { id: 'TRX-1092', period: 'Nov 2024', periodDetail: '1 Bulan Sewa', payDate: '05 Nov 2024', amount: 'Rp 2.500.000', status: 'Lunas' },
-  { id: 'TRX-0985', period: 'Okt 2024', periodDetail: '1 Bulan Sewa', payDate: '02 Okt 2024', amount: 'Rp 2.500.000', status: 'Lunas' },
-  { id: 'TRX-0871', period: 'Sep 2024', periodDetail: '1 Bulan Sewa', payDate: '04 Sep 2024', amount: 'Rp 2.500.000', status: 'Lunas' },
-  { id: 'TRX-0755', period: 'Agt 2024', periodDetail: '1 Bulan Sewa', payDate: '01 Agt 2024', amount: 'Rp 2.500.000', status: 'Gagal' },
-];
+function formatRupiah(value?: number | null) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
+}
+
+function formatPeriod(value?: string | null) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(new Date(value));
+}
+
+function normalizePaymentStatus(payment: Payment): Transaction['status'] {
+  if (payment.rental_application?.payment_status === 'paid' || ['settlement', 'capture'].includes(payment.transaction_status)) return 'Lunas';
+  if (payment.rental_application?.payment_status === 'failed' || ['expire', 'cancel', 'deny'].includes(payment.transaction_status)) return 'Gagal';
+
+  return 'Pending';
+}
+
+function normalizeApplicationStatus(application: RentalApplication): Transaction['status'] {
+  if (application.payment_status === 'paid') return 'Lunas';
+  if (application.payment_status === 'failed' || application.status === 'rejected') return 'Gagal';
+
+  return 'Pending';
+}
+
+function buildTransactions(payments: Payment[], applications: RentalApplication[]): Transaction[] {
+  const paymentApplicationIds = new Set(payments.map((payment) => payment.rental_application_id));
+  const paymentRows = payments.map((payment) => ({
+    id: payment.order_id,
+    period: formatPeriod(payment.paid_at ?? payment.created_at),
+    periodDetail: `Pembayaran ${payment.rental_application?.room?.room_name || 'sewa kamar'}`,
+    payDate: formatDate(payment.paid_at ?? payment.created_at),
+    amount: formatRupiah(payment.gross_amount),
+    status: normalizePaymentStatus(payment),
+  }));
+  const applicationRows = applications
+    .filter((application) => !paymentApplicationIds.has(application.id))
+    .map((application) => ({
+      id: `APP-${application.id}`,
+      period: formatPeriod(application.created_at),
+      periodDetail: `Pengajuan ${application.room?.room_name || 'sewa kamar'} - ${application.duration}`,
+      payDate: formatDate(application.created_at),
+      amount: application.payment?.gross_amount ? formatRupiah(application.payment.gross_amount) : '-',
+      status: normalizeApplicationStatus(application),
+    }));
+
+  return [...paymentRows, ...applicationRows];
+}
 
 interface NavItem {
   icon: string;
@@ -398,7 +448,15 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
   );
 }
 
-function SummaryGrid() {
+function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
+  const paidTransactions = transactions.filter((transaction) => transaction.status === 'Lunas');
+  const totalPaid = paidTransactions.reduce((total, transaction) => {
+    const numericAmount = Number(transaction.amount.replace(/[^\d]/g, ''));
+
+    return total + (Number.isNaN(numericAmount) ? 0 : numericAmount);
+  }, 0);
+  const lastPaid = paidTransactions[0];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
       {/* Big card */}
@@ -408,23 +466,23 @@ function SummaryGrid() {
       >
         <div className="relative z-10">
           <p className="font-medium text-sm mb-1" style={{ color: 'rgba(255,255,255,0.8)' }}>
-            Total Pembayaran (2024)
+            Total Pembayaran
           </p>
           <h3 className="font-headline font-black tracking-tighter mb-4" style={{ fontSize: '2.8rem', lineHeight: 1.1 }}>
-            Rp 24.500.000
+            {formatRupiah(totalPaid)}
           </h3>
           <div className="flex flex-wrap gap-4">
             <div
               className="glass-effect px-4 py-2 rounded-lg"
             >
               <p className="text-[10px] font-bold uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>Terakhir Bayar</p>
-              <p className="text-sm font-semibold text-white">05 Nov 2024</p>
+              <p className="text-sm font-semibold text-white">{lastPaid?.payDate ?? '-'}</p>
             </div>
             <div
               className="glass-effect px-4 py-2 rounded-lg"
             >
               <p className="text-[10px] font-bold uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>Total Transaksi</p>
-              <p className="text-sm font-semibold text-white">10 Transaksi</p>
+              <p className="text-sm font-semibold text-white">{transactions.length} Transaksi</p>
             </div>
           </div>
         </div>
@@ -456,15 +514,15 @@ function SummaryGrid() {
               className="text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest"
               style={{ background: 'rgba(34,197,94,0.2)', color: '#004b1e' }}
             >
-              Lunas
+              {lastPaid?.status ?? 'Pending'}
             </span>
           </div>
           <p className="text-sm mb-1" style={{ color: '#3d4a3d' }}>Status Terakhir</p>
-          <h4 className="font-headline font-bold text-2xl" style={{ color: '#0f172a' }}>05 Nov 2024</h4>
+          <h4 className="font-headline font-bold text-2xl" style={{ color: '#0f172a' }}>{lastPaid?.payDate ?? '-'}</h4>
         </div>
         <div className="mt-4 pt-4" style={{ borderTop: '1px solid #f8fafc' }}>
           <p className="text-xs" style={{ color: '#3d4a3d' }}>
-            Pembayaran periode November telah berhasil diverifikasi oleh sistem.
+            {lastPaid ? `${lastPaid.periodDetail} telah diverifikasi oleh sistem.` : 'Belum ada pembayaran lunas yang tercatat.'}
           </p>
         </div>
       </div>
@@ -472,7 +530,7 @@ function SummaryGrid() {
   );
 }
 
-function TransactionsTable() {
+function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const rowsPerPage = 4;
@@ -748,6 +806,45 @@ export default function Page() {
   useInjectLink(MATERIAL_SYMBOLS_URL);
   const { user, logout, isLoading } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [historyError, setHistoryError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadHistory() {
+      try {
+        const [payments, applications] = await Promise.all([
+          getMyPayments(),
+          getMyRentalApplications(),
+        ]);
+
+        if (isMounted) {
+          setTransactions(buildTransactions(payments, applications));
+          setHistoryError('');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setHistoryError(error instanceof Error ? error.message : 'Gagal memuat riwayat.');
+        }
+      }
+    }
+
+    if (user?.role === 'tenant') {
+      void loadHistory();
+    }
+
+    const handleTenantDataSync = () => {
+      void loadHistory();
+    };
+
+    window.addEventListener('tenant-data-sync', handleTenantDataSync);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('tenant-data-sync', handleTenantDataSync);
+    };
+  }, [user?.role]);
 
   return (
     <>
@@ -793,8 +890,13 @@ export default function Page() {
                 </button>
               </div>
 
-              <SummaryGrid />
-              <TransactionsTable />
+              {historyError && (
+                <p className="mb-6 rounded-xl px-4 py-3 text-sm font-bold" style={{ color: '#93000a', background: '#ffdad6' }}>
+                  {historyError}
+                </p>
+              )}
+              <SummaryGrid transactions={transactions} />
+              <TransactionsTable transactions={transactions} />
               <HelpBanner />
             </div>
           </section>

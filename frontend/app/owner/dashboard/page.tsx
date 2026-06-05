@@ -1,7 +1,14 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getRooms, type ApiRoom } from '@/lib/api';
+import {
+  getOwnerDashboardStats,
+  getOwnerPayments,
+  getRooms,
+  type ApiRoom,
+  type OwnerDashboardStats,
+  type OwnerPaymentOverview,
+} from '@/lib/api';
 
 /* ─── Inject Google Fonts + Material Symbols into <head> ─── */
 function useGlobalStyles() {
@@ -377,7 +384,19 @@ type RoomStatusStats = {
   available: number;
   occupied: number;
   maintenance: number;
+  paidRevenue: number;
+  activeTenants: number;
+  pendingApplications: number;
+  successfulPayments: number;
 };
+
+function formatRupiah(value?: number | null) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
 
 function StatsRow({ stats }: { stats: RoomStatusStats }) {
   const barHeights = ['40%', '60%', '50%', '80%', '70%', '95%'];
@@ -488,9 +507,9 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
             </p>
           </div>
           <h3 style={{ fontSize: 28, fontWeight: 800, color: colors.onSurface, fontFamily: 'Manrope, sans-serif' }}>
-            Rp 92.500.000
+            {formatRupiah(stats.paidRevenue)}
           </h3>
-          <p style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, marginTop: 4 }}>+12% dari bulan lalu</p>
+          <p style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, marginTop: 4 }}>{stats.successfulPayments} pembayaran berhasil</p>
         </div>
         <div
           style={{
@@ -545,14 +564,14 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Total Pengeluaran
+              Penyewa & Pengajuan
             </p>
           </div>
           <h3 style={{ fontSize: 28, fontWeight: 800, color: colors.onSurface, fontFamily: 'Manrope, sans-serif' }}>
-            Rp 12.400.000
+            {stats.activeTenants} Penyewa
           </h3>
           <p style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, marginTop: 4 }}>
-            Biaya operasional &amp; maintenance
+            {stats.pendingApplications} pengajuan pending menunggu review
           </p>
         </div>
         <div
@@ -566,8 +585,8 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
             border: `1px solid ${colors.tertiary}1a`,
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 700, color: colors.tertiary }}>Tagihan Listrik &amp; Air</span>
-          <span style={{ fontSize: 12, fontWeight: 900, color: colors.tertiary }}>80%</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: colors.tertiary }}>Pengajuan Pending</span>
+          <span style={{ fontSize: 12, fontWeight: 900, color: colors.tertiary }}>{stats.pendingApplications}</span>
         </div>
       </div>
     </section>
@@ -575,24 +594,32 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
 }
 
 /* ─── Branch Stats ─── */
-const branches = [
-  {
-    name: 'Cabang 1 - Emerald Residence',
-    detail: '24 Kamar · Jakarta Selatan',
-    pct: 92,
-    income: 'Rp 48.000.000',
-    expense: 'Rp 5.200.000',
-  },
-  {
-    name: 'Cabang 2 - Sapphire Suites',
-    detail: '24 Kamar · Jakarta Pusat',
-    pct: 87,
-    income: 'Rp 44.500.000',
-    expense: 'Rp 7.200.000',
-  },
-];
+function BranchStats({ rooms }: { rooms: ApiRoom[] }) {
+  const branches = Object.values(rooms.reduce<Record<string, {
+        name: string;
+        detail: string;
+        pct: number;
+        income: string;
+        expense: string;
+      }>>((groups, room) => {
+        const key = room.branch?.branch_name || 'Cabang belum diatur';
+        groups[key] ??= {
+          name: key,
+          detail: `0 Kamar - ${room.branch?.city || '-'}`,
+          pct: 0,
+          income: 'Terisi: 0',
+          expense: 'Tersedia: 0',
+        };
+        const total = Number(groups[key].detail.match(/^\d+/)?.[0] ?? 0) + 1;
+        const occupied = Number(groups[key].income.replace(/[^\d]/g, '')) + (room.room_status === 'occupied' ? 1 : 0);
+        groups[key].detail = `${total} Kamar - ${room.branch?.city || '-'}`;
+        groups[key].pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+        groups[key].income = `Terisi: ${occupied}`;
+        groups[key].expense = `Tersedia: ${total - occupied}`;
 
-function BranchStats() {
+        return groups;
+      }, {}));
+
   return (
     <div
       style={{
@@ -622,7 +649,9 @@ function BranchStats() {
         </button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-        {branches.map((b, i) => (
+        {branches.length === 0 ? (
+          <p style={{ fontSize: 14, color: colors.onSurfaceVariant }}>Belum ada data cabang.</p>
+        ) : branches.map((b, i) => (
           <div key={i}>
             <div
               style={{
@@ -657,8 +686,8 @@ function BranchStats() {
               />
             </div>
             <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>Pemasukan: {b.income}</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>Pengeluaran: {b.expense}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{b.income}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{b.expense}</span>
             </div>
           </div>
         ))}
@@ -668,26 +697,30 @@ function BranchStats() {
 }
 
 /* ─── Activity Feed ─── */
-const activities = [
-  {
-    icon: 'check_circle',
-    iconBg: '#f0fdf4',
-    iconColor: colors.primary,
-    title: 'Pembayaran Diterima - Kamar 102',
-    sub: 'Oleh Budi Setiawan · Cabang 1',
-    time: 'Tadi',
-  },
-  {
-    icon: 'warning',
-    iconBg: '#fffbeb',
-    iconColor: '#d97706',
-    title: 'Laporan Kerusakan - Kamar 205',
-    sub: 'AC Tidak Dingin · Cabang 2',
-    time: '2 jam lalu',
-  },
-];
+function formatDashboardActivityTime(value?: string | null) {
+  if (!value) return '-';
 
-function ActivityFeed() {
+  return new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function ActivityFeed({ payments }: { payments: OwnerPaymentOverview['payments'] }) {
+  const activities = payments.slice(0, 4).map((payment) => {
+    const isPaid = ['settlement', 'capture'].includes(payment.transaction_status);
+    const isFailed = ['expire', 'cancel', 'deny'].includes(payment.transaction_status);
+
+    return {
+      icon: isPaid ? 'check_circle' : isFailed ? 'warning' : 'pending',
+      iconBg: isPaid ? '#f0fdf4' : isFailed ? '#fffbeb' : '#e7eeff',
+      iconColor: isPaid ? colors.primary : isFailed ? '#d97706' : colors.onSurfaceVariant,
+      title: `${isPaid ? 'Pembayaran Diterima' : isFailed ? 'Pembayaran Gagal' : 'Pembayaran Menunggu'} - ${payment.room?.room_name || 'Kamar'}`,
+      sub: `Oleh ${payment.tenant?.full_name || payment.tenant?.email || 'Tenant'} - ${payment.room?.branch?.branch_name || 'Cabang belum diatur'}`,
+      time: formatDashboardActivityTime(payment.paid_at ?? payment.created_at),
+    };
+  });
+
   return (
     <div
       style={{
@@ -709,7 +742,9 @@ function ActivityFeed() {
         Aktivitas Terkini
       </h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {activities.map((a, i) => (
+        {activities.length === 0 ? (
+          <p style={{ fontSize: 14, color: colors.onSurfaceVariant }}>Belum ada aktivitas pembayaran.</p>
+        ) : activities.map((a, i) => (
           <div
             key={i}
             style={{
@@ -831,17 +866,8 @@ function QuickActions() {
 }
 
 /* ─── Occupancy Heatmap ─── */
-const fallbackOccupancy = [
-  true, true, false, true, true, true,
-  true, false, true, true, true, true,
-  true, true, true, false, true, true,
-  true, true, true, true, true, true,
-];
-
 function OccupancyMap({ rooms }: { rooms: ApiRoom[] }) {
-  const occupancy = rooms.length > 0
-    ? rooms.slice(0, 24).map((room) => room.room_status === 'occupied')
-    : fallbackOccupancy;
+  const occupancy = rooms.slice(0, 24).map((room) => room.room_status === 'occupied');
 
   return (
     <div
@@ -871,7 +897,9 @@ function OccupancyMap({ rooms }: { rooms: ApiRoom[] }) {
           gap: 8,
         }}
       >
-        {occupancy.map((occupied, i) => (
+        {occupancy.length === 0 ? (
+          <p style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>Belum ada kamar.</p>
+        ) : occupancy.map((occupied, i) => (
           <div
             key={i}
             style={{
@@ -1015,6 +1043,8 @@ const responsiveCSS = `
 export default function Page() {
   useGlobalStyles();
   const [rooms, setRooms] = useState<ApiRoom[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<OwnerDashboardStats | null>(null);
+  const [recentPayments, setRecentPayments] = useState<OwnerPaymentOverview['payments']>([]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -1028,21 +1058,29 @@ export default function Page() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadRooms() {
+    async function loadDashboardData() {
       try {
-        const data = await getRooms();
+        const [roomData, statsData, paymentData] = await Promise.all([
+          getRooms(),
+          getOwnerDashboardStats(),
+          getOwnerPayments(),
+        ]);
 
         if (isMounted) {
-          setRooms(data);
+          setRooms(roomData);
+          setDashboardStats(statsData);
+          setRecentPayments(paymentData.payments);
         }
       } catch {
         if (isMounted) {
           setRooms([]);
+          setDashboardStats(null);
+          setRecentPayments([]);
         }
       }
     }
 
-    loadRooms();
+    loadDashboardData();
 
     return () => {
       isMounted = false;
@@ -1050,11 +1088,15 @@ export default function Page() {
   }, []);
 
   const roomStats = useMemo(() => ({
-    total: rooms.length,
-    available: rooms.filter((room) => room.room_status === 'available').length,
-    occupied: rooms.filter((room) => room.room_status === 'occupied').length,
-    maintenance: rooms.filter((room) => room.room_status === 'maintenance').length,
-  }), [rooms]);
+    total: dashboardStats?.total_rooms ?? rooms.length,
+    available: dashboardStats?.available_rooms ?? rooms.filter((room) => room.room_status === 'available').length,
+    occupied: dashboardStats?.occupied_rooms ?? rooms.filter((room) => room.room_status === 'occupied').length,
+    maintenance: dashboardStats?.maintenance_rooms ?? rooms.filter((room) => room.room_status === 'maintenance').length,
+    paidRevenue: dashboardStats?.paid_revenue ?? 0,
+    activeTenants: dashboardStats?.active_tenants ?? 0,
+    pendingApplications: dashboardStats?.pending_applications ?? 0,
+    successfulPayments: dashboardStats?.successful_payments ?? 0,
+  }), [dashboardStats, rooms]);
 
   return (
     <>
@@ -1082,8 +1124,8 @@ export default function Page() {
         >
           {/* Left col */}
           <div className="left-col" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <BranchStats />
-            <ActivityFeed />
+            <BranchStats rooms={rooms} />
+            <ActivityFeed payments={recentPayments} />
           </div>
 
           {/* Right col */}

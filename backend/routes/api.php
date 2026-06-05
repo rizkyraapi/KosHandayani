@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchController;
+use App\Http\Controllers\OwnerDataController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RentalApplicationController;
@@ -36,8 +37,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/owner/rental-applications', [RentalApplicationController::class, 'ownerIndex']);
     Route::put('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerUpdate']);
+    Route::get('/owner/dashboard', [OwnerDataController::class, 'dashboard']);
+    Route::get('/owner/payments', [OwnerDataController::class, 'payments']);
+    Route::get('/owner/tenants', [OwnerDataController::class, 'tenants']);
 
     Route::post('/payments/create', [PaymentController::class, 'create']);
+    Route::post('/payments/sync-status', [PaymentController::class, 'syncStatus']);
     Route::get('/my-payments', [PaymentController::class, 'index']);
     Route::get('/payments/{id}', [PaymentController::class, 'show']);
 

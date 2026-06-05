@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Midtrans\Config;
 use Midtrans\Snap;
+use Midtrans\Transaction;
 use RuntimeException;
 
 class MidtransService
@@ -13,6 +14,13 @@ class MidtransService
         $this->configure();
 
         return Snap::getSnapToken($payload);
+    }
+
+    public function getTransactionStatus(string $orderId): array
+    {
+        $this->configure();
+
+        return (array) Transaction::status($orderId);
     }
 
     public function isValidNotificationSignature(array $payload): bool

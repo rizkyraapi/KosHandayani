@@ -32,7 +32,7 @@ class RentalApplicationController extends Controller
             'kk_file' => $kkPath,
             'status' => 'pending',
             'payment_status' => 'pending',
-        ])->load(['user', 'room.branch', 'room.facilities', 'room.images']);
+        ])->load(['user', 'payment', 'room.branch', 'room.facilities', 'room.images']);
 
         return response()->json([
             'success' => true,
@@ -47,7 +47,7 @@ class RentalApplicationController extends Controller
             return $response;
         }
 
-        $applications = RentalApplication::with(['room.branch', 'room.facilities'])
+        $applications = RentalApplication::with(['payment', 'room.branch', 'room.facilities'])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->get()
@@ -66,7 +66,7 @@ class RentalApplicationController extends Controller
             return $response;
         }
 
-        $application = RentalApplication::with(['user', 'room.branch', 'room.facilities', 'room.images'])
+        $application = RentalApplication::with(['user', 'payment', 'room.branch', 'room.facilities', 'room.images'])
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
 
@@ -83,7 +83,7 @@ class RentalApplicationController extends Controller
             return $response;
         }
 
-        $applications = RentalApplication::with(['user', 'room.branch', 'room.facilities'])
+        $applications = RentalApplication::with(['user', 'payment', 'room.branch', 'room.facilities'])
             ->latest()
             ->get()
             ->map(fn (RentalApplication $application) => $this->formatApplication($application, includeTenant: true));
@@ -142,14 +142,7 @@ class RentalApplicationController extends Controller
 
             $application->update($updates);
 
-            if ($statusChanged && $validated['status'] === 'approved' && $application->room) {
-                $application->room->update([
-                    'is_available' => false,
-                    'room_status' => 'occupied',
-                ]);
-            }
-
-            return $application->fresh(['user', 'room.branch', 'room.facilities', 'room.images']);
+            return $application->fresh(['user', 'payment', 'room.branch', 'room.facilities', 'room.images']);
         });
 
         return response()->json([
@@ -200,6 +193,23 @@ class RentalApplicationController extends Controller
                 ? $this->formatRoom($application->room, $includeRoomDetails)
                 : null,
         ];
+
+        if ($application->relationLoaded('payment')) {
+            $payment = $application->getRelation('payment');
+            $data['payment'] = $payment ? [
+                'id' => $payment->id,
+                'rental_application_id' => $payment->rental_application_id,
+                'order_id' => $payment->order_id,
+                'transaction_id' => $payment->transaction_id,
+                'gross_amount' => $payment->gross_amount,
+                'payment_type' => $payment->payment_type,
+                'transaction_status' => $payment->transaction_status,
+                'snap_token' => $payment->snap_token,
+                'paid_at' => optional($payment->paid_at)->toDateTimeString(),
+                'created_at' => $payment->created_at,
+                'updated_at' => $payment->updated_at,
+            ] : null;
+        }
 
         if ($includeTenant) {
             $data['tenant'] = $application->user

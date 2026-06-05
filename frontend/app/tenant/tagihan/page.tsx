@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { createPayment, getMyPayments, type Payment } from '@/lib/api';
+import { createPayment, getMyPayments, syncPaymentStatus, type Payment } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
 import { payWithMidtransSnap } from '@/lib/midtrans';
+import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
@@ -607,7 +609,8 @@ function ConfirmationSidebar({
   onPay: () => void;
 }) {
   const room = payment?.rental_application?.room;
-  const isPending = normalizePaymentStatus(payment) === 'pending' && Boolean(payment);
+  const normalizedStatus = normalizePaymentStatus(payment);
+  const canPay = ['pending', 'failed'].includes(normalizedStatus) && Boolean(payment);
   const summaryItems = [
     { label: room?.room_name ? `Sewa ${room.room_name}` : 'Sewa kamar', amount: formatRupiah(payment?.gross_amount) },
     { label: 'Status Pembayaran', amount: normalizePaymentStatus(payment) },
@@ -686,7 +689,7 @@ function ConfirmationSidebar({
           </div>
         </div>
 
-        {isPending ? (
+        {canPay ? (
           <button
             disabled={isPaying}
             onClick={onPay}
@@ -723,7 +726,7 @@ function ConfirmationSidebar({
             }}
           >
             <Icon name="security" filled />
-            {isPaying ? 'Memproses...' : 'Lanjutkan Pembayaran'}
+            {isPaying ? 'Memproses...' : normalizedStatus === 'failed' ? 'Bayar Ulang' : 'Lanjutkan Pembayaran'}
           </button>
         ) : (
           <p style={{ margin: 0, color: '#3d4a3d', fontWeight: 700 }}>
@@ -942,7 +945,8 @@ const responsiveStyle = `
 // ─── Page Component ────────────────────────────────────────────────────────────
 
 export default function Page() {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, refreshUser } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoadingPayments, setIsLoadingPayments] = useState(true);
   const [isPaying, setIsPaying] = useState(false);
@@ -1013,30 +1017,41 @@ export default function Page() {
   async function handleContinuePayment() {
     if (!activePayment) return;
 
+    async function refreshAfterPayment(nextMessage: string) {
+      setPaymentMessage(nextMessage);
+      await syncTenantDataAfterPayment();
+      await Promise.allSettled([refreshPayments(), refreshUser()]);
+      router.push('/tenant/tagihan');
+    }
+
     try {
       setIsPaying(true);
       setPaymentMessage('');
       setPaymentError('');
 
-      let snapToken = activePayment.snap_token;
+      const status = normalizePaymentStatus(activePayment);
+      let snapToken = status === 'failed' ? null : activePayment.snap_token;
+      let orderId = activePayment.order_id;
 
       if (!snapToken) {
         const payment = await createPayment(activePayment.rental_application_id);
         snapToken = payment.snap_token;
+        orderId = payment.order_id;
       }
 
       await payWithMidtransSnap(snapToken, {
         onSuccess: () => {
-          setPaymentMessage('Pembayaran berhasil. Data tagihan diperbarui.');
-          void refreshPayments();
+          void syncPaymentStatus(orderId)
+            .catch(() => null)
+            .then(() => refreshAfterPayment('Pembayaran berhasil. Data tagihan diperbarui.'));
         },
         onPending: () => {
-          setPaymentMessage('Pembayaran sedang diproses.');
-          void refreshPayments();
+          void syncPaymentStatus(orderId)
+            .catch(() => null)
+            .then(() => refreshAfterPayment('Pembayaran sedang diproses.'));
         },
         onError: () => {
-          setPaymentMessage('Pembayaran gagal diproses.');
-          void refreshPayments();
+          void refreshAfterPayment('Pembayaran gagal diproses.');
         },
         onClose: () => {
           setPaymentMessage('Pembayaran dibatalkan.');

@@ -32,6 +32,11 @@ class RentalApplicationApprovalPaymentStatusTest extends TestCase
         $this->assertSame('approved', $application->status);
         $this->assertSame('unpaid', $application->payment_status);
         $this->assertNotNull($application->approved_at);
+        $this->assertDatabaseHas('rooms', [
+            'id' => $application->room_id,
+            'is_available' => true,
+            'room_status' => 'available',
+        ]);
     }
 
     public function test_repeated_approval_does_not_refresh_payment_status_or_approved_at(): void

@@ -47,7 +47,7 @@ class PaymentController extends Controller
                     ], 422));
                 }
 
-                if ($application->payment_status !== 'unpaid') {
+                if (! in_array($application->payment_status, ['unpaid', 'failed'], true)) {
                     abort(response()->json([
                         'success' => false,
                         'message' => 'Status pembayaran tidak valid untuk membuat pembayaran',
@@ -72,12 +72,22 @@ class PaymentController extends Controller
                     'transaction_status' => 'pending',
                 ]);
 
+                if ($application->payment_status === 'failed') {
+                    $payment->order_id = $this->generateOrderId($application);
+                    $payment->snap_token = null;
+                    $payment->transaction_id = null;
+                    $payment->payment_type = null;
+                    $payment->paid_at = null;
+                    $application->payment_status = 'unpaid';
+                    $application->save();
+                }
+
                 if (! $payment->snap_token) {
                     $payment->order_id ??= $this->generateOrderId($application);
                     $payment->gross_amount = $grossAmount;
                     $payment->transaction_status = 'pending';
                     $payment->snap_token = $this->midtrans->createSnapToken(
-                        $this->buildSnapPayload($payment, $application)
+                        $this->buildSnapPayload($payment, $application, $this->resolveFrontendOrigin($request))
                     );
                     $payment->save();
                 }
@@ -146,29 +156,7 @@ class PaymentController extends Controller
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                $status = $payload['transaction_status'];
-
-                $payment->update([
-                    'transaction_id' => $payload['transaction_id'] ?? $payment->transaction_id,
-                    'payment_type' => $payload['payment_type'] ?? $payment->payment_type,
-                    'gross_amount' => isset($payload['gross_amount'])
-                        ? (int) round((float) $payload['gross_amount'])
-                        : $payment->gross_amount,
-                    'transaction_status' => $status,
-                    'paid_at' => $this->isSuccessfulStatus($status)
-                        ? ($payment->paid_at ?? now())
-                        : $payment->paid_at,
-                ]);
-
-                if ($this->isSuccessfulStatus($status)) {
-                    $this->applySuccessfulPayment($payment->fresh(['rentalApplication.room']));
-                }
-
-                if ($this->isFailedStatus($status)) {
-                    $this->applyFailedPayment($payment->fresh(['rentalApplication']));
-                }
-
-                return $payment->fresh(['rentalApplication.room']);
+                return $this->updatePaymentFromMidtransStatus($payment, $payload);
             });
         } catch (ModelNotFoundException) {
             return response()->json([
@@ -180,6 +168,53 @@ class PaymentController extends Controller
         return response()->json([
             'success' => true,
             'payment' => $payment,
+        ]);
+    }
+
+    public function syncStatus(Request $request): JsonResponse
+    {
+        if ($response = $this->ensureTenant($request)) {
+            return $response;
+        }
+
+        $validator = Validator::make($request->all(), [
+            'order_id' => ['required', 'string'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError('Validasi sinkronisasi pembayaran gagal', $validator->errors());
+        }
+
+        $orderId = $validator->validated()['order_id'];
+
+        try {
+            $statusPayload = $this->midtrans->getTransactionStatus($orderId);
+            $payment = DB::transaction(function () use ($request, $orderId, $statusPayload): Payment {
+                $payment = Payment::with(['rentalApplication.room'])
+                    ->where('order_id', $orderId)
+                    ->whereHas('rentalApplication', fn ($query) => $query->where('user_id', $request->user()->id))
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                return $this->updatePaymentFromMidtransStatus($payment, $statusPayload);
+            });
+        } catch (ModelNotFoundException) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pembayaran tidak ditemukan',
+            ], 404);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyinkronkan status pembayaran',
+            ], 502);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $payment,
         ]);
     }
 
@@ -253,12 +288,43 @@ class PaymentController extends Controller
         ]);
     }
 
-    private function buildSnapPayload(Payment $payment, RentalApplication $application): array
+    private function updatePaymentFromMidtransStatus(Payment $payment, array $payload): Payment
+    {
+        $status = (string) ($payload['transaction_status'] ?? $payment->transaction_status);
+        $grossAmount = $payload['gross_amount'] ?? $payment->gross_amount;
+
+        $payment->update([
+            'transaction_id' => $payload['transaction_id'] ?? $payment->transaction_id,
+            'payment_type' => $payload['payment_type'] ?? $payment->payment_type,
+            'gross_amount' => is_numeric($grossAmount)
+                ? (int) round((float) $grossAmount)
+                : $payment->gross_amount,
+            'transaction_status' => $status,
+            'paid_at' => $this->isSuccessfulStatus($status)
+                ? ($payment->paid_at ?? now())
+                : $payment->paid_at,
+        ]);
+
+        if ($this->isSuccessfulStatus($status)) {
+            $this->applySuccessfulPayment($payment->fresh(['rentalApplication.room']));
+        }
+
+        if ($this->isFailedStatus($status)) {
+            $this->applyFailedPayment($payment->fresh(['rentalApplication']));
+        }
+
+        return $payment->fresh(['rentalApplication.room.branch']);
+    }
+
+    private function buildSnapPayload(Payment $payment, RentalApplication $application, ?string $frontendOrigin = null): array
     {
         $durationMonths = $this->getDurationInMonths($application);
         $roomPrice = (int) $application->room->price;
+        $finishUrl = $frontendOrigin
+            ? rtrim($frontendOrigin, '/').'/tenant/rental-applications/'.$application->id
+            : null;
 
-        return [
+        $payload = [
             'transaction_details' => [
                 'order_id' => $payment->order_id,
                 'gross_amount' => $payment->gross_amount,
@@ -277,6 +343,14 @@ class PaymentController extends Controller
                 ],
             ],
         ];
+
+        if ($finishUrl) {
+            $payload['callbacks'] = [
+                'finish' => $finishUrl,
+            ];
+        }
+
+        return $payload;
     }
 
     private function getDurationInMonths(RentalApplication $application): int
@@ -300,6 +374,27 @@ class PaymentController extends Controller
     private function generateOrderId(RentalApplication $application): string
     {
         return sprintf('KH-%s-%s', $application->id, now()->timestamp);
+    }
+
+    private function resolveFrontendOrigin(Request $request): ?string
+    {
+        $origin = $request->headers->get('Origin');
+
+        if (! $origin && $request->headers->get('Referer')) {
+            $referer = parse_url($request->headers->get('Referer'));
+            if (isset($referer['scheme'], $referer['host'])) {
+                $origin = $referer['scheme'].'://'.$referer['host'].(isset($referer['port']) ? ':'.$referer['port'] : '');
+            }
+        }
+
+        $configuredOrigin = config('app.frontend_url') ?: env('FRONTEND_URL');
+        $origin ??= $configuredOrigin;
+
+        if (! $origin || str_contains($origin, 'example.com')) {
+            return null;
+        }
+
+        return rtrim($origin, '/');
     }
 
     private function isSuccessfulStatus(string $status): bool

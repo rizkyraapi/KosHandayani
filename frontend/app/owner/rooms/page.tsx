@@ -30,13 +30,6 @@ export default function KosHandayaniPage() {
   const [actionMessage, setActionMessage] = useState('');
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
 
-  const fallbackRooms = useMemo(() => [
-    { id: 1, name: 'Kamar A-101', floor: 'Lantai 1 • King Bed', branch: 'Emerald Heights', price: 'Rp 2.500.000', status: 'Lunas / Terisi', statusType: 'occupied' },
-    { id: 2, name: 'Kamar A-102', floor: 'Lantai 1 • Queen Bed', branch: 'Emerald Heights', price: 'Rp 2.200.000', status: 'Kosong', statusType: 'empty' },
-    { id: 3, name: 'Kamar B-205', floor: 'Lantai 2 • Studio Luxe', branch: 'Ruby Residence', price: 'Rp 3.100.000', status: 'Lunas / Terisi', statusType: 'occupied' },
-    { id: 4, name: 'Kamar C-008', floor: 'Lantai Dasar • Single Bed', branch: 'Ruby Residence', price: 'Rp 1.800.000', status: 'Maintenance', statusType: 'maintenance' },
-  ], []);
-
   useEffect(() => {
     let isMounted = true;
 
@@ -68,10 +61,6 @@ export default function KosHandayaniPage() {
   }, []);
 
   const rooms = useMemo(() => {
-    if (apiRooms.length === 0) {
-      return fallbackRooms;
-    }
-
     return apiRooms.map((room) => ({
       id: room.id,
       isApiRoom: true,
@@ -83,7 +72,7 @@ export default function KosHandayaniPage() {
       status: statusLabel(room.room_status),
       statusType: room.room_status,
     }));
-  }, [apiRooms, fallbackRooms]);
+  }, [apiRooms]);
 
   async function handleDeleteRoom(roomId: number, roomName: string) {
     const confirmed = window.confirm(`Hapus ${roomName}? Data kamar dan foto yang tersimpan akan dihapus.`);
@@ -129,9 +118,10 @@ export default function KosHandayaniPage() {
   const stats = useMemo(() => ({
     total: rooms.length,
     occupied: rooms.filter((room) => room.statusType === 'occupied').length,
-    available: rooms.filter((room) => room.statusType === 'available' || room.statusType === 'empty').length,
+    available: rooms.filter((room) => room.statusType === 'available').length,
     maintenance: rooms.filter((room) => room.statusType === 'maintenance').length,
   }), [rooms]);
+  const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0;
 
   return (
     <div className="light">
@@ -593,7 +583,7 @@ export default function KosHandayaniPage() {
             <div className="rooms-stat-card">
               <div className="rooms-stat-top">
                 <span className="material-symbols-outlined rooms-stat-icon text-[#006e2f] bg-[#006e2f]/10">door_open</span>
-                <span className="rooms-stat-badge text-[#006e2f] bg-[#006e2f]/10">+4 Bulan Ini</span>
+                <span className="rooms-stat-badge text-[#006e2f] bg-[#006e2f]/10">{stats.maintenance} Maintenance</span>
               </div>
               <p className="rooms-stat-label">Total Unit</p>
               <h3 className="rooms-stat-value">{stats.total}</h3>
@@ -601,7 +591,7 @@ export default function KosHandayaniPage() {
             <div className="rooms-stat-card">
               <div className="rooms-stat-top">
                 <span className="material-symbols-outlined rooms-stat-icon text-[#2f6a3c] bg-[#2f6a3c]/10">check_circle</span>
-                <span className="rooms-stat-badge text-[#2f6a3c] bg-[#2f6a3c]/10">92% Okupansi</span>
+                <span className="rooms-stat-badge text-[#2f6a3c] bg-[#2f6a3c]/10">{occupancyRate}% Okupansi</span>
               </div>
               <p className="rooms-stat-label">Terisi</p>
               <h3 className="rooms-stat-value">{stats.occupied}</h3>
@@ -681,6 +671,13 @@ export default function KosHandayaniPage() {
                       </td>
                     </tr>
                   )}
+                  {!isLoadingRooms && !roomsError && filteredRooms.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="text-center text-[#3d4a3d] font-semibold">
+                        Tidak ada kamar ditemukan.
+                      </td>
+                    </tr>
+                  )}
                   {!isLoadingRooms && !roomsError && filteredRooms.map((room) => (
                     <tr key={room.id} className="hover:bg-[#f0f3ff]/30 transition-colors group">
                       <td>
@@ -703,12 +700,12 @@ export default function KosHandayaniPage() {
                       <td>
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                           room.statusType === 'occupied' ? 'bg-[#afefb4] text-[#346e40]' :
-                          room.statusType === 'available' || room.statusType === 'empty' ? 'bg-[#ff8b7c] text-[#76231b]' :
+                          room.statusType === 'available' ? 'bg-[#ff8b7c] text-[#76231b]' :
                           'bg-[#e7eeff] text-[#3d4a3d]/60'
                         }`}>
                           <span className="w-1.5 h-1.5 rounded-full" style={{
                             backgroundColor: room.statusType === 'occupied' ? '#2f6a3c' :
-                              room.statusType === 'available' || room.statusType === 'empty' ? '#9e4036' :
+                              room.statusType === 'available' ? '#9e4036' :
                               '#6d7b6c'
                           }}></span>
                           {room.status}
@@ -748,9 +745,7 @@ export default function KosHandayaniPage() {
                   <span className="material-symbols-outlined text-lg">chevron_left</span>
                 </button>
                 <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#006e2f] text-white text-xs font-bold">1</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#dee8ff] text-xs font-bold text-[#3d4a3d] transition-colors">2</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#dee8ff] text-xs font-bold text-[#3d4a3d] transition-colors">3</button>
-                <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors">
+                <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
                   <span className="material-symbols-outlined text-lg">chevron_right</span>
                 </button>
               </div>

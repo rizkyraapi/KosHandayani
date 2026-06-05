@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   BedDouble,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   ReceiptText,
@@ -16,16 +17,13 @@ import { useAuth } from '@/contexts/AuthContext';
 const ownerNavItems = [
   { label: 'Dashboard', href: '/owner/dashboard', icon: LayoutDashboard },
   { label: 'Data Kamar', href: '/owner/rooms', icon: BedDouble },
-  { label: 'Pengajuan Sewa', href: '/owner/tenants', icon: UsersRound },
+  { label: 'Pengajuan Sewa', href: '/owner/rental-applications', icon: ClipboardList },
+  { label: 'Penyewa Aktif', href: '/owner/tenants', icon: UsersRound },
   { label: 'Tagihan', href: '/owner/payments', icon: ReceiptText },
   { label: 'Laporan', href: '/owner/reports', icon: BarChart3 },
 ];
 
 function isActivePath(pathname: string, href: string) {
-  if (href === '/owner/tenants' && pathname.startsWith('/owner/rental-applications')) {
-    return true;
-  }
-
   if (href === '/owner/dashboard') {
     return pathname === href;
   }

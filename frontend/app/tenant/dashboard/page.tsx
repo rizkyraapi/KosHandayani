@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
-import { getMyRentalApplications, type RentalApplication } from '@/lib/api';
+import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
 
 /* ═══════════════════════════════════════════════════════════════
    ALL CUSTOM STYLES — fonts, colors, utilities, Material Symbols,
@@ -220,6 +220,7 @@ const QUICK_ACTIONS = [
     color: 'text-secondary',
     title: 'Riwayat',
     desc: 'Lihat transaksi lama',
+    href: '/tenant/riwayat',
   },
   {
     icon: 'support_agent',
@@ -227,6 +228,7 @@ const QUICK_ACTIONS = [
     color: 'text-tertiary',
     title: 'Bantuan',
     desc: 'Layanan pengaduan',
+    href: '#',
   },
   {
     icon: 'qr_code_2',
@@ -234,13 +236,15 @@ const QUICK_ACTIONS = [
     color: 'text-primary',
     title: 'Akses Gate',
     desc: 'QR Code pintu utama',
+    href: '#',
   },
   {
     icon: 'account_balance_wallet',
     bg: 'bg-slate-200',
     color: 'text-slate-700',
-    title: 'Saldo Deposit',
-    desc: 'Rp 500.000',
+    title: 'Tagihan',
+    desc: 'Cek pembayaran',
+    href: '/tenant/tagihan',
   },
 ];
 
@@ -261,6 +265,36 @@ const ANNOUNCEMENTS = [
   },
 ];
 
+function formatRupiah(value?: number | null) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
+}
+
+function normalizePaymentStatus(payment?: Payment | null) {
+  if (!payment) return 'none';
+  if (payment.rental_application?.payment_status === 'paid' || ['settlement', 'capture'].includes(payment.transaction_status)) return 'paid';
+  if (payment.rental_application?.payment_status === 'failed' || ['expire', 'cancel', 'deny'].includes(payment.transaction_status)) return 'failed';
+
+  return 'pending';
+}
+
+function getPaymentStatusLabel(payment?: Payment | null) {
+  const status = normalizePaymentStatus(payment);
+  if (status === 'paid') return 'Lunas';
+  if (status === 'failed') return 'Gagal';
+  if (status === 'pending') return 'Menunggu Pembayaran';
+
+  return 'Belum ada tagihan';
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PAGE COMPONENT
 ═══════════════════════════════════════════════════════════════ */
@@ -268,9 +302,21 @@ export default function Page() {
   const { user, logout, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [applications, setApplications] = useState<RentalApplication[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [applicationsError, setApplicationsError] = useState('');
   const displayName = user?.full_name || 'Tenant';
   const isProfileComplete = Boolean(user?.profile_completed);
+  const activePayment = payments.find((payment) => normalizePaymentStatus(payment) === 'pending')
+    ?? payments.find((payment) => normalizePaymentStatus(payment) === 'failed')
+    ?? payments.find((payment) => normalizePaymentStatus(payment) === 'paid')
+    ?? null;
+  const activeApplication = activePayment?.rental_application
+    ?? applications.find((application) => application.payment_status === 'paid')
+    ?? applications.find((application) => application.status === 'approved')
+    ?? applications[0]
+    ?? null;
+  const activeRoom = activeApplication?.room;
+  const paymentStatus = getPaymentStatusLabel(activePayment);
 
   useEffect(() => {
     if (document.getElementById('kos-styles')) return;
@@ -284,11 +330,15 @@ export default function Page() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadApplications() {
+    async function loadDashboardData() {
       try {
-        const data = await getMyRentalApplications();
+        const [applicationData, paymentData] = await Promise.all([
+          getMyRentalApplications(),
+          getMyPayments(),
+        ]);
         if (isMounted) {
-          setApplications(data.slice(0, 3));
+          setApplications(applicationData.slice(0, 3));
+          setPayments(paymentData);
           setApplicationsError('');
         }
       } catch {
@@ -299,11 +349,18 @@ export default function Page() {
     }
 
     if (user?.role === 'tenant') {
-      void loadApplications();
+      void loadDashboardData();
     }
+
+    const handleTenantDataSync = () => {
+      void loadDashboardData();
+    };
+
+    window.addEventListener('tenant-data-sync', handleTenantDataSync);
 
     return () => {
       isMounted = false;
+      window.removeEventListener('tenant-data-sync', handleTenantDataSync);
     };
   }, [user?.role]);
 
@@ -475,49 +532,49 @@ export default function Page() {
                 <div>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary-container text-on-primary-container rounded-full text-xs font-bold mb-4">
                     <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    Status sewa (Aktif)
+                    Status sewa ({activeApplication?.payment_status === 'paid' ? 'Aktif' : activeApplication ? 'Pengajuan' : 'Belum Ada'})
                   </span>
                   <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">
-                    Tagihan bulan ini
+                    Tagihan terkini
                   </h3>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-3xl lg:text-4xl font-extrabold text-on-surface font-manrope">
-                      Rp 2.250.000
+                      {formatRupiah(activePayment?.gross_amount)}
                     </span>
-                    <span className="text-on-surface-variant font-medium">/ bulan</span>
+                    <span className="text-on-surface-variant font-medium">{activePayment ? paymentStatus : ''}</span>
                   </div>
                   <p className="text-error font-bold text-sm mt-2 flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">event</span>
-                    Jatuh tempo 5 Sept
+                    {activePayment?.paid_at ? `Dibayar ${formatDate(activePayment.paid_at)}` : activeApplication?.move_in_date ? `Mulai ${formatDate(activeApplication.move_in_date)}` : 'Belum ada jadwal sewa'}
                   </p>
                 </div>
                 <div className="text-left sm:text-right">
                   <p className="text-xs text-on-surface-variant font-bold uppercase tracking-widest mb-1">
                     Metode Pembayaran
                   </p>
-                  <p className="text-sm font-semibold text-on-surface">Transfer Virtual Account</p>
+                  <p className="text-sm font-semibold text-on-surface">{activePayment?.payment_type || '-'}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
-                <button className="bg-linear-to-r from-primary to-primary-container text-on-primary py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-shadow-primary-20 transition-all active:scale-95 group">
-                  Bayar Sekarang
+                <Link href="/tenant/tagihan" className="bg-linear-to-r from-primary to-primary-container text-on-primary py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-shadow-primary-20 transition-all active:scale-95 group">
+                  {normalizePaymentStatus(activePayment) === 'paid' ? 'Lihat Tagihan' : 'Bayar Sekarang'}
                   <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
                     arrow_forward
                   </span>
-                </button>
-                <button className="bg-surface-container-low text-on-surface py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-bg-surface-container-high transition-all active:scale-95">
+                </Link>
+                <Link href="/tenant/tagihan" className="bg-surface-container-low text-on-surface py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-bg-surface-container-high transition-all active:scale-95">
                   Rincian Tagihan
                   <span className="material-symbols-outlined">receipt_long</span>
-                </button>
+                </Link>
               </div>
             </div>
             <div className="bg-surface-container-low px-6 lg:px-8 py-4 flex items-center justify-between">
               <p className="text-xs text-on-surface-variant font-medium">
-                Terakhir dibayar: 5 Agustus 2024
+                Terakhir dibayar: {formatDate(activePayment?.paid_at)}
               </p>
-              <a href="#" className="text-xs text-primary font-bold hover:underline">
+              <Link href="/tenant/riwayat" className="text-xs text-primary font-bold hover:underline">
                 Lihat Invoice Sebelumnya
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -528,11 +585,11 @@ export default function Page() {
                 Hunian Anda
               </p>
               <h3 className="text-xl lg:text-2xl font-bold text-on-surface font-manrope leading-tight">
-                Superior Room B-05
+                {activeRoom?.room_name || 'Belum ada kamar aktif'}
               </h3>
               <p className="text-on-surface-variant font-semibold flex items-center gap-1.5 mt-1">
                 <span className="material-symbols-outlined text-base">location_on</span>
-                Cabang Margonda
+                {activeRoom?.branch?.branch_name || 'Cabang belum diatur'}
               </p>
             </div>
             <div className="mt-8 flex-1">
@@ -552,15 +609,15 @@ export default function Page() {
             </div>
             <div className="relative mt-auto">
               <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwEFa1B7bMp3MpBhenzOvyffcPdrh39WdKdbm1KUM8U085YD1T7EaIU5VlsP_N_uKwbUbXuZHRf2nlM7sz_8mWwvO35Q-xNRRTu0NAsRmelljA6ntwBx6bYCklPej3fsGXzKZ9qOSgwwtsWV9vkFJa9jBZrBXV1wrCx72UKXPwDJLHuo4ua95ICftEoQmxKN04tU-7y6irRemrxebklyqJicNqKnKbeM5q_fjMSa3kVwIYwJjD7zfY_apG4NfuAiNyQGPbpgUFD2N_"
-                alt="Superior Room B-05"
+                src={activeRoom?.thumbnail || activeRoom?.image_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAwEFa1B7bMp3MpBhenzOvyffcPdrh39WdKdbm1KUM8U085YD1T7EaIU5VlsP_N_uKwbUbXuZHRf2nlM7sz_8mWwvO35Q-xNRRTu0NAsRmelljA6ntwBx6bYCklPej3fsGXzKZ9qOSgwwtsWV9vkFJa9jBZrBXV1wrCx72UKXPwDJLHuo4ua95ICftEoQmxKN04tU-7y6irRemrxebklyqJicNqKnKbeM5q_fjMSa3kVwIYwJjD7zfY_apG4NfuAiNyQGPbpgUFD2N_'}
+                alt={activeRoom?.room_name || 'Kamar'}
                 className="w-full h-32 object-cover rounded-xl shadow-inner brightness-90"
               />
               <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent rounded-xl flex items-end p-4">
-                <button className="text-white text-xs font-bold flex items-center gap-2 hover:gap-3 transition-all">
+                <Link href={activeRoom?.id ? `/room/${activeRoom.id}` : '/rooms'} className="text-white text-xs font-bold flex items-center gap-2 hover:gap-3 transition-all">
                   Lihat Kamar
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
+                </Link>
               </div>
             </div>
           </div>
@@ -574,7 +631,7 @@ export default function Page() {
               {QUICK_ACTIONS.map((action) => (
                 <a
                   key={action.title}
-                  href="#"
+                  href={action.href}
                   className="group bg-surface-container-lowest p-5 lg:p-6 rounded-2xl shadow-sm hover:shadow-md transition-all hover:-translate-y-1"
                 >
                   <div

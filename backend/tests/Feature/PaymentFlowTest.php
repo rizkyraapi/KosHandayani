@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Payment;
 use App\Models\RentalApplication;
 use App\Models\Room;
+use App\Models\RoomOccupancy;
 use App\Models\User;
 use App\Services\MidtransService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +30,8 @@ class PaymentFlowTest extends TestCase
                     && $payload['transaction_details']['gross_amount'] === 4500000
                     && $payload['item_details'][0]['id'] === 'ROOM-'.$room->id
                     && $payload['item_details'][0]['price'] === 1500000
-                    && $payload['item_details'][0]['quantity'] === 3;
+                    && $payload['item_details'][0]['quantity'] === 3
+                    && $payload['callbacks']['finish'] === 'http://localhost:3000/tenant/rental-applications/'.$application->id;
             }))
             ->andReturn('snap-token-123');
         $this->app->instance(MidtransService::class, $midtrans);
@@ -37,6 +39,7 @@ class PaymentFlowTest extends TestCase
 
         $response = $this
             ->withToken($token)
+            ->withHeader('Origin', 'http://localhost:3000')
             ->postJson('/api/payments/create', [
                 'rental_application_id' => $application->id,
             ]);
@@ -52,6 +55,61 @@ class PaymentFlowTest extends TestCase
             'gross_amount' => 4500000,
             'snap_token' => 'snap-token-123',
             'transaction_status' => 'pending',
+        ]);
+    }
+
+    public function test_tenant_can_retry_failed_payment_with_new_midtrans_order(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom();
+        $application = $this->createApprovedApplication($tenant, $room);
+        $application->update(['payment_status' => 'failed']);
+        Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'OLD-ORDER-'.$application->id,
+            'gross_amount' => 4500000,
+            'transaction_status' => 'expire',
+            'snap_token' => 'old-snap-token',
+            'transaction_id' => 'old-transaction',
+            'payment_type' => 'bank_transfer',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('createSnapToken')
+            ->once()
+            ->with(Mockery::on(function (array $payload) use ($application): bool {
+                return str_starts_with($payload['transaction_details']['order_id'], 'KH-'.$application->id.'-')
+                    && $payload['transaction_details']['order_id'] !== 'OLD-ORDER-'.$application->id
+                    && $payload['transaction_details']['gross_amount'] === 4500000
+                    && $payload['item_details'][0]['quantity'] === 3;
+            }))
+            ->andReturn('retry-snap-token');
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/create', [
+                'rental_application_id' => $application->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('snap_token', 'retry-snap-token');
+
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'payment_status' => 'unpaid',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'rental_application_id' => $application->id,
+            'gross_amount' => 4500000,
+            'snap_token' => 'retry-snap-token',
+            'transaction_id' => null,
+            'payment_type' => null,
+            'transaction_status' => 'pending',
+        ]);
+        $this->assertDatabaseMissing('payments', [
+            'rental_application_id' => $application->id,
+            'order_id' => 'OLD-ORDER-'.$application->id,
         ]);
     }
 
@@ -127,10 +185,11 @@ class PaymentFlowTest extends TestCase
             'user_id' => $tenant->id,
             'room_id' => $room->id,
             'rental_application_id' => $application->id,
-            'start_date' => '2026-06-10',
-            'end_date' => '2026-09-10',
             'status' => 'active',
         ]);
+        $occupancy = RoomOccupancy::first();
+        $this->assertSame('2026-06-10', $occupancy?->start_date?->toDateString());
+        $this->assertSame('2026-09-10', $occupancy?->end_date?->toDateString());
         $this->assertDatabaseCount('room_occupancies', 1);
 
         $this->assertDatabaseHas('rooms', [
@@ -180,6 +239,62 @@ class PaymentFlowTest extends TestCase
         $this->assertDatabaseHas('rental_applications', [
             'id' => $application->id,
             'payment_status' => 'failed',
+        ]);
+    }
+
+    public function test_tenant_can_sync_successful_payment_status_after_snap_callback(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom();
+        $application = $this->createApprovedApplication($tenant, $room);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'KH-'.$application->id.'-sync-success',
+            'gross_amount' => 4500000,
+            'transaction_status' => 'pending',
+            'snap_token' => 'snap-token-sync',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('getTransactionStatus')
+            ->once()
+            ->with($payment->order_id)
+            ->andReturn([
+                'order_id' => $payment->order_id,
+                'transaction_status' => 'settlement',
+                'gross_amount' => '4500000.00',
+                'transaction_id' => 'midtrans-sync-transaction',
+                'payment_type' => 'bank_transfer',
+            ]);
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/sync-status', [
+                'order_id' => $payment->order_id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.transaction_status', 'settlement');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'transaction_status' => 'settlement',
+            'transaction_id' => 'midtrans-sync-transaction',
+            'payment_type' => 'bank_transfer',
+        ]);
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('room_occupancies', [
+            'rental_application_id' => $application->id,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('rooms', [
+            'id' => $room->id,
+            'is_available' => false,
+            'room_status' => 'occupied',
         ]);
     }
 
