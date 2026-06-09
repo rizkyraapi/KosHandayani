@@ -16,6 +16,18 @@ class PaymentFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_midtrans_notification_route_is_public_post_only(): void
+    {
+        $this
+            ->getJson('/api/payments/notification')
+            ->assertMethodNotAllowed();
+
+        $this
+            ->postJson('/api/payments/notification', [])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false);
+    }
+
     public function test_tenant_can_create_midtrans_snap_payment_for_approved_application(): void
     {
         $tenant = User::factory()->create(['role' => 'tenant']);
@@ -130,6 +142,30 @@ class PaymentFlowTest extends TestCase
             ])
             ->assertNotFound()
             ->assertJsonPath('success', false);
+    }
+
+    public function test_tenant_cannot_create_payment_when_room_is_no_longer_available(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom();
+        $application = $this->createApprovedApplication($tenant, $room);
+        $room->update([
+            'is_available' => false,
+            'room_status' => 'occupied',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldNotReceive('createSnapToken');
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/create', [
+                'rental_application_id' => $application->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Kamar sudah tidak tersedia untuk dibayar');
     }
 
     public function test_midtrans_settlement_notification_marks_payment_paid_and_creates_occupancy_once(): void

@@ -3,9 +3,11 @@
 namespace App\Http\Requests;
 
 use App\Models\Room;
+use App\Models\RentalApplication;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator as ValidationValidator;
 
 class StoreRentalApplicationRequest extends FormRequest
@@ -20,7 +22,7 @@ class StoreRentalApplicationRequest extends FormRequest
         return [
             'room_id' => ['required', 'integer', 'exists:rooms,id'],
             'move_in_date' => ['required', 'date'],
-            'duration' => ['required', 'string', 'max:50'],
+            'duration' => ['required', 'string', Rule::in(['1 Bulan', '3 Bulan', '6 Bulan', '12 Bulan'])],
             'ktp_file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
             'kk_file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
         ];
@@ -50,6 +52,16 @@ class StoreRentalApplicationRequest extends FormRequest
 
             if (! $room->is_available || $room->room_status !== 'available') {
                 $validator->errors()->add('room_id', 'Kamar tidak tersedia untuk diajukan.');
+            }
+
+            if ($user && RentalApplication::query()
+                ->where('user_id', $user->id)
+                ->where('room_id', $room->id)
+                ->whereIn('status', ['pending', 'approved'])
+                ->whereIn('payment_status', ['pending', 'unpaid', 'paid'])
+                ->exists()
+            ) {
+                $validator->errors()->add('room_id', 'Anda sudah memiliki pengajuan aktif untuk kamar ini.');
             }
         });
     }

@@ -95,6 +95,22 @@ class RentalApplicationController extends Controller
         ]);
     }
 
+    public function ownerShow(Request $request, int $id): JsonResponse
+    {
+        if ($response = $this->ensureRole($request, 'owner')) {
+            return $response;
+        }
+
+        $application = RentalApplication::with(['user', 'payment', 'room.branch', 'room.facilities', 'room.images'])
+            ->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Detail pengajuan sewa berhasil diambil',
+            'data' => $this->formatApplication($application, includeTenant: true, includeRoomDetails: true),
+        ]);
+    }
+
     public function ownerUpdate(Request $request, int $id): JsonResponse
     {
         if ($response = $this->ensureRole($request, 'owner')) {
@@ -127,6 +143,17 @@ class RentalApplicationController extends Controller
             ];
 
             if ($statusChanged) {
+                if (
+                    $validated['status'] === 'approved'
+                    && (! $application->room || ! $application->room->is_available || $application->room->room_status !== 'available')
+                ) {
+                    abort(response()->json([
+                        'success' => false,
+                        'message' => 'Kamar sudah tidak tersedia untuk disetujui',
+                        'data' => null,
+                    ], 422));
+                }
+
                 $updates['status'] = $validated['status'];
 
                 if ($validated['status'] === 'approved') {

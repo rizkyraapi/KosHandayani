@@ -1,8 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
 import { deleteRoom, getRooms, type ApiRoom } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 function formatRupiah(price: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -30,35 +32,24 @@ export default function KosHandayaniPage() {
   const [actionMessage, setActionMessage] = useState('');
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadRooms() {
-      try {
-        setIsLoadingRooms(true);
-        setRoomsError('');
-        const data = await getRooms();
-
-        if (isMounted) {
-          setApiRooms(data);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setRoomsError(error instanceof Error ? error.message : 'Gagal memuat data kamar.');
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingRooms(false);
-        }
-      }
+  const loadRooms = useCallback(async () => {
+    try {
+      setIsLoadingRooms(true);
+      setRoomsError('');
+      const data = await getRooms();
+      setApiRooms(data);
+    } catch (error) {
+      setRoomsError(error instanceof Error ? error.message : 'Gagal memuat data kamar.');
+    } finally {
+      setIsLoadingRooms(false);
     }
-
-    loadRooms();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadRooms);
+  }, [loadRooms]);
+
+  useAutoRefresh(loadRooms);
 
   const rooms = useMemo(() => {
     return apiRooms.map((room) => ({
@@ -645,40 +636,37 @@ export default function KosHandayaniPage() {
             </div>
 
             {/* Table */}
-            <div className="rooms-table-wrap">
-              <table className="rooms-table">
-                <thead>
-                  <tr>
-                    <th>Nama Kamar</th>
-                    <th>Cabang</th>
-                    <th>Harga Bulanan</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingRooms && (
+            {isLoadingRooms ? (
+              <div className="rooms-table-wrap p-5">
+                <LoadingState title="Memuat kamar" description="Mengambil status kamar terbaru dari backend." />
+              </div>
+            ) : roomsError ? (
+              <div className="rooms-table-wrap p-5">
+                <ErrorState title="Gagal mengambil data" description={roomsError} onAction={() => void loadRooms()} />
+              </div>
+            ) : filteredRooms.length === 0 ? (
+              <div className="rooms-table-wrap p-5">
+                <EmptyState
+                  title={rooms.length === 0 ? 'Belum ada kamar' : 'Kamar tidak ditemukan'}
+                  description={rooms.length === 0 ? 'Tambahkan kamar baru agar tenant dapat mengajukan sewa.' : 'Coba ubah cabang atau kata kunci pencarian.'}
+                  actionLabel="Refresh"
+                  onAction={() => void loadRooms()}
+                />
+              </div>
+            ) : (
+              <div className="rooms-table-wrap">
+                <table className="rooms-table">
+                  <thead>
                     <tr>
-                      <td colSpan={5} className="text-center text-[#3d4a3d] font-semibold">
-                        Memuat data kamar...
-                      </td>
+                      <th>Nama Kamar</th>
+                      <th>Cabang</th>
+                      <th>Harga Bulanan</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: 'right' }}>Aksi</th>
                     </tr>
-                  )}
-                  {!isLoadingRooms && roomsError && (
-                    <tr>
-                      <td colSpan={5} className="text-center text-[#ba1a1a] font-semibold">
-                        {roomsError}
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingRooms && !roomsError && filteredRooms.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center text-[#3d4a3d] font-semibold">
-                        Tidak ada kamar ditemukan.
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingRooms && !roomsError && filteredRooms.map((room) => (
+                  </thead>
+                  <tbody>
+                    {filteredRooms.map((room) => (
                     <tr key={room.id} className="hover:bg-[#f0f3ff]/30 transition-colors group">
                       <td>
                         <div className="rooms-name-cell">
@@ -732,24 +720,27 @@ export default function KosHandayaniPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Pagination */}
-            <div className="rooms-pagination">
-              <p className="text-xs text-[#3d4a3d] font-medium">Menampilkan {filteredRooms.length} dari {rooms.length} Kamar</p>
-              <div className="flex items-center gap-1">
-                <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
-                  <span className="material-symbols-outlined text-lg">chevron_left</span>
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#006e2f] text-white text-xs font-bold">1</button>
-                <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
-                  <span className="material-symbols-outlined text-lg">chevron_right</span>
-                </button>
+            {!isLoadingRooms && !roomsError && filteredRooms.length > 0 && (
+              <div className="rooms-pagination">
+                <p className="text-xs text-[#3d4a3d] font-medium">Menampilkan {filteredRooms.length} dari {rooms.length} Kamar</p>
+                <div className="flex items-center gap-1">
+                  <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
+                    <span className="material-symbols-outlined text-lg">chevron_left</span>
+                  </button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#006e2f] text-white text-xs font-bold">1</button>
+                  <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
+                    <span className="material-symbols-outlined text-lg">chevron_right</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Footer */}

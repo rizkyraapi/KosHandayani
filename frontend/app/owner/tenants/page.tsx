@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
 import { getOwnerTenants, type OwnerTenantOccupancy } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 function formatDate(value?: string | null) {
   if (!value) return '-';
@@ -46,28 +48,24 @@ export default function Page() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadTenants() {
-      try {
-        setIsLoading(true);
-        setError('');
-        const data = await getOwnerTenants();
-        if (isMounted) setOccupancies(data);
-      } catch (loadError) {
-        if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Gagal memuat data penyewa aktif.');
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
+  const loadTenants = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const data = await getOwnerTenants();
+      setOccupancies(data);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat data penyewa aktif.');
+    } finally {
+      setIsLoading(false);
     }
-
-    void loadTenants();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadTenants);
+  }, [loadTenants]);
+
+  useAutoRefresh(loadTenants);
 
   const filteredOccupancies = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -118,11 +116,18 @@ export default function Page() {
         <Stat label="Pendapatan Lunas" value={formatRupiah(totalRevenue)} />
       </section>
 
-      <section style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(17,28,45,0.05)', overflow: 'hidden' }}>
+      <section style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(17,28,45,0.05)', overflow: 'hidden', padding: isLoading || error || filteredOccupancies.length === 0 ? 20 : 0 }}>
         {isLoading ? (
-          <p style={{ padding: 24, color: '#3d4a3d', fontWeight: 700 }}>Memuat penyewa aktif...</p>
+          <LoadingState title="Memuat penyewa aktif" description="Mengambil data okupansi dan pembayaran terbaru." />
         ) : error ? (
-          <p style={{ margin: 24, color: '#93000a', background: '#ffdad6', padding: 16, borderRadius: 10, fontWeight: 700 }}>{error}</p>
+          <ErrorState title="Gagal mengambil data" description={error} onAction={() => void loadTenants()} />
+        ) : filteredOccupancies.length === 0 ? (
+          <EmptyState
+            title={occupancies.length === 0 ? 'Belum ada tenant aktif' : 'Tenant tidak ditemukan'}
+            description={occupancies.length === 0 ? 'Tenant akan muncul setelah pembayaran settlement dan okupansi dibuat.' : 'Coba ubah kata kunci pencarian atau refresh data.'}
+            actionLabel="Refresh"
+            onAction={() => void loadTenants()}
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 860 }}>
@@ -134,11 +139,7 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {filteredOccupancies.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ padding: 28, textAlign: 'center', color: '#3d4a3d' }}>Tidak ada penyewa aktif ditemukan.</td>
-                  </tr>
-                ) : filteredOccupancies.map((occupancy) => {
+                {filteredOccupancies.map((occupancy) => {
                   const statusStyle = paymentStatusStyle(occupancy.payment_status);
 
                   return (

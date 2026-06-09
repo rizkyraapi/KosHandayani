@@ -17,9 +17,12 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:30',
-            'email' => 'required|email|unique:users',
+            'phone' => ['required', 'string', 'max:30', 'regex:/^(\+62|62|0)8[0-9]{8,13}$/'],
+            'email' => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+        ], [
+            'phone.regex' => 'Nomor WhatsApp harus berupa nomor Indonesia yang valid, contoh 081234567890.',
+            'email.unique' => 'Email sudah digunakan.',
         ]);
 
         $user = User::create([

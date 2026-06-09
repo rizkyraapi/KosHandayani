@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import RentalApplicationDetailView from '@/components/RentalApplicationDetailView';
 import { createPayment, getMyRentalApplication, syncPaymentStatus, type RentalApplication } from '@/lib/api';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 export default function Page() {
   const params = useParams<{ id: string }>();
@@ -16,35 +17,24 @@ export default function Page() {
   const [paymentMessage, setPaymentMessage] = useState('');
   const [isPaying, setIsPaying] = useState(false);
 
-  async function refreshApplication() {
-    setIsLoading(true);
-    setError('');
-    const data = await getMyRentalApplication(params.id);
-    setApplication(data);
-    setIsLoading(false);
-  }
+  const refreshApplication = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const data = await getMyRentalApplication(params.id);
+      setApplication(data);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat detail pengajuan.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [params.id]);
 
   useEffect(() => {
-    let isMounted = true;
+    void Promise.resolve().then(refreshApplication);
+  }, [refreshApplication]);
 
-    async function loadApplication() {
-      try {
-        setIsLoading(true);
-        setError('');
-        const data = await getMyRentalApplication(params.id);
-        if (isMounted) setApplication(data);
-      } catch (loadError) {
-        if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Gagal memuat detail pengajuan.');
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    }
-
-    void loadApplication();
-    return () => {
-      isMounted = false;
-    };
-  }, [params.id]);
+  useAutoRefresh(refreshApplication);
 
   async function handlePayment() {
     if (!application) return;

@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
 import { getOwnerPayments, type OwnerPaymentOverview } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 type PaymentRow = {
   id: number;
@@ -272,31 +274,25 @@ export default function Page() {
   const [search, setSearch] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadPayments() {
-      try {
-        setIsLoadingPayments(true);
-        setPaymentsError('');
-        const data = await getOwnerPayments();
-        if (isMounted) setOverview(data);
-      } catch (error) {
-        if (isMounted) {
-          setPaymentsError(error instanceof Error ? error.message : 'Gagal memuat data pembayaran.');
-          setOverview(null);
-        }
-      } finally {
-        if (isMounted) setIsLoadingPayments(false);
-      }
+  const loadPayments = useCallback(async () => {
+    try {
+      setIsLoadingPayments(true);
+      setPaymentsError('');
+      const data = await getOwnerPayments();
+      setOverview(data);
+    } catch (error) {
+      setPaymentsError(error instanceof Error ? error.message : 'Gagal memuat data pembayaran.');
+      setOverview(null);
+    } finally {
+      setIsLoadingPayments(false);
     }
-
-    void loadPayments();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadPayments);
+  }, [loadPayments]);
+
+  useAutoRefresh(loadPayments);
 
   const rows = useMemo(() => buildRows(overview?.payments ?? []), [overview]);
   const statsData = useMemo(() => buildStats(overview?.stats), [overview]);
@@ -360,13 +356,23 @@ export default function Page() {
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <button style={{ background: '#ffffff', color: '#111c2d', border: '1px solid rgba(188,203,185,0.3)', padding: '10px 16px', borderRadius: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
+            <button
+              type="button"
+              disabled
+              title="Fitur ekspor belum diaktifkan untuk demo ini"
+              style={{ background: '#ffffff', color: '#3d4a3d', border: '1px solid rgba(188,203,185,0.3)', padding: '10px 16px', borderRadius: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, cursor: 'not-allowed', fontSize: 14, opacity: 0.65 }}
+            >
               <Icon name="file_download" />
-              <span>Ekspor PDF</span>
+              <span>Ekspor PDF - Segera Hadir</span>
             </button>
-            <button style={{ background: '#006e2f', color: '#ffffff', padding: '10px 20px', borderRadius: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer', fontSize: 14, boxShadow: '0 8px 20px rgba(0,110,47,0.2)' }}>
+            <button
+              type="button"
+              disabled
+              title="Pembayaran manual belum menjadi bagian flow demo"
+              style={{ background: '#e7eeff', color: '#3d4a3d', padding: '10px 20px', borderRadius: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'not-allowed', fontSize: 14, boxShadow: 'none', opacity: 0.75 }}
+            >
               <Icon name="account_balance_wallet" />
-              <span>Input Manual</span>
+              <span>Input Manual - Segera Hadir</span>
             </button>
           </div>
         </header>
@@ -427,67 +433,68 @@ export default function Page() {
           </div>
         </section>
 
-        <div style={{ background: '#ffffff', borderRadius: 16, boxShadow: '0 12px 40px rgba(17,28,45,0.06)', overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: 720 }}>
-              <thead>
-                <tr style={{ background: 'rgba(248,250,252,0.5)' }}>
-                  {['Nama Penyewa', 'Kamar', 'Cabang', 'Status Pembayaran', 'Tanggal Bayar', 'Aksi'].map((heading, index) => (
-                    <th
-                      key={heading}
-                      style={{
-                        padding: '20px 24px',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        color: '#3d4a3d',
-                        borderBottom: '1px solid #f1f5f9',
-                        textAlign: index === 5 ? 'center' : 'left',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody style={{ borderTop: '1px solid #f8fafc' }}>
-                {isLoadingPayments ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 24, color: '#3d4a3d', fontWeight: 700 }}>Memuat pembayaran...</td>
-                  </tr>
-                ) : paymentsError ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 24, color: '#93000a', fontWeight: 700 }}>{paymentsError}</td>
-                  </tr>
-                ) : filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 28, textAlign: 'center', color: '#3d4a3d' }}>Tidak ada pembayaran ditemukan.</td>
-                  </tr>
-                ) : (
-                  filteredRows.map((row) => <PaymentTableRow key={row.id} row={row} />)
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div style={{ background: '#ffffff', borderRadius: 16, boxShadow: '0 12px 40px rgba(17,28,45,0.06)', overflow: 'hidden', padding: isLoadingPayments || paymentsError || filteredRows.length === 0 ? 20 : 0 }}>
+          {isLoadingPayments ? (
+            <LoadingState title="Memuat pembayaran" description="Mengambil transaksi Midtrans terbaru dari backend." />
+          ) : paymentsError ? (
+            <ErrorState title="Gagal mengambil data" description={paymentsError} onAction={() => void loadPayments()} />
+          ) : filteredRows.length === 0 ? (
+            <EmptyState
+              title={rows.length === 0 ? 'Belum ada pembayaran' : 'Pembayaran tidak ditemukan'}
+              description={rows.length === 0 ? 'Data akan muncul setelah tenant membuat transaksi pembayaran.' : 'Coba ubah filter cabang atau kata kunci pencarian.'}
+              actionLabel="Refresh"
+              onAction={() => void loadPayments()}
+            />
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: 720 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(248,250,252,0.5)' }}>
+                      {['Nama Penyewa', 'Kamar', 'Cabang', 'Status Pembayaran', 'Tanggal Bayar', 'Aksi'].map((heading, index) => (
+                        <th
+                          key={heading}
+                          style={{
+                            padding: '20px 24px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.08em',
+                            color: '#3d4a3d',
+                            borderBottom: '1px solid #f1f5f9',
+                            textAlign: index === 5 ? 'center' : 'left',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody style={{ borderTop: '1px solid #f8fafc' }}>
+                    {filteredRows.map((row) => <PaymentTableRow key={row.id} row={row} />)}
+                  </tbody>
+                </table>
+              </div>
 
-          <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(248,250,252,0.5)', borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 12 }}>
-            <p style={{ fontSize: 12, fontWeight: 500, color: '#3d4a3d' }}>
-              Menampilkan {filteredRows.length} dari {rows.length} pembayaran
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button disabled style={{ padding: 6, borderRadius: 8, border: '1px solid rgba(188,203,185,0.3)', color: '#3d4a3d', background: 'transparent', cursor: 'not-allowed', opacity: 0.5, display: 'flex', alignItems: 'center' }}>
-                <Icon name="chevron_left" />
-              </button>
-              <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: '#006e2f', color: '#ffffff', fontSize: 12, fontWeight: 700 }}>
-                1
-              </button>
-              <button disabled style={{ padding: 6, borderRadius: 8, border: '1px solid rgba(188,203,185,0.3)', color: '#3d4a3d', background: 'transparent', cursor: 'not-allowed', opacity: 0.5, display: 'flex', alignItems: 'center' }}>
-                <Icon name="chevron_right" />
-              </button>
-            </div>
-          </div>
+              <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(248,250,252,0.5)', borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 12 }}>
+                <p style={{ fontSize: 12, fontWeight: 500, color: '#3d4a3d' }}>
+                  Menampilkan {filteredRows.length} dari {rows.length} pembayaran
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button disabled style={{ padding: 6, borderRadius: 8, border: '1px solid rgba(188,203,185,0.3)', color: '#3d4a3d', background: 'transparent', cursor: 'not-allowed', opacity: 0.5, display: 'flex', alignItems: 'center' }}>
+                    <Icon name="chevron_left" />
+                  </button>
+                  <button style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', background: '#006e2f', color: '#ffffff', fontSize: 12, fontWeight: 700 }}>
+                    1
+                  </button>
+                  <button disabled style={{ padding: 6, borderRadius: 8, border: '1px solid rgba(188,203,185,0.3)', color: '#3d4a3d', background: 'transparent', cursor: 'not-allowed', opacity: 0.5, display: 'flex', alignItems: 'center' }}>
+                    <Icon name="chevron_right" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div

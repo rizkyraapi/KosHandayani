@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
+import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
 import { getOwnerRentalApplications, type RentalApplication } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 function formatDate(value?: string | null) {
   if (!value) return '-';
@@ -53,21 +55,7 @@ export default function Page() {
     void Promise.resolve().then(loadApplications);
   }, [loadApplications]);
 
-  useEffect(() => {
-    function refreshOnFocus() {
-      if (document.visibilityState === 'visible') {
-        void loadApplications();
-      }
-    }
-
-    window.addEventListener('focus', refreshOnFocus);
-    document.addEventListener('visibilitychange', refreshOnFocus);
-
-    return () => {
-      window.removeEventListener('focus', refreshOnFocus);
-      document.removeEventListener('visibilitychange', refreshOnFocus);
-    };
-  }, [loadApplications]);
+  useAutoRefresh(loadApplications);
 
   const filteredApplications = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -129,11 +117,18 @@ export default function Page() {
         <Stat label="Ditolak" value={stats.rejected} />
       </section>
 
-      <section style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(17,28,45,0.05)', overflow: 'hidden' }}>
+      <section style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(17,28,45,0.05)', overflow: 'hidden', padding: isLoading || error || filteredApplications.length === 0 ? 20 : 0 }}>
         {isLoading ? (
-          <p style={{ padding: 24, color: '#3d4a3d', fontWeight: 700 }}>Memuat pengajuan...</p>
+          <LoadingState title="Memuat pengajuan" description="Mengambil data terbaru dari backend." />
         ) : error ? (
-          <p style={{ margin: 24, color: '#93000a', background: '#ffdad6', padding: 16, borderRadius: 10, fontWeight: 700 }}>{error}</p>
+          <ErrorState title="Gagal mengambil data" description={error} onAction={() => void loadApplications()} />
+        ) : filteredApplications.length === 0 ? (
+          <EmptyState
+            title={applications.length === 0 ? 'Belum ada pengajuan sewa' : 'Pengajuan tidak ditemukan'}
+            description={applications.length === 0 ? 'Pengajuan baru dari tenant akan muncul otomatis di halaman ini.' : 'Coba ubah kata kunci pencarian atau refresh data.'}
+            actionLabel="Refresh"
+            onAction={() => void loadApplications()}
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 860 }}>
@@ -145,11 +140,7 @@ export default function Page() {
                 </tr>
               </thead>
               <tbody>
-                {filteredApplications.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ padding: 28, textAlign: 'center', color: '#3d4a3d' }}>Tidak ada pengajuan ditemukan.</td>
-                  </tr>
-                ) : filteredApplications.map((application) => {
+                {filteredApplications.map((application) => {
                   const paymentStyle = paymentStatusStyle(application);
 
                   return (

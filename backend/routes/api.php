@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-rental-applications/{id}', [RentalApplicationController::class, 'myApplicationDetail']);
 
     Route::get('/owner/rental-applications', [RentalApplicationController::class, 'ownerIndex']);
+    Route::get('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerShow'])->whereNumber('id');
     Route::put('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerUpdate']);
     Route::get('/owner/dashboard', [OwnerDataController::class, 'dashboard']);
     Route::get('/owner/payments', [OwnerDataController::class, 'payments']);
@@ -44,7 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payments/create', [PaymentController::class, 'create']);
     Route::post('/payments/sync-status', [PaymentController::class, 'syncStatus']);
     Route::get('/my-payments', [PaymentController::class, 'index']);
-    Route::get('/payments/{id}', [PaymentController::class, 'show']);
+    Route::get('/payments/{id}', [PaymentController::class, 'show'])->whereNumber('id');
 
     Route::post('/rooms', [RoomController::class, 'store']);
     Route::put('/rooms/{room}', [RoomController::class, 'update']);

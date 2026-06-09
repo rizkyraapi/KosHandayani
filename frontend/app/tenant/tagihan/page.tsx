@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { createPayment, getMyPayments, syncPaymentStatus, type Payment } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 const globalStyle = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
@@ -954,13 +955,13 @@ export default function Page() {
   const [paymentError, setPaymentError] = useState('');
   const activePayment = payments.find((payment) => normalizePaymentStatus(payment) === 'pending') ?? payments[0] ?? null;
 
-  async function refreshPayments() {
+  const refreshPayments = useCallback(async () => {
     setIsLoadingPayments(true);
     setPaymentError('');
     const data = await getMyPayments();
     setPayments(data);
     setIsLoadingPayments(false);
-  }
+  }, []);
 
   useEffect(() => {
     const fontLink1 = document.createElement('link');
@@ -1013,6 +1014,20 @@ export default function Page() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const handleTenantDataSync = () => {
+      void refreshPayments();
+    };
+
+    window.addEventListener('tenant-data-sync', handleTenantDataSync);
+
+    return () => {
+      window.removeEventListener('tenant-data-sync', handleTenantDataSync);
+    };
+  }, [refreshPayments]);
+
+  useAutoRefresh(refreshPayments);
 
   async function handleContinuePayment() {
     if (!activePayment) return;

@@ -370,14 +370,9 @@ export async function getOwnerRentalApplications(): Promise<RentalApplication[]>
 }
 
 export async function getOwnerRentalApplication(id: number | string): Promise<RentalApplication> {
-  const applications = await getOwnerRentalApplications();
-  const application = applications.find((item) => item.id === Number(id));
+  const { data } = await apiClient.get<ApiEnvelope<RentalApplication>>(`/owner/rental-applications/${id}`);
 
-  if (!application) {
-    throw new Error('Detail pengajuan sewa tidak ditemukan.');
-  }
-
-  return application;
+  return unwrapData(data, 'Detail pengajuan sewa tidak ditemukan.');
 }
 
 export async function updateOwnerRentalApplication(

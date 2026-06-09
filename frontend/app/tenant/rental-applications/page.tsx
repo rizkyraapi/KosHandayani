@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
@@ -20,6 +20,7 @@ import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBa
 import { createPayment, getMyRentalApplications, syncPaymentStatus, type RentalApplication } from '@/lib/api';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=700';
 
@@ -184,35 +185,24 @@ export default function Page() {
     needPayment: applications.filter(isAwaitingPayment).length,
   }), [applications]);
 
-  async function refreshApplications() {
-    setIsLoading(true);
-    setError('');
-    const data = await getMyRentalApplications();
-    setApplications(data);
-    setIsLoading(false);
-  }
+  const refreshApplications = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      const data = await getMyRentalApplications();
+      setApplications(data);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat pengajuan sewa.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    void Promise.resolve().then(refreshApplications);
+  }, [refreshApplications]);
 
-    async function loadApplications() {
-      try {
-        setIsLoading(true);
-        setError('');
-        const data = await getMyRentalApplications();
-        if (isMounted) setApplications(data);
-      } catch (loadError) {
-        if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Gagal memuat pengajuan sewa.');
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    }
-
-    void loadApplications();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  useAutoRefresh(refreshApplications);
 
   async function handlePayment(application: RentalApplication) {
     async function refreshAfterPayment(nextMessage: string, shouldRedirect = false) {

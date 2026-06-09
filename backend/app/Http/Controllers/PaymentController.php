@@ -11,6 +11,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -58,6 +59,13 @@ class PaymentController extends Controller
                     abort(response()->json([
                         'success' => false,
                         'message' => 'Kamar untuk pengajuan sewa tidak ditemukan',
+                    ], 422));
+                }
+
+                if (! $application->room->is_available || $application->room->room_status !== 'available') {
+                    abort(response()->json([
+                        'success' => false,
+                        'message' => 'Kamar sudah tidak tersedia untuk dibayar',
                     ], 422));
                 }
 
@@ -119,6 +127,8 @@ class PaymentController extends Controller
 
     public function notification(Request $request): JsonResponse
     {
+        Log::info('Midtrans notification received', $request->all());
+
         $validator = Validator::make($request->all(), [
             'order_id' => ['required', 'string'],
             'transaction_status' => ['required', 'string', Rule::in([

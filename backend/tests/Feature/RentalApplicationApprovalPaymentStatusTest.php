@@ -90,6 +90,32 @@ class RentalApplicationApprovalPaymentStatusTest extends TestCase
         $this->assertSame('pending', $application->payment_status);
     }
 
+    public function test_owner_cannot_approve_application_when_room_is_unavailable(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner']);
+        $application = $this->createRentalApplication();
+        $application->room->update([
+            'is_available' => false,
+            'room_status' => 'occupied',
+        ]);
+
+        $this
+            ->actingAs($owner)
+            ->putJson('/api/owner/rental-applications/'.$application->id, [
+                'status' => 'approved',
+                'owner_notes' => 'Disetujui',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Kamar sudah tidak tersedia untuk disetujui');
+
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+    }
+
     private function createRentalApplication(array $overrides = []): RentalApplication
     {
         $tenant = User::factory()->create(['role' => 'tenant']);

@@ -60,6 +60,38 @@ class OwnerRentalApplicationIndexTest extends TestCase
         $this->assertSame('6 Bulan', $pending['duration']);
     }
 
+    public function test_owner_can_fetch_single_application_detail_with_relationships(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner']);
+        $branch = Branch::create([
+            'branch_name' => 'Cabang Detail',
+            'city' => 'Bandung',
+            'address' => 'Jl. Detail',
+        ]);
+        $room = Room::create([
+            'room_name' => 'Kamar Detail Owner',
+            'branch_id' => $branch->id,
+            'branch' => $branch->branch_name,
+            'room_type' => 'single',
+            'gender_type' => 'mixed',
+            'room_status' => 'available',
+            'price' => 1500000,
+            'max_guest' => 1,
+            'is_available' => true,
+        ]);
+        $application = $this->createRentalApplicationRecord($room, 'Tenant Detail', 'pending', 'pending');
+
+        $this
+            ->actingAs($owner)
+            ->getJson('/api/owner/rental-applications/'.$application->id)
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.id', $application->id)
+            ->assertJsonPath('data.tenant.full_name', 'Tenant Detail')
+            ->assertJsonPath('data.room.room_name', 'Kamar Detail Owner')
+            ->assertJsonPath('data.room.branch.branch_name', 'Cabang Detail');
+    }
+
     private function createRentalApplicationRecord(Room $room, string $tenantName, string $status, string $paymentStatus): RentalApplication
     {
         $tenant = User::factory()->create([

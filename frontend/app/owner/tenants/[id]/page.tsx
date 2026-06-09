@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import RentalApplicationDetailView from '@/components/RentalApplicationDetailView';
+import { ErrorState, LoadingState } from '@/components/UiState';
 import {
   getOwnerRentalApplication,
   updateOwnerRentalApplication,
@@ -10,6 +11,7 @@ import {
   type RentalApplicationStatus,
 } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 export default function Page() {
   const params = useParams<{ id: string }>();
@@ -38,6 +40,8 @@ export default function Page() {
     void Promise.resolve().then(loadApplication);
   }, [loadApplication]);
 
+  useAutoRefresh(loadApplication);
+
   async function decide(status: Exclude<RentalApplicationStatus, 'pending'>) {
     try {
       setIsSubmitting(true);
@@ -62,9 +66,9 @@ export default function Page() {
     <main style={{ minHeight: '100vh', background: '#f9f9ff', padding: 32, color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
       <div style={{ maxWidth: 1120, margin: '0 auto', display: 'grid', gap: 24 }}>
         {isLoading ? (
-          <p style={{ color: '#3d4a3d', fontWeight: 700 }}>Memuat detail pengajuan...</p>
+          <LoadingState title="Memuat detail pengajuan" description="Mengambil status pengajuan, pembayaran, dan dokumen terbaru." />
         ) : error && !application ? (
-          <p style={{ color: '#93000a', background: '#ffdad6', padding: 16, borderRadius: 10, fontWeight: 700 }}>{error}</p>
+          <ErrorState title="Gagal mengambil detail" description={error} onAction={() => void loadApplication()} />
         ) : application ? (
           <>
             <RentalApplicationDetailView application={application} />

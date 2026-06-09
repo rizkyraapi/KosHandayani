@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getOwnerDashboardStats,
@@ -9,6 +9,7 @@ import {
   type OwnerDashboardStats,
   type OwnerPaymentOverview,
 } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 /* ─── Inject Google Fonts + Material Symbols into <head> ─── */
 function useGlobalStyles() {
@@ -1055,37 +1056,29 @@ export default function Page() {
     };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const [roomData, statsData, paymentData] = await Promise.all([
+        getRooms(),
+        getOwnerDashboardStats(),
+        getOwnerPayments(),
+      ]);
 
-    async function loadDashboardData() {
-      try {
-        const [roomData, statsData, paymentData] = await Promise.all([
-          getRooms(),
-          getOwnerDashboardStats(),
-          getOwnerPayments(),
-        ]);
-
-        if (isMounted) {
-          setRooms(roomData);
-          setDashboardStats(statsData);
-          setRecentPayments(paymentData.payments);
-        }
-      } catch {
-        if (isMounted) {
-          setRooms([]);
-          setDashboardStats(null);
-          setRecentPayments([]);
-        }
-      }
+      setRooms(roomData);
+      setDashboardStats(statsData);
+      setRecentPayments(paymentData.payments);
+    } catch {
+      setRooms([]);
+      setDashboardStats(null);
+      setRecentPayments([]);
     }
-
-    loadDashboardData();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadDashboardData);
+  }, [loadDashboardData]);
+
+  useAutoRefresh(loadDashboardData);
 
   const roomStats = useMemo(() => ({
     total: dashboardStats?.total_rooms ?? rooms.length,
