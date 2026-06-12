@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import RentalApplicationDetailView from '@/components/RentalApplicationDetailView';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { createPayment, getMyRentalApplication, syncPaymentStatus, type RentalApplication } from '@/lib/api';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
@@ -11,6 +12,7 @@ import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 export default function Page() {
   const params = useParams<{ id: string }>();
+  const { t } = useLanguage();
   const [application, setApplication] = useState<RentalApplication | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,11 +26,11 @@ export default function Page() {
       const data = await getMyRentalApplication(params.id);
       setApplication(data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat detail pengajuan.');
+      setError(loadError instanceof Error ? loadError.message : t('messages.loadApplicationDetailFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [params.id]);
+  }, [params.id, t]);
 
   useEffect(() => {
     void Promise.resolve().then(refreshApplication);
@@ -55,22 +57,22 @@ export default function Page() {
         onSuccess: () => {
           void syncPaymentStatus(payment.order_id)
             .catch(() => null)
-            .then(() => refreshAfterPayment('Pembayaran berhasil. Detail pengajuan diperbarui.'));
+            .then(() => refreshAfterPayment(t('messages.paymentSuccessRefresh')));
         },
         onPending: () => {
           void syncPaymentStatus(payment.order_id)
             .catch(() => null)
-            .then(() => refreshAfterPayment('Pembayaran sedang diproses.'));
+            .then(() => refreshAfterPayment(t('messages.paymentPending')));
         },
         onError: () => {
-          void refreshAfterPayment('Pembayaran gagal diproses.');
+          void refreshAfterPayment(t('status.paymentFailed'));
         },
         onClose: () => {
-          setPaymentMessage('Pembayaran dibatalkan.');
+          setPaymentMessage(t('messages.paymentCancelled'));
         },
       });
     } catch (paymentError) {
-      setError(paymentError instanceof Error ? paymentError.message : 'Gagal membuka pembayaran.');
+      setError(paymentError instanceof Error ? paymentError.message : t('messages.paymentOpenFailed'));
     } finally {
       setIsPaying(false);
     }
@@ -86,7 +88,7 @@ export default function Page() {
           <div className="rounded-2xl border border-white bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3 text-sm font-bold text-[#3d4a3d]">
               <Loader2 className="animate-spin text-[#006e2f]" size={18} />
-              Memuat detail pengajuan...
+              {t('common.loading')}
             </div>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
               <div className="h-80 animate-pulse rounded-2xl bg-[#e7eeff]" />

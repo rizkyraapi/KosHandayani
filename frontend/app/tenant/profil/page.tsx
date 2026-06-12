@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { changePassword, getProfile, updateProfile, type ChangePasswordPayload, type ProfilePayload } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // Inject Google Fonts and Material Symbols into <head>
 function useGlobalStyles() {
@@ -151,13 +152,14 @@ function getApiErrorMessages(error: unknown, fallback: string) {
 // ── Sub-components ──────────────────────────────────────────────────────────
 
 function SideNav() {
+  const { t } = useLanguage();
   const navItems = [
-    { icon: 'dashboard', label: 'Dashboard', active: false },
-    { icon: 'domain', label: 'Cabang', active: false },
-    { icon: 'group', label: 'Penyewa', active: false },
-    { icon: 'payments', label: 'Keuangan', active: false },
-    { icon: 'analytics', label: 'Laporan', active: false },
-    { icon: 'settings', label: 'Pengaturan', active: true },
+    { icon: 'dashboard', labelKey: 'common.dashboard', active: false },
+    { icon: 'domain', labelKey: 'owner.applications.branch', active: false },
+    { icon: 'group', labelKey: 'common.tenants', active: false },
+    { icon: 'payments', labelKey: 'common.payments', active: false },
+    { icon: 'analytics', labelKey: 'common.reports', active: false },
+    { icon: 'settings', labelKey: 'tenant.profile.settings', active: true },
   ];
 
   return (
@@ -210,7 +212,7 @@ function SideNav() {
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         {navItems.map((item) => (
           <a
-            key={item.label}
+            key={item.labelKey}
             href="#"
             style={{
               display: 'flex',
@@ -234,7 +236,7 @@ function SideNav() {
             }}
           >
             <span className="material-symbols-outlined">{item.icon}</span>
-            {item.label}
+            {t(item.labelKey)}
           </a>
         ))}
       </nav>
@@ -264,17 +266,17 @@ function SideNav() {
         <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
           add
         </span>
-        Tambah Kamar
+        {t('owner.rooms.addShort')} {t('common.room')}
       </button>
 
       {/* Bottom links */}
       <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         {[
-          { icon: 'help', label: 'Bantuan' },
-          { icon: 'logout', label: 'Keluar' },
+          { icon: 'help', labelKey: 'common.help' },
+          { icon: 'logout', labelKey: 'common.logout' },
         ].map((item) => (
           <a
-            key={item.label}
+            key={item.labelKey}
             href="#"
             style={{
               display: 'flex',
@@ -293,7 +295,7 @@ function SideNav() {
             onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = 'transparent')}
           >
             <span className="material-symbols-outlined">{item.icon}</span>
-            {item.label}
+            {t(item.labelKey)}
           </a>
         ))}
       </div>
@@ -1059,6 +1061,7 @@ function SecondaryCard({
 export default function Page() {
   useGlobalStyles();
   const { refreshUser } = useAuth();
+  const { t } = useLanguage();
   const [form, setForm] = useState<ProfilePayload & { email: string }>({
     full_name: '',
     email: '',
@@ -1099,7 +1102,7 @@ export default function Page() {
       setSelectedPhoto(null);
       setPhotoPreviewUrl(profile.profile_photo_url || '');
     } catch (profileError) {
-      setError(getAuthErrorMessage(profileError, 'Gagal mengambil data profil.'));
+      setError(getAuthErrorMessage(profileError, t('messages.loadProfileFailed')));
     } finally {
       setIsFetching(false);
     }
@@ -1119,12 +1122,12 @@ export default function Page() {
 
   const handlePhotoChange = (file: File) => {
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      setError('Foto profil harus berformat JPG, JPEG, atau PNG.');
+      setError(t('tenant.profile.photoTypeError'));
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      setError('Ukuran foto profil maksimal 2MB.');
+      setError(t('tenant.profile.photoSizeError'));
       return;
     }
 
@@ -1162,10 +1165,10 @@ export default function Page() {
       setSelectedPhoto(null);
       setPhotoPreviewUrl(profile.profile_photo_url || '');
       setIsEditing(false);
-      setSuccess('Profil berhasil diperbarui.');
+      setSuccess(t('tenant.profile.updateSuccess'));
       await refreshUser();
     } catch (profileError) {
-      setError(getAuthErrorMessage(profileError, 'Gagal memperbarui profil.'));
+      setError(getAuthErrorMessage(profileError, t('messages.saveProfileFailed')));
     } finally {
       setIsSaving(false);
     }
@@ -1184,9 +1187,9 @@ export default function Page() {
         new_password: '',
         new_password_confirmation: '',
       });
-      setPasswordSuccess(response.message || 'Password berhasil diubah');
+      setPasswordSuccess(response.message || t('messages.passwordChanged'));
     } catch (passwordError) {
-      setPasswordErrors(getApiErrorMessages(passwordError, 'Gagal mengganti password.'));
+      setPasswordErrors(getApiErrorMessages(passwordError, t('tenant.profile.passwordChangeFailed')));
     } finally {
       setIsChangingPassword(false);
     }
@@ -1228,7 +1231,7 @@ export default function Page() {
                 marginBottom: '0.25rem',
               }}
             >
-              Akun Saya
+              {t('tenant.profile.myAccount')}
             </span>
             <h1
               style={{
@@ -1239,7 +1242,7 @@ export default function Page() {
                 margin: 0,
               }}
             >
-              Profil Pengguna
+              {t('tenant.profile.title')}
             </h1>
           </div>
 
@@ -1318,15 +1321,15 @@ export default function Page() {
         >
           <SecondaryCard
             icon="notifications"
-            title="Notifikasi"
-            subtitle="Kelola cara kami menghubungi Anda."
-            actionLabel="Atur"
+            title={t('tenant.profile.notifications')}
+            subtitle={t('tenant.profile.notificationsSubtitle')}
+            actionLabel={t('tenant.profile.configure')}
           />
           <SecondaryCard
             icon="credit_card"
-            title="Metode Pembayaran"
-            subtitle="Tautkan akun bank atau e-wallet."
-            actionLabel="Kelola"
+            title={t('tenant.profile.paymentMethods')}
+            subtitle={t('tenant.profile.paymentMethodsSubtitle')}
+            actionLabel={t('tenant.profile.manage')}
           />
         </div>
       </main>

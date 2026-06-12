@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { deleteRoom, getRooms, type ApiRoom } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
@@ -14,16 +15,17 @@ function formatRupiah(price: number) {
   }).format(price);
 }
 
-function statusLabel(status: ApiRoom['room_status']) {
+function statusLabel(status: ApiRoom['room_status'], t: (key: string) => string) {
   return {
-    available: 'Kosong',
-    occupied: 'Lunas / Terisi',
-    maintenance: 'Maintenance',
+    available: t('status.available'),
+    occupied: t('status.occupied'),
+    maintenance: t('status.maintenance'),
   }[status];
 }
 
 export default function KosHandayaniPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [apiRooms, setApiRooms] = useState<ApiRoom[]>([]);
@@ -39,11 +41,11 @@ export default function KosHandayaniPage() {
       const data = await getRooms();
       setApiRooms(data);
     } catch (error) {
-      setRoomsError(error instanceof Error ? error.message : 'Gagal memuat data kamar.');
+      setRoomsError(error instanceof Error ? error.message : t('messages.loadRoomsFailed'));
     } finally {
       setIsLoadingRooms(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void Promise.resolve().then(loadRooms);
@@ -57,16 +59,16 @@ export default function KosHandayaniPage() {
       isApiRoom: true,
       name: room.room_name,
       floor: `${room.room_type} - ${room.gender_type} - Maks ${room.max_guest} tamu`,
-      branch: room.branch?.branch_name || 'Cabang belum diatur',
+      branch: room.branch?.branch_name || t('tenant.applications.branchUnset'),
       branchId: room.branch_id ? String(room.branch_id) : 'unknown',
       price: formatRupiah(room.price),
-      status: statusLabel(room.room_status),
+      status: statusLabel(room.room_status, t),
       statusType: room.room_status,
     }));
-  }, [apiRooms]);
+  }, [apiRooms, t]);
 
   async function handleDeleteRoom(roomId: number, roomName: string) {
-    const confirmed = window.confirm(`Hapus ${roomName}? Data kamar dan foto yang tersimpan akan dihapus.`);
+    const confirmed = window.confirm(t('owner.rooms.deleteConfirmation', { room: roomName }));
 
     if (!confirmed) {
       return;
@@ -78,9 +80,9 @@ export default function KosHandayaniPage() {
       setActionMessage('');
       await deleteRoom(roomId);
       setApiRooms((current) => current.filter((room) => room.id !== roomId));
-      setActionMessage('Kamar berhasil dihapus.');
+      setActionMessage(t('messages.roomDeleted'));
     } catch (error) {
-      setRoomsError(error instanceof Error ? error.message : 'Gagal menghapus kamar.');
+      setRoomsError(error instanceof Error ? error.message : t('owner.rooms.deleteFailed'));
     } finally {
       setDeletingRoomId(null);
     }
@@ -557,15 +559,15 @@ export default function KosHandayaniPage() {
           <header className="rooms-header">
             <div>
               <nav>
-                <span className="rooms-eyebrow">Manajemen Properti</span>
+                <span className="rooms-eyebrow">{t('owner.applications.eyebrow')}</span>
               </nav>
-              <h2 className="rooms-title">Daftar Kamar</h2>
-              <p className="rooms-subtitle">Pantau dan kelola ketersediaan unit di seluruh cabang.</p>
+              <h2 className="rooms-title">{t('owner.rooms.title')}</h2>
+              <p className="rooms-subtitle">{t('owner.rooms.subtitle')}</p>
             </div>
             <Link href="/owner/rooms/create" className="rooms-add-button gradient-primary" style={{ textDecoration: 'none' }}>
               <span className="material-symbols-outlined text-xl">add</span>
-              <span className="hidden sm:inline">Tambah Kamar Baru</span>
-              <span className="sm:hidden">Tambah</span>
+              <span className="hidden sm:inline">{t('owner.rooms.addNew')}</span>
+              <span className="sm:hidden">{t('owner.rooms.addShort')}</span>
             </Link>
           </header>
 
@@ -574,25 +576,25 @@ export default function KosHandayaniPage() {
             <div className="rooms-stat-card">
               <div className="rooms-stat-top">
                 <span className="material-symbols-outlined rooms-stat-icon text-[#006e2f] bg-[#006e2f]/10">door_open</span>
-                <span className="rooms-stat-badge text-[#006e2f] bg-[#006e2f]/10">{stats.maintenance} Maintenance</span>
+                <span className="rooms-stat-badge text-[#006e2f] bg-[#006e2f]/10">{stats.maintenance} {t('status.maintenance')}</span>
               </div>
-              <p className="rooms-stat-label">Total Unit</p>
+              <p className="rooms-stat-label">{t('owner.rooms.totalUnits')}</p>
               <h3 className="rooms-stat-value">{stats.total}</h3>
             </div>
             <div className="rooms-stat-card">
               <div className="rooms-stat-top">
                 <span className="material-symbols-outlined rooms-stat-icon text-[#2f6a3c] bg-[#2f6a3c]/10">check_circle</span>
-                <span className="rooms-stat-badge text-[#2f6a3c] bg-[#2f6a3c]/10">{occupancyRate}% Okupansi</span>
+                <span className="rooms-stat-badge text-[#2f6a3c] bg-[#2f6a3c]/10">{occupancyRate}% {t('owner.rooms.occupancy')}</span>
               </div>
-              <p className="rooms-stat-label">Terisi</p>
+              <p className="rooms-stat-label">{t('status.occupied')}</p>
               <h3 className="rooms-stat-value">{stats.occupied}</h3>
             </div>
             <div className="rooms-stat-card">
               <div className="rooms-stat-top">
                 <span className="material-symbols-outlined rooms-stat-icon text-[#9e4036] bg-[#9e4036]/10">error</span>
-                <span className="rooms-stat-badge text-[#9e4036] bg-[#9e4036]/10">Tersedia</span>
+                <span className="rooms-stat-badge text-[#9e4036] bg-[#9e4036]/10">{t('status.available')}</span>
               </div>
-              <p className="rooms-stat-label">Kosong</p>
+              <p className="rooms-stat-label">{t('status.available')}</p>
               <h3 className="rooms-stat-value">{stats.available}</h3>
             </div>
           </section>
@@ -611,7 +613,7 @@ export default function KosHandayaniPage() {
                   onClick={() => setSelectedBranch('all')}
                   className={`rooms-tab ${selectedBranch === 'all' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
                 >
-                  Semua
+                  {t('owner.payments.allBranches')}
                 </button>
                 {branchTabs.map((branch) => (
                   <button
@@ -627,7 +629,7 @@ export default function KosHandayaniPage() {
                 <span className="material-symbols-outlined rooms-search-icon">search</span>
                 <input
                   type="text"
-                  placeholder="Cari nomor kamar..."
+                  placeholder={t('owner.rooms.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="rooms-search-input"
@@ -638,18 +640,18 @@ export default function KosHandayaniPage() {
             {/* Table */}
             {isLoadingRooms ? (
               <div className="rooms-table-wrap p-5">
-                <LoadingState title="Memuat kamar" description="Mengambil status kamar terbaru dari backend." />
+                <LoadingState title={t('owner.rooms.loadingTitle')} description={t('owner.rooms.loadingDescription')} />
               </div>
             ) : roomsError ? (
               <div className="rooms-table-wrap p-5">
-                <ErrorState title="Gagal mengambil data" description={roomsError} onAction={() => void loadRooms()} />
+                <ErrorState title={t('messages.loadFailed')} description={roomsError} onAction={() => void loadRooms()} />
               </div>
             ) : filteredRooms.length === 0 ? (
               <div className="rooms-table-wrap p-5">
                 <EmptyState
-                  title={rooms.length === 0 ? 'Belum ada kamar' : 'Kamar tidak ditemukan'}
-                  description={rooms.length === 0 ? 'Tambahkan kamar baru agar tenant dapat mengajukan sewa.' : 'Coba ubah cabang atau kata kunci pencarian.'}
-                  actionLabel="Refresh"
+                  title={rooms.length === 0 ? t('empty.noRooms') : t('empty.roomsNotFound')}
+                  description={rooms.length === 0 ? t('owner.rooms.emptyDescription') : t('owner.rooms.notFoundDescription')}
+                  actionLabel={t('common.refresh')}
                   onAction={() => void loadRooms()}
                 />
               </div>
@@ -658,11 +660,11 @@ export default function KosHandayaniPage() {
                 <table className="rooms-table">
                   <thead>
                     <tr>
-                      <th>Nama Kamar</th>
-                      <th>Cabang</th>
-                      <th>Harga Bulanan</th>
-                      <th>Status</th>
-                      <th style={{ textAlign: 'right' }}>Aksi</th>
+                      <th>{t('owner.rooms.roomName')}</th>
+                      <th>{t('owner.applications.branch')}</th>
+                      <th>{t('owner.rooms.monthlyPrice')}</th>
+                      <th>{t('common.status')}</th>
+                      <th style={{ textAlign: 'right' }}>{t('common.action')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -703,7 +705,7 @@ export default function KosHandayaniPage() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             className="p-2 text-[#006e2f] hover:bg-[#006e2f]/10 rounded-lg transition-colors"
-                            title="Edit"
+                            title={t('common.edit')}
                             disabled={!('isApiRoom' in room)}
                             onClick={() => router.push(`/owner/rooms/create?edit=${room.id}`)}
                           >
@@ -711,7 +713,7 @@ export default function KosHandayaniPage() {
                           </button>
                           <button
                             className="p-2 text-[#ba1a1a] hover:bg-[#ba1a1a]/10 rounded-lg transition-colors disabled:opacity-40"
-                            title="Hapus"
+                            title={t('common.delete')}
                             disabled={!('isApiRoom' in room) || deletingRoomId === room.id}
                             onClick={() => handleDeleteRoom(room.id, room.name)}
                           >
@@ -729,7 +731,9 @@ export default function KosHandayaniPage() {
             {/* Pagination */}
             {!isLoadingRooms && !roomsError && filteredRooms.length > 0 && (
               <div className="rooms-pagination">
-                <p className="text-xs text-[#3d4a3d] font-medium">Menampilkan {filteredRooms.length} dari {rooms.length} Kamar</p>
+                <p className="text-xs text-[#3d4a3d] font-medium">
+                  {t('common.showing', { count: filteredRooms.length, total: rooms.length, item: t('common.rooms') })}
+                </p>
                 <div className="flex items-center gap-1">
                   <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
                     <span className="material-symbols-outlined text-lg">chevron_left</span>

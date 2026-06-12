@@ -4,6 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getAuthErrorMessage } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
@@ -144,6 +146,7 @@ function InputField({ label, icon, placeholder, type = 'text', value, onChange, 
 
 export default function Page() {
   const { login, error: authError, clearError } = useAuth();
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -168,7 +171,7 @@ export default function Page() {
     try {
       await login(form);
     } catch (error) {
-      setLocalError(getAuthErrorMessage(error, 'Login gagal. Periksa email dan password.'));
+      setLocalError(getAuthErrorMessage(error, t('auth.loginFailed')));
     } finally {
       setIsSubmitting(false);
     }
@@ -252,7 +255,7 @@ export default function Page() {
                   marginTop: 0,
                 }}
               >
-                Masuk ke Akun Anda
+                {t('auth.loginTitle')}
               </h2>
               <p
                 style={{
@@ -262,8 +265,11 @@ export default function Page() {
                   margin: 0,
                 }}
               >
-                Kelola properti Anda dengan sentuhan layanan premium.
+                {t('auth.loginSubtitle')}
               </p>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                <LanguageSwitcher />
+              </div>
             </div>
 
             <div
@@ -279,9 +285,9 @@ export default function Page() {
                 style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
               >
                 <InputField
-                  label="Email"
+                  label={t('auth.email')}
                   icon="person"
-                  placeholder="Masukkan email"
+                  placeholder={t('auth.email')}
                   type="email"
                   value={form.email}
                   onChange={(email) => setForm((current) => ({ ...current, email }))}
@@ -307,7 +313,7 @@ export default function Page() {
                         marginLeft: '4px',
                       }}
                     >
-                      Password
+                      {t('auth.password')}
                     </label>
                     <a
                       href="#"
@@ -320,7 +326,7 @@ export default function Page() {
                       onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                       onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                     >
-                      Lupa password?
+                      {t('auth.forgotPassword')}
                     </a>
                   </div>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -338,7 +344,7 @@ export default function Page() {
                     </span>
                     <input
                       type="password"
-                      placeholder="Masukkan password"
+                      placeholder={t('auth.password')}
                       value={form.password}
                       disabled={isSubmitting}
                       onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
@@ -392,7 +398,7 @@ export default function Page() {
                       cursor: isSubmitting ? 'not-allowed' : 'pointer',
                     }}
                   />
-                  Ingat saya
+                  {t('auth.rememberMe')}
                 </label>
 
                 {(errorMessage || registered) && (
@@ -405,7 +411,7 @@ export default function Page() {
                       lineHeight: 1.5,
                     }}
                   >
-                    {errorMessage || 'Registrasi berhasil. Silakan login.'}
+                    {errorMessage || t('messages.registerSuccess')}
                   </p>
                 )}
 
@@ -439,7 +445,7 @@ export default function Page() {
                   }}
                   onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
-                  {isSubmitting ? 'Memproses...' : 'Login'}
+                  {isSubmitting ? t('common.processing') : t('common.login')}
                   <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
                     login
                   </span>
@@ -455,7 +461,7 @@ export default function Page() {
                 }}
               >
                 <p style={{ fontSize: '14px', color: colors.onSurfaceVariant, margin: 0 }}>
-                  Belum punya akun?{' '}
+                  {t('auth.noAccount')}{' '}
                   <Link
                     href="/register"
                     style={{
@@ -467,7 +473,7 @@ export default function Page() {
                     onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                     onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                   >
-                    Daftar
+                    {t('common.register')}
                   </Link>
                 </p>
               </div>

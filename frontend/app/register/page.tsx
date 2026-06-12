@@ -3,7 +3,9 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getAuthErrorMessage } from '@/lib/auth';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
@@ -151,6 +153,7 @@ function InputField({ label, icon, placeholder, type = 'text', value, onChange, 
 
 export default function Page() {
   const { register, error: authError, clearError } = useAuth();
+  const { t } = useLanguage();
   const [agreed, setAgreed] = useState(false);
   const [localError, setLocalError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -169,17 +172,17 @@ export default function Page() {
     clearError();
 
     if (!agreed) {
-      setLocalError('Anda harus menyetujui Syarat & Ketentuan terlebih dahulu.');
+      setLocalError(t('auth.agreeRequired'));
       return;
     }
 
     if (form.password !== form.password_confirmation) {
-      setLocalError('Konfirmasi password tidak sama.');
+      setLocalError(t('auth.passwordMismatch'));
       return;
     }
 
     if (!isPasswordStrong(form.password)) {
-      setLocalError('Password minimal 8 karakter, harus memiliki huruf kapital dan angka.');
+      setLocalError(t('auth.passwordRule'));
       return;
     }
 
@@ -187,7 +190,7 @@ export default function Page() {
       setIsSubmitting(true);
       await register(form);
     } catch (error) {
-      setLocalError(getAuthErrorMessage(error, 'Register gagal. Periksa data yang diisi.'));
+      setLocalError(getAuthErrorMessage(error, t('auth.registerFailed')));
     } finally {
       setIsSubmitting(false);
     }
@@ -273,7 +276,7 @@ export default function Page() {
                   marginTop: 0,
                 }}
               >
-                Buat Akun Baru
+                {t('auth.registerTitle')}
               </h2>
               <p
                 style={{
@@ -283,8 +286,11 @@ export default function Page() {
                   margin: 0,
                 }}
               >
-                Kelola properti Anda dengan sentuhan layanan premium.
+                {t('auth.registerSubtitle')}
               </p>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                <LanguageSwitcher />
+              </div>
             </div>
 
             {/* Card */}
@@ -301,16 +307,16 @@ export default function Page() {
                 style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
               >
                 <InputField
-                  label="Nama Lengkap"
+                  label={t('auth.fullName')}
                   icon="person"
-                  placeholder="Masukkan nama lengkap sesuai KTP"
+                  placeholder={t('auth.fullName')}
                   type="text"
                   value={form.full_name}
                   onChange={(full_name) => setForm((current) => ({ ...current, full_name }))}
                   disabled={isSubmitting}
                 />
                 <InputField
-                  label="No WhatsApp"
+                  label={t('auth.whatsapp')}
                   icon="call"
                   placeholder="08xxxxxxxxxx"
                   type="tel"
@@ -319,7 +325,7 @@ export default function Page() {
                   disabled={isSubmitting}
                 />
                 <InputField
-                  label="Email"
+                  label={t('auth.email')}
                   icon="mail"
                   placeholder="contoh@email.com"
                   type="email"
@@ -329,21 +335,21 @@ export default function Page() {
                 />
 
                 <InputField
-                  label="Password"
+                  label={t('auth.password')}
                   icon="lock"
-                  placeholder="Masukkan password"
+                  placeholder={t('auth.password')}
                   type="password"
                   value={form.password}
                   onChange={(password) => setForm((current) => ({ ...current, password }))}
                   disabled={isSubmitting}
                 />
                 <p style={{ margin: '-16px 4px 0', color: colors.onSurfaceVariant, fontSize: '12px', lineHeight: 1.5 }}>
-                  Minimal 8 karakter, harus ada huruf kapital dan angka.
+                  {t('auth.passwordRule')}
                 </p>
                 <InputField
-                  label="Ulangi Password"
+                  label={t('auth.confirmPassword')}
                   icon="shield"
-                  placeholder="Ulangi password"
+                  placeholder={t('auth.confirmPassword')}
                   type="password"
                   value={form.password_confirmation}
                   onChange={(password_confirmation) =>
@@ -379,7 +385,7 @@ export default function Page() {
                       cursor: 'pointer',
                     }}
                   >
-                    Dengan klik Saya Setuju, saya menyatakan bahwa saya telah membaca dan menyetujui{' '}
+                    {t('auth.termsPrefix')}{' '}
                     <a
                       href="#"
                       style={{
@@ -390,9 +396,9 @@ export default function Page() {
                       onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                       onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                     >
-                      Syarat &amp; Ketentuan
+                      {t('auth.terms')}
                     </a>{' '}
-                    serta{' '}
+                    {' '}{t('auth.and')}{' '}
                     <a
                       href="#"
                       style={{
@@ -403,9 +409,9 @@ export default function Page() {
                       onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                       onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                     >
-                      Kebijakan Privasi
+                      {t('auth.privacy')}
                     </a>{' '}
-                    KosHandayani.
+                    {t('auth.termsSuffix')}
                   </label>
                 </div>
 
@@ -454,7 +460,7 @@ export default function Page() {
                   }}
                   onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 >
-                  {isSubmitting ? 'Memproses...' : 'Daftar'}
+                  {isSubmitting ? t('common.processing') : t('common.register')}
                   <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
                     arrow_forward
                   </span>
@@ -471,7 +477,7 @@ export default function Page() {
                 }}
               >
                 <p style={{ fontSize: '14px', color: colors.onSurfaceVariant, margin: 0 }}>
-                  Sudah punya akun?{' '}
+                  {t('auth.haveAccount')}{' '}
                   <Link
                     href="/login"
                     style={{
@@ -483,7 +489,7 @@ export default function Page() {
                     onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
                     onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
                   >
-                    Login
+                    {t('common.login')}
                   </Link>
                 </p>
               </div>

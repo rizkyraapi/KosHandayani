@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getOwnerDashboardStats,
   getOwnerPayments,
@@ -120,8 +121,8 @@ function useGlobalStyles() {
     `;
     document.head.appendChild(style);
 
-    // Page title
-    document.title = 'Owner Dashboard - KosHandayani';
+    // Page title is finalized by Page() after the active locale is known.
+    document.title = 'KosHandayani';
 
     return () => {
       document.head.removeChild(fontLink);
@@ -179,16 +180,17 @@ const Icon = ({ name, style }: { name: string; style?: React.CSSProperties }) =>
 
 /* ─── Sidebar ─── */
 const navItems = [
-  { icon: 'dashboard', label: 'Dashboard', active: true },
-  { icon: 'bed', label: 'Data Kamar' },
-  { icon: 'group', label: 'Data Penyewa' },
-  { icon: 'payments', label: 'Tagihan' },
-  { icon: 'receipt_long', label: '' },
-  { icon: 'analytics', label: 'Laporan' },
+  { icon: 'dashboard', labelKey: 'common.dashboard', active: true },
+  { icon: 'bed', labelKey: 'nav.ownerRooms' },
+  { icon: 'group', labelKey: 'common.tenants' },
+  { icon: 'payments', labelKey: 'common.bill' },
+  { icon: 'receipt_long', labelKey: 'common.payments' },
+  { icon: 'analytics', labelKey: 'common.reports' },
 ];
 
 function Sidebar() {
   const { logout, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   return (
     <nav
@@ -223,7 +225,7 @@ function Sidebar() {
             marginTop: 2,
           }}
         >
-          Owner Dashboard
+          {t('common.ownerDashboard')}
         </p>
       </div>
 
@@ -260,7 +262,7 @@ function Sidebar() {
             }}
           >
             <Icon name={item.icon} />
-            <span style={{ fontFamily: 'Inter, sans-serif' }}>{item.label}</span>
+            <span style={{ fontFamily: 'Inter, sans-serif' }}>{t(item.labelKey)}</span>
           </a>
         ))}
       </div>
@@ -285,7 +287,7 @@ function Sidebar() {
             fontFamily: 'Inter, sans-serif',
           }}
         >
-          <span>Semua Cabang</span>
+          <span>{t('owner.payments.allBranches')}</span>
           <Icon name="unfold_more" style={{ fontSize: 18 }} />
         </button>
         <button
@@ -310,7 +312,7 @@ function Sidebar() {
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
         >
           <Icon name="logout" />
-          <span style={{ fontFamily: 'Inter, sans-serif' }}>Logout</span>
+          <span style={{ fontFamily: 'Inter, sans-serif' }}>{t('common.logout')}</span>
         </button>
       </div>
     </nav>
@@ -319,6 +321,8 @@ function Sidebar() {
 
 /* ─── Header ─── */
 function Header() {
+  const { t } = useLanguage();
+
   return (
     <header
       style={{
@@ -340,10 +344,10 @@ function Header() {
             fontFamily: 'Manrope, sans-serif',
           }}
         >
-          Ringkasan Properti
+          {t('owner.dashboard.summaryTitle')}
         </h1>
         <p style={{ color: colors.onSurfaceVariant, fontWeight: 500, marginTop: 4 }}>
-          Selamat datang kembali, Pak Handayani.
+          {t('owner.dashboard.welcome')}
         </p>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -361,10 +365,10 @@ function Header() {
             className="animate-pulse"
             style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: colors.primary }}
           />
-          <span style={{ fontSize: 12, fontWeight: 700, color: colors.primary }}>Cabang 1: Aktif</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: colors.primary }}>{t('owner.dashboard.branchActive')}</span>
         </div>
         <img
-          alt="Owner Avatar"
+          alt={t('owner.dashboard.ownerAvatar')}
           style={{
             width: 40,
             height: 40,
@@ -400,6 +404,7 @@ function formatRupiah(value?: number | null) {
 }
 
 function StatsRow({ stats }: { stats: RoomStatusStats }) {
+  const { t } = useLanguage();
   const barHeights = ['40%', '60%', '50%', '80%', '70%', '95%'];
 
   return (
@@ -504,13 +509,13 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Total Pemasukan
+              {t('owner.dashboard.totalIncome')}
             </p>
           </div>
           <h3 style={{ fontSize: 28, fontWeight: 800, color: colors.onSurface, fontFamily: 'Manrope, sans-serif' }}>
             {formatRupiah(stats.paidRevenue)}
           </h3>
-          <p style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, marginTop: 4 }}>{stats.successfulPayments} pembayaran berhasil</p>
+          <p style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, marginTop: 4 }}>{t('owner.dashboard.successfulPayments', { count: stats.successfulPayments })}</p>
         </div>
         <div
           style={{
@@ -565,14 +570,14 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Penyewa & Pengajuan
+              {t('owner.dashboard.tenantsAndApplications')}
             </p>
           </div>
           <h3 style={{ fontSize: 28, fontWeight: 800, color: colors.onSurface, fontFamily: 'Manrope, sans-serif' }}>
-            {stats.activeTenants} Penyewa
+            {t('owner.dashboard.tenantCount', { count: stats.activeTenants })}
           </h3>
           <p style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, marginTop: 4 }}>
-            {stats.pendingApplications} pengajuan pending menunggu review
+            {t('owner.dashboard.pendingApplicationsDescription', { count: stats.pendingApplications })}
           </p>
         </div>
         <div
@@ -586,7 +591,7 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
             border: `1px solid ${colors.tertiary}1a`,
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 700, color: colors.tertiary }}>Pengajuan Pending</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: colors.tertiary }}>{t('owner.dashboard.pendingApplications')}</span>
           <span style={{ fontSize: 12, fontWeight: 900, color: colors.tertiary }}>{stats.pendingApplications}</span>
         </div>
       </div>
@@ -596,6 +601,7 @@ function StatsRow({ stats }: { stats: RoomStatusStats }) {
 
 /* ─── Branch Stats ─── */
 function BranchStats({ rooms }: { rooms: ApiRoom[] }) {
+  const { t } = useLanguage();
   const branches = Object.values(rooms.reduce<Record<string, {
         name: string;
         detail: string;
@@ -603,20 +609,20 @@ function BranchStats({ rooms }: { rooms: ApiRoom[] }) {
         income: string;
         expense: string;
       }>>((groups, room) => {
-        const key = room.branch?.branch_name || 'Cabang belum diatur';
+        const key = room.branch?.branch_name || t('tenant.applications.branchUnset');
         groups[key] ??= {
           name: key,
-          detail: `0 Kamar - ${room.branch?.city || '-'}`,
+          detail: t('owner.dashboard.branchRoomDetail', { count: 0, city: room.branch?.city || '-' }),
           pct: 0,
-          income: 'Terisi: 0',
-          expense: 'Tersedia: 0',
+          income: t('owner.dashboard.occupiedCount', { count: 0 }),
+          expense: t('owner.dashboard.availableCount', { count: 0 }),
         };
         const total = Number(groups[key].detail.match(/^\d+/)?.[0] ?? 0) + 1;
         const occupied = Number(groups[key].income.replace(/[^\d]/g, '')) + (room.room_status === 'occupied' ? 1 : 0);
-        groups[key].detail = `${total} Kamar - ${room.branch?.city || '-'}`;
+        groups[key].detail = t('owner.dashboard.branchRoomDetail', { count: total, city: room.branch?.city || '-' });
         groups[key].pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
-        groups[key].income = `Terisi: ${occupied}`;
-        groups[key].expense = `Tersedia: ${total - occupied}`;
+        groups[key].income = t('owner.dashboard.occupiedCount', { count: occupied });
+        groups[key].expense = t('owner.dashboard.availableCount', { count: total - occupied });
 
         return groups;
       }, {}));
@@ -632,7 +638,7 @@ function BranchStats({ rooms }: { rooms: ApiRoom[] }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
         <h3 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em', fontFamily: 'Manrope, sans-serif' }}>
-          Statistik Per Cabang
+          {t('owner.dashboard.branchStats')}
         </h3>
         <button
           style={{
@@ -646,12 +652,12 @@ function BranchStats({ rooms }: { rooms: ApiRoom[] }) {
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.textDecoration = 'underline')}
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.textDecoration = 'none')}
         >
-          Lihat Detail
+          {t('common.detail')}
         </button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
         {branches.length === 0 ? (
-          <p style={{ fontSize: 14, color: colors.onSurfaceVariant }}>Belum ada data cabang.</p>
+          <p style={{ fontSize: 14, color: colors.onSurfaceVariant }}>{t('owner.dashboard.noBranchData')}</p>
         ) : branches.map((b, i) => (
           <div key={i}>
             <div
@@ -666,7 +672,7 @@ function BranchStats({ rooms }: { rooms: ApiRoom[] }) {
                 <h4 style={{ fontWeight: 700, color: colors.onSurface }}>{b.name}</h4>
                 <p style={{ fontSize: 12, color: colors.onSurfaceVariant, marginTop: 2 }}>{b.detail}</p>
               </div>
-              <span style={{ fontSize: 14, fontWeight: 900, color: colors.primary }}>{b.pct}% Terisi</span>
+              <span style={{ fontSize: 14, fontWeight: 900, color: colors.primary }}>{b.pct}% {t('status.occupied')}</span>
             </div>
             <div
               style={{
@@ -708,6 +714,7 @@ function formatDashboardActivityTime(value?: string | null) {
 }
 
 function ActivityFeed({ payments }: { payments: OwnerPaymentOverview['payments'] }) {
+  const { t } = useLanguage();
   const activities = payments.slice(0, 4).map((payment) => {
     const isPaid = ['settlement', 'capture'].includes(payment.transaction_status);
     const isFailed = ['expire', 'cancel', 'deny'].includes(payment.transaction_status);
@@ -716,8 +723,11 @@ function ActivityFeed({ payments }: { payments: OwnerPaymentOverview['payments']
       icon: isPaid ? 'check_circle' : isFailed ? 'warning' : 'pending',
       iconBg: isPaid ? '#f0fdf4' : isFailed ? '#fffbeb' : '#e7eeff',
       iconColor: isPaid ? colors.primary : isFailed ? '#d97706' : colors.onSurfaceVariant,
-      title: `${isPaid ? 'Pembayaran Diterima' : isFailed ? 'Pembayaran Gagal' : 'Pembayaran Menunggu'} - ${payment.room?.room_name || 'Kamar'}`,
-      sub: `Oleh ${payment.tenant?.full_name || payment.tenant?.email || 'Tenant'} - ${payment.room?.branch?.branch_name || 'Cabang belum diatur'}`,
+      title: `${isPaid ? t('owner.dashboard.paymentReceived') : isFailed ? t('status.paymentFailed') : t('owner.dashboard.paymentWaiting')} - ${payment.room?.room_name || t('common.room')}`,
+      sub: t('owner.dashboard.activityBy', {
+        tenant: payment.tenant?.full_name || payment.tenant?.email || t('common.tenant'),
+        branch: payment.room?.branch?.branch_name || t('tenant.applications.branchUnset'),
+      }),
       time: formatDashboardActivityTime(payment.paid_at ?? payment.created_at),
     };
   });
@@ -740,11 +750,11 @@ function ActivityFeed({ payments }: { payments: OwnerPaymentOverview['payments']
           fontFamily: 'Manrope, sans-serif',
         }}
       >
-        Aktivitas Terkini
+        {t('owner.dashboard.recentActivity')}
       </h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {activities.length === 0 ? (
-          <p style={{ fontSize: 14, color: colors.onSurfaceVariant }}>Belum ada aktivitas pembayaran.</p>
+          <p style={{ fontSize: 14, color: colors.onSurfaceVariant }}>{t('owner.dashboard.noPaymentActivity')}</p>
         ) : activities.map((a, i) => (
           <div
             key={i}
@@ -1043,9 +1053,14 @@ const responsiveCSS = `
 /* ─── Page Root ─── */
 export default function Page() {
   useGlobalStyles();
+  const { t } = useLanguage();
   const [rooms, setRooms] = useState<ApiRoom[]>([]);
   const [dashboardStats, setDashboardStats] = useState<OwnerDashboardStats | null>(null);
   const [recentPayments, setRecentPayments] = useState<OwnerPaymentOverview['payments']>([]);
+
+  useEffect(() => {
+    document.title = `${t('common.ownerDashboard')} - KosHandayani`;
+  }, [t]);
 
   useEffect(() => {
     const style = document.createElement('style');

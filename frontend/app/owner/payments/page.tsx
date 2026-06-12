@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getOwnerPayments, type OwnerPaymentOverview } from '@/lib/api';
+import type { Locale } from '@/lib/i18n';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 type PaymentRow = {
@@ -13,7 +15,7 @@ type PaymentRow = {
   initials: string;
   roomName: string;
   branchName: string;
-  status: 'Lunas' | 'Gagal' | 'Menunggu Verifikasi';
+  status: 'paid' | 'failed' | 'pending';
   paidDate: string;
   orderId: string;
   amount: string;
@@ -67,10 +69,10 @@ function formatRupiah(value: number) {
   }).format(value);
 }
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value?: string | null, locale: Locale = 'id') {
   if (!value) return '-';
 
-  return new Intl.DateTimeFormat('id-ID', {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
@@ -86,15 +88,15 @@ function getInitials(name: string) {
 }
 
 function normalizePaymentStatus(status: string): PaymentRow['status'] {
-  if (['settlement', 'capture'].includes(status)) return 'Lunas';
-  if (['expire', 'cancel', 'deny'].includes(status)) return 'Gagal';
+  if (['settlement', 'capture'].includes(status)) return 'paid';
+  if (['expire', 'cancel', 'deny'].includes(status)) return 'failed';
 
-  return 'Menunggu Verifikasi';
+  return 'pending';
 }
 
-function buildRows(payments: OwnerPaymentOverview['payments']): PaymentRow[] {
+function buildRows(payments: OwnerPaymentOverview['payments'], locale: Locale, fallbackTenant: string, fallbackBranch: string): PaymentRow[] {
   return payments.map((payment) => {
-    const tenantName = payment.tenant?.full_name || payment.tenant?.email || 'Tenant belum tersedia';
+    const tenantName = payment.tenant?.full_name || payment.tenant?.email || fallbackTenant;
     const status = normalizePaymentStatus(payment.transaction_status);
 
     return {
@@ -103,9 +105,9 @@ function buildRows(payments: OwnerPaymentOverview['payments']): PaymentRow[] {
       tenantAvatar: payment.tenant?.profile_photo_url ?? null,
       initials: getInitials(tenantName),
       roomName: payment.room?.room_name || '-',
-      branchName: payment.room?.branch?.branch_name || 'Cabang belum diatur',
+      branchName: payment.room?.branch?.branch_name || fallbackBranch,
       status,
-      paidDate: status === 'Lunas' ? formatDateTime(payment.paid_at) : formatDateTime(payment.created_at),
+      paidDate: status === 'paid' ? formatDateTime(payment.paid_at, locale) : formatDateTime(payment.created_at, locale),
       orderId: payment.order_id,
       amount: formatRupiah(payment.gross_amount),
       href: `/owner/rental-applications/${payment.rental_application_id}`,
@@ -113,7 +115,10 @@ function buildRows(payments: OwnerPaymentOverview['payments']): PaymentRow[] {
   });
 }
 
-function buildStats(stats?: OwnerPaymentOverview['stats']): StatCardData[] {
+function buildStats(
+  stats: OwnerPaymentOverview['stats'] | undefined,
+  t: (key: string) => string,
+): StatCardData[] {
   const safeStats = stats ?? {
     total_collected: 0,
     paid_count: 0,
@@ -125,7 +130,7 @@ function buildStats(stats?: OwnerPaymentOverview['stats']): StatCardData[] {
   return [
     {
       icon: 'payments',
-      label: 'Total Terkumpul',
+      label: t('owner.payments.totalCollected'),
       value: formatRupiah(safeStats.total_collected),
       iconBg: 'rgba(0,110,47,0.1)',
       iconColor: '#006e2f',
@@ -133,16 +138,16 @@ function buildStats(stats?: OwnerPaymentOverview['stats']): StatCardData[] {
     },
     {
       icon: 'check_circle',
-      label: 'Lunas',
-      value: `${safeStats.paid_count} / ${safeStats.tenant_count} Penyewa`,
+      label: t('owner.payments.paid'),
+      value: `${safeStats.paid_count} / ${safeStats.tenant_count} ${t('common.tenants')}`,
       iconBg: 'rgba(34,197,94,0.2)',
       iconColor: '#004b1e',
       valueColor: '#111c2d',
     },
     {
       icon: 'warning',
-      label: 'Gagal',
-      value: `${safeStats.failed_count} Pembayaran`,
+      label: t('owner.payments.failed'),
+      value: `${safeStats.failed_count} ${t('common.payments')}`,
       iconBg: 'rgba(255,218,214,0.5)',
       iconColor: '#ba1a1a',
       valueColor: '#ba1a1a',
@@ -151,8 +156,8 @@ function buildStats(stats?: OwnerPaymentOverview['stats']): StatCardData[] {
     },
     {
       icon: 'pending',
-      label: 'Menunggu Konfirmasi',
-      value: `${safeStats.pending_count} Pembayaran`,
+      label: t('owner.payments.pendingConfirmation'),
+      value: `${safeStats.pending_count} ${t('common.payments')}`,
       iconBg: 'rgba(175,239,180,0.3)',
       iconColor: '#346e40',
       valueColor: '#111c2d',
@@ -161,10 +166,11 @@ function buildStats(stats?: OwnerPaymentOverview['stats']): StatCardData[] {
 }
 
 function StatusBadge({ status }: { status: PaymentRow['status'] }) {
-  const cfg: Record<PaymentRow['status'], { bg: string; text: string; dot: string; label: string }> = {
-    Lunas: { bg: '#afefb4', text: '#346e40', dot: '#2f6a3c', label: 'Lunas' },
-    Gagal: { bg: '#ffdad6', text: '#ba1a1a', dot: '#ba1a1a', label: 'Gagal' },
-    'Menunggu Verifikasi': { bg: '#dee8ff', text: '#3d4a3d', dot: '#3d4a3d', label: 'Menunggu Verifikasi' },
+  const { t } = useLanguage();
+  const cfg: Record<PaymentRow['status'], { bg: string; text: string; dot: string; labelKey: string }> = {
+    paid: { bg: '#afefb4', text: '#346e40', dot: '#2f6a3c', labelKey: 'status.paid' },
+    failed: { bg: '#ffdad6', text: '#ba1a1a', dot: '#ba1a1a', labelKey: 'status.failed' },
+    pending: { bg: '#dee8ff', text: '#3d4a3d', dot: '#3d4a3d', labelKey: 'status.awaitingVerification' },
   };
   const c = cfg[status];
 
@@ -184,7 +190,7 @@ function StatusBadge({ status }: { status: PaymentRow['status'] }) {
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
-      {c.label}
+      {t(c.labelKey)}
     </span>
   );
 }
@@ -248,7 +254,7 @@ function PaymentTableRow({ row }: { row: PaymentRow }) {
       <td style={{ padding: '20px 24px' }}>
         <StatusBadge status={row.status} />
       </td>
-      <td style={{ padding: '20px 24px', fontSize: 14, fontWeight: 500, color: row.status === 'Gagal' ? '#ba1a1a' : '#3d4a3d' }}>
+      <td style={{ padding: '20px 24px', fontSize: 14, fontWeight: 500, color: row.status === 'failed' ? '#ba1a1a' : '#3d4a3d' }}>
         <div>{row.paidDate}</div>
         <div style={{ marginTop: 2, fontSize: 12, fontWeight: 800, color: '#006e2f' }}>{row.amount}</div>
       </td>
@@ -260,7 +266,7 @@ function PaymentTableRow({ row }: { row: PaymentRow }) {
           onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,110,47,0.1)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <Icon name={row.status === 'Menunggu Verifikasi' ? 'verified' : 'visibility'} />
+          <Icon name={row.status === 'pending' ? 'verified' : 'visibility'} />
         </Link>
       </td>
     </tr>
@@ -268,6 +274,7 @@ function PaymentTableRow({ row }: { row: PaymentRow }) {
 }
 
 export default function Page() {
+  const { locale, t } = useLanguage();
   const [overview, setOverview] = useState<OwnerPaymentOverview | null>(null);
   const [isLoadingPayments, setIsLoadingPayments] = useState(true);
   const [paymentsError, setPaymentsError] = useState('');
@@ -281,12 +288,12 @@ export default function Page() {
       const data = await getOwnerPayments();
       setOverview(data);
     } catch (error) {
-      setPaymentsError(error instanceof Error ? error.message : 'Gagal memuat data pembayaran.');
+      setPaymentsError(error instanceof Error ? error.message : t('messages.loadPaymentsFailed'));
       setOverview(null);
     } finally {
       setIsLoadingPayments(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void Promise.resolve().then(loadPayments);
@@ -294,8 +301,11 @@ export default function Page() {
 
   useAutoRefresh(loadPayments);
 
-  const rows = useMemo(() => buildRows(overview?.payments ?? []), [overview]);
-  const statsData = useMemo(() => buildStats(overview?.stats), [overview]);
+  const rows = useMemo(
+    () => buildRows(overview?.payments ?? [], locale, t('common.tenant'), t('tenant.applications.branchUnset')),
+    [locale, overview, t],
+  );
+  const statsData = useMemo(() => buildStats(overview?.stats, t), [overview, t]);
   const branchOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.branchName))).sort(), [rows]);
 
   const filteredRows = useMemo(() => {
@@ -344,35 +354,35 @@ export default function Page() {
         >
           <div>
             <nav style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#3d4a3d', fontSize: 14, marginBottom: 8, fontWeight: 500 }}>
-              <span>Manajemen</span>
+              <span>{t('owner.applications.eyebrow')}</span>
               <Icon name="chevron_right" size={16} />
-              <span style={{ color: '#006e2f', fontWeight: 700 }}>Monitoring Pembayaran</span>
+              <span style={{ color: '#006e2f', fontWeight: 700 }}>{t('owner.payments.breadcrumb')}</span>
             </nav>
             <h1 style={{ fontSize: 36, fontWeight: 800, color: '#111c2d', fontFamily: 'Manrope, sans-serif', lineHeight: 1.1 }}>
-              Keuangan Penyewa
+              {t('owner.payments.title')}
             </h1>
             <p style={{ color: '#3d4a3d', marginTop: 4, fontSize: 14 }}>
-              Pantau arus kas dan status pelunasan sewa secara real-time.
+              {t('owner.payments.subtitle')}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <button
               type="button"
               disabled
-              title="Fitur ekspor belum diaktifkan untuk demo ini"
+              title={`${t('owner.payments.exportPdf')} - ${t('common.comingSoon')}`}
               style={{ background: '#ffffff', color: '#3d4a3d', border: '1px solid rgba(188,203,185,0.3)', padding: '10px 16px', borderRadius: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, cursor: 'not-allowed', fontSize: 14, opacity: 0.65 }}
             >
               <Icon name="file_download" />
-              <span>Ekspor PDF - Segera Hadir</span>
+              <span>{t('owner.payments.exportPdf')} - {t('owner.payments.comingSoonSuffix')}</span>
             </button>
             <button
               type="button"
               disabled
-              title="Pembayaran manual belum menjadi bagian flow demo"
+              title={`${t('owner.payments.manualInput')} - ${t('common.comingSoon')}`}
               style={{ background: '#e7eeff', color: '#3d4a3d', padding: '10px 20px', borderRadius: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'not-allowed', fontSize: 14, boxShadow: 'none', opacity: 0.75 }}
             >
               <Icon name="account_balance_wallet" />
-              <span>Input Manual - Segera Hadir</span>
+              <span>{t('owner.payments.manualInput')} - {t('owner.payments.comingSoonSuffix')}</span>
             </button>
           </div>
         </header>
@@ -392,14 +402,14 @@ export default function Page() {
         >
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }} className="filter-selects">
             <div style={{ position: 'relative' }}>
-              <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: '#3d4a3d', marginBottom: 4, marginLeft: 4 }}>Pilih Cabang</label>
+              <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: '#3d4a3d', marginBottom: 4, marginLeft: 4 }}>{t('owner.payments.selectBranch')}</label>
               <div style={{ position: 'relative' }}>
                 <select
                   value={selectedBranch}
                   onChange={(event) => setSelectedBranch(event.currentTarget.value)}
                   style={{ background: '#ffffff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, padding: '10px 40px 10px 16px', cursor: 'pointer', minWidth: 180, color: '#111c2d', outline: 'none' }}
                 >
-                  <option value="all">Semua Cabang</option>
+                  <option value="all">{t('owner.payments.allBranches')}</option>
                   {branchOptions.map((branch) => (
                     <option key={branch} value={branch}>{branch}</option>
                   ))}
@@ -409,12 +419,12 @@ export default function Page() {
             </div>
 
             <div style={{ position: 'relative' }}>
-              <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: '#3d4a3d', marginBottom: 4, marginLeft: 4 }}>Periode</label>
+              <label style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: '#3d4a3d', marginBottom: 4, marginLeft: 4 }}>{t('owner.payments.period')}</label>
               <div style={{ position: 'relative' }}>
                 <select
                   style={{ background: '#ffffff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, padding: '10px 40px 10px 16px', cursor: 'pointer', minWidth: 150, color: '#111c2d', outline: 'none' }}
                 >
-                  <option>Semua Periode</option>
+                  <option>{t('owner.payments.allPeriods')}</option>
                 </select>
                 <Icon name="calendar_month" size={20} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#3d4a3d', pointerEvents: 'none' }} />
               </div>
@@ -425,7 +435,7 @@ export default function Page() {
             <Icon name="search" style={{ color: '#3d4a3d', marginRight: 12 }} />
             <input
               type="text"
-              placeholder="Cari nama atau nomor kamar..."
+              placeholder={t('owner.payments.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.currentTarget.value)}
               style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 14, fontWeight: 500, width: '100%', color: '#111c2d' }}
@@ -435,14 +445,14 @@ export default function Page() {
 
         <div style={{ background: '#ffffff', borderRadius: 16, boxShadow: '0 12px 40px rgba(17,28,45,0.06)', overflow: 'hidden', padding: isLoadingPayments || paymentsError || filteredRows.length === 0 ? 20 : 0 }}>
           {isLoadingPayments ? (
-            <LoadingState title="Memuat pembayaran" description="Mengambil transaksi Midtrans terbaru dari backend." />
+            <LoadingState title={t('common.loading')} description={t('owner.payments.subtitle')} />
           ) : paymentsError ? (
-            <ErrorState title="Gagal mengambil data" description={paymentsError} onAction={() => void loadPayments()} />
+            <ErrorState title={t('messages.loadFailed')} description={paymentsError} onAction={() => void loadPayments()} />
           ) : filteredRows.length === 0 ? (
             <EmptyState
-              title={rows.length === 0 ? 'Belum ada pembayaran' : 'Pembayaran tidak ditemukan'}
-              description={rows.length === 0 ? 'Data akan muncul setelah tenant membuat transaksi pembayaran.' : 'Coba ubah filter cabang atau kata kunci pencarian.'}
-              actionLabel="Refresh"
+              title={rows.length === 0 ? t('empty.noPayments') : t('empty.paymentsNotFound')}
+              description={rows.length === 0 ? t('owner.payments.reconciliationDescription') : t('owner.applications.notFoundDescription')}
+              actionLabel={t('common.refresh')}
               onAction={() => void loadPayments()}
             />
           ) : (
@@ -451,7 +461,14 @@ export default function Page() {
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: 720 }}>
                   <thead>
                     <tr style={{ background: 'rgba(248,250,252,0.5)' }}>
-                      {['Nama Penyewa', 'Kamar', 'Cabang', 'Status Pembayaran', 'Tanggal Bayar', 'Aksi'].map((heading, index) => (
+                      {[
+                        t('owner.payments.tenantName'),
+                        t('owner.payments.room'),
+                        t('owner.payments.branch'),
+                        t('owner.payments.status'),
+                        t('owner.payments.paidDate'),
+                        t('common.action'),
+                      ].map((heading, index) => (
                         <th
                           key={heading}
                           style={{
@@ -479,7 +496,7 @@ export default function Page() {
 
               <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(248,250,252,0.5)', borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 12 }}>
                 <p style={{ fontSize: 12, fontWeight: 500, color: '#3d4a3d' }}>
-                  Menampilkan {filteredRows.length} dari {rows.length} pembayaran
+                  {t('common.showing', { count: filteredRows.length, total: rows.length, item: t('common.payments') })}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button disabled style={{ padding: 6, borderRadius: 8, border: '1px solid rgba(188,203,185,0.3)', color: '#3d4a3d', background: 'transparent', cursor: 'not-allowed', opacity: 0.5, display: 'flex', alignItems: 'center' }}>
@@ -504,17 +521,17 @@ export default function Page() {
           <div style={{ position: 'absolute', bottom: -80, right: -80, width: 256, height: 256, background: 'rgba(0,110,47,0.2)', borderRadius: '50%', filter: 'blur(48px)', pointerEvents: 'none' }} />
           <div style={{ position: 'relative', zIndex: 1, maxWidth: 520 }}>
             <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 12, fontFamily: 'Manrope, sans-serif' }}>
-              Rekonsiliasi pembayaran tenant
+              {t('owner.payments.reconciliationTitle')}
             </h2>
             <p style={{ opacity: 0.8, fontSize: 14, lineHeight: 1.6 }}>
-              Data tagihan tersambung langsung dengan status transaksi Midtrans dan pengajuan sewa tenant.
+              {t('owner.payments.reconciliationDescription')}
             </p>
           </div>
           <Link
             href="/owner/tenants"
             style={{ position: 'relative', zIndex: 1, background: '#22c55e', color: '#004b1e', padding: '10px 24px', borderRadius: 12, fontWeight: 900, fontSize: 14, textDecoration: 'none' }}
           >
-            Kelola Penyewa
+            {t('owner.payments.manageTenants')}
           </Link>
         </div>
       </main>

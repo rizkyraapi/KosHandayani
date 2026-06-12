@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { createPayment, getMyPayments, syncPaymentStatus, type Payment } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
+import type { Locale } from '@/lib/i18n';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
@@ -133,11 +135,11 @@ const globalStyle = `
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const navItems = [
-  { icon: 'home', label: 'Dashboard', active: false },
-  { icon: 'door_front', label: 'Kamar Saya', active: false },
-  { icon: 'request_quote', label: 'Tagihan', active: true },
-  { icon: 'history', label: 'Riwayat', active: false },
-  { icon: 'account_circle', label: 'Profil', active: false },
+  { icon: 'home', labelKey: 'common.dashboard', active: false },
+  { icon: 'door_front', labelKey: 'tenant.billing.myRoom', active: false },
+  { icon: 'request_quote', labelKey: 'common.bill', active: true },
+  { icon: 'history', labelKey: 'common.history', active: false },
+  { icon: 'account_circle', labelKey: 'common.profile', active: false },
 ];
 
 const paymentMethods = [
@@ -154,9 +156,9 @@ function formatRupiah(value?: number | null) {
   }).format(value ?? 0);
 }
 
-function formatDate(value?: string | null) {
+function formatDate(value?: string | null, locale: Locale = 'id') {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', { dateStyle: 'medium' }).format(new Date(value));
 }
 
 function normalizePaymentStatus(payment?: Payment | null) {
@@ -167,12 +169,12 @@ function normalizePaymentStatus(payment?: Payment | null) {
   return 'pending';
 }
 
-function paymentStatusLabel(payment?: Payment | null) {
+function paymentStatusLabel(payment: Payment | null | undefined, t: (key: string) => string) {
   const status = normalizePaymentStatus(payment);
-  if (status === 'paid') return 'Pembayaran Berhasil';
-  if (status === 'failed') return 'Pembayaran Gagal';
+  if (status === 'paid') return t('status.paymentSuccessful');
+  if (status === 'failed') return t('status.paymentFailed');
 
-  return 'Menunggu Pembayaran';
+  return t('status.pendingPayment');
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -202,7 +204,8 @@ const Icon = ({
 );
 
 function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
-  const displayName = currentUser?.full_name || currentUser?.email || 'Tenant';
+  const { t } = useLanguage();
+  const displayName = currentUser?.full_name || currentUser?.email || t('common.tenant');
   const profilePhoto =
     currentUser?.profile_photo_url ||
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBxHlmogJT2E4aPWpZrwi8tDGS-f5SPJOAG6IzqDRlvMsTCf6v9mOSeE_oQx7sSj5ku0MZ5UPQ_sW9O1mQK5NfHnbjiHuW8CgV9oUiFi72IKkb9_R0E6kfEpQG97bCp-_WCZaTQGvd4W6CIpZu94A8zInMrCVeqHDcQG3ciZk2Rd1jAXSIH3dOzJkyHGwkzi6KFQR52Y5OnRWDNF_E_lW83OR3_AVyV_pcq_leeRnMUllzNgjyZIa_gGN3UU90HBQsJhj8NDyLGgTbT';
@@ -245,14 +248,14 @@ function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
             fontWeight: 700,
           }}
         >
-          Tenant Area
+          {t('tenant.applications.tenantArea')}
         </p>
       </div>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flexGrow: 1 }}>
         {navItems.map((item) => (
           <a
-            key={item.label}
+            key={item.labelKey}
             href="#"
             style={{
               display: 'flex',
@@ -285,7 +288,7 @@ function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
             }}
           >
             <Icon name={item.icon} filled={item.active} />
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </a>
         ))}
       </nav>
@@ -339,6 +342,7 @@ function BillSummaryCard({
   error: string;
   message: string;
 }) {
+  const { locale, t } = useLanguage();
   const room = payment?.rental_application?.room;
 
   return (
@@ -391,7 +395,7 @@ function BillSummaryCard({
                 marginBottom: '0.75rem',
               }}
             >
-              {isLoading ? 'Memuat Tagihan' : paymentStatusLabel(payment)}
+              {isLoading ? t('tenant.billing.loadingBill') : paymentStatusLabel(payment, t)}
             </span>
             <h3
               style={{
@@ -401,10 +405,10 @@ function BillSummaryCard({
                 fontFamily: 'Manrope, sans-serif',
               }}
             >
-              {room?.room_name ? `Sewa ${room.room_name}` : 'Belum Ada Tagihan'}
+              {room?.room_name ? t('tenant.billing.roomRent', { room: room.room_name }) : t('empty.noPayments')}
             </h3>
             <p style={{ fontSize: '0.875rem', color: '#3d4a3d' }}>
-              Tanggal pembayaran: {formatDate(payment?.paid_at)}
+              {t('tenant.detail.paymentDate')}: {formatDate(payment?.paid_at, locale)}
             </p>
             {(error || message) && (
               <p style={{ fontSize: '0.875rem', color: error ? '#93000a' : '#166534', fontWeight: 700, marginTop: '0.5rem' }}>
@@ -413,7 +417,7 @@ function BillSummaryCard({
             )}
           </div>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#3d4a3d' }}>Total Tagihan</p>
+            <p style={{ fontSize: '0.75rem', fontWeight: 500, color: '#3d4a3d' }}>{t('tenant.billing.totalBill')}</p>
             <p
               style={{
                 fontSize: '1.875rem',
@@ -445,11 +449,11 @@ function BillSummaryCard({
                 marginBottom: '0.25rem',
               }}
             >
-              Status Pembayaran
+              {t('owner.applications.paymentStatus')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#9e4036' }}>
               <Icon name="event" style={{ fontSize: '1.125rem' }} />
-              <span style={{ fontWeight: 700 }}>{normalizePaymentStatus(payment)}</span>
+              <span style={{ fontWeight: 700 }}>{paymentStatusLabel(payment, t)}</span>
             </div>
           </div>
           <div
@@ -468,7 +472,7 @@ function BillSummaryCard({
                 marginBottom: '0.25rem',
               }}
             >
-              ID Transaksi
+              {t('tenant.history.transactionId')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#111c2d' }}>
               <Icon name="fingerprint" style={{ fontSize: '1.125rem' }} />
@@ -482,6 +486,7 @@ function BillSummaryCard({
 }
 
 function PaymentMethodSection() {
+  const { t } = useLanguage();
   const [selected, setSelected] = useState(0);
 
   return (
@@ -506,7 +511,7 @@ function PaymentMethodSection() {
         }}
       >
         <Icon name="account_balance_wallet" style={{ color: '#006e2f' }} />
-        Pilih Metode Pembayaran
+        {t('tenant.billing.selectPaymentMethod')}
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -520,7 +525,7 @@ function PaymentMethodSection() {
               marginBottom: '0.5rem',
             }}
           >
-            Opsi Pembayaran
+            {t('tenant.billing.paymentOptions')}
           </label>
           <div style={{ position: 'relative' }}>
             <select
@@ -609,13 +614,14 @@ function ConfirmationSidebar({
   isPaying: boolean;
   onPay: () => void;
 }) {
+  const { t } = useLanguage();
   const room = payment?.rental_application?.room;
   const normalizedStatus = normalizePaymentStatus(payment);
   const canPay = ['pending', 'failed'].includes(normalizedStatus) && Boolean(payment);
   const summaryItems = [
-    { label: room?.room_name ? `Sewa ${room.room_name}` : 'Sewa kamar', amount: formatRupiah(payment?.gross_amount) },
-    { label: 'Status Pembayaran', amount: normalizePaymentStatus(payment) },
-    { label: 'Biaya Layanan', amount: 'Gratis', isGratis: true },
+    { label: room?.room_name ? t('tenant.billing.roomRent', { room: room.room_name }) : t('tenant.billing.roomRentFallback'), amount: formatRupiah(payment?.gross_amount) },
+    { label: t('owner.applications.paymentStatus'), amount: paymentStatusLabel(payment, t) },
+    { label: t('tenant.billing.serviceFee'), amount: t('tenant.billing.free'), isGratis: true },
   ];
 
   return (
@@ -637,7 +643,7 @@ function ConfirmationSidebar({
             color: '#111c2d',
           }}
         >
-          Ringkasan Konfirmasi
+          {t('tenant.billing.confirmationSummary')}
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0', marginBottom: '2.5rem' }}>
@@ -674,7 +680,7 @@ function ConfirmationSidebar({
             }}
           >
             <span style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111c2d', fontFamily: 'Manrope, sans-serif' }}>
-              Total Bayar
+              {t('tenant.billing.totalPay')}
             </span>
             <span
               style={{
@@ -727,11 +733,11 @@ function ConfirmationSidebar({
             }}
           >
             <Icon name="security" filled />
-            {isPaying ? 'Memproses...' : normalizedStatus === 'failed' ? 'Bayar Ulang' : 'Lanjutkan Pembayaran'}
+            {isPaying ? t('common.processing') : normalizedStatus === 'failed' ? t('tenant.billing.payAgain') : t('tenant.billing.continuePayment')}
           </button>
         ) : (
           <p style={{ margin: 0, color: '#3d4a3d', fontWeight: 700 }}>
-            {payment ? paymentStatusLabel(payment) : 'Belum ada tagihan aktif.'}
+            {payment ? paymentStatusLabel(payment, t) : t('tenant.billing.noActiveBill')}
           </p>
         )}
 
@@ -755,7 +761,7 @@ function ConfirmationSidebar({
               color: '#3d4a3d',
             }}
           >
-            Pembayaran Anda dilindungi oleh sistem keamanan 256-bit SSL. Struk digital akan diterbitkan otomatis setelah verifikasi.
+            {t('tenant.billing.securityNotice')}
           </p>
         </div>
       </section>
@@ -772,8 +778,8 @@ function ConfirmationSidebar({
         }}
       >
         <div>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#111c2d' }}>Butuh Bantuan?</p>
-          <p style={{ fontSize: '0.625rem', color: '#3d4a3d' }}>Hubungi Digital Concierge kami</p>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#111c2d' }}>{t('tenant.billing.needHelp')}</p>
+          <p style={{ fontSize: '0.625rem', color: '#3d4a3d' }}>{t('tenant.billing.contactConcierge')}</p>
         </div>
         <button
           style={{
@@ -948,6 +954,7 @@ const responsiveStyle = `
 export default function Page() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoadingPayments, setIsLoadingPayments] = useState(true);
   const [isPaying, setIsPaying] = useState(false);
@@ -1002,7 +1009,7 @@ export default function Page() {
         const data = await getMyPayments();
         if (isMounted) setPayments(data);
       } catch (loadError) {
-        if (isMounted) setPaymentError(loadError instanceof Error ? loadError.message : 'Gagal memuat tagihan.');
+        if (isMounted) setPaymentError(loadError instanceof Error ? loadError.message : t('messages.loadPaymentsFailed'));
       } finally {
         if (isMounted) setIsLoadingPayments(false);
       }
@@ -1013,7 +1020,7 @@ export default function Page() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const handleTenantDataSync = () => {
@@ -1058,22 +1065,22 @@ export default function Page() {
         onSuccess: () => {
           void syncPaymentStatus(orderId)
             .catch(() => null)
-            .then(() => refreshAfterPayment('Pembayaran berhasil. Data tagihan diperbarui.'));
+            .then(() => refreshAfterPayment(t('messages.paymentSuccessRefresh')));
         },
         onPending: () => {
           void syncPaymentStatus(orderId)
             .catch(() => null)
-            .then(() => refreshAfterPayment('Pembayaran sedang diproses.'));
+            .then(() => refreshAfterPayment(t('messages.paymentPending')));
         },
         onError: () => {
-          void refreshAfterPayment('Pembayaran gagal diproses.');
+          void refreshAfterPayment(t('status.paymentFailed'));
         },
         onClose: () => {
-          setPaymentMessage('Pembayaran dibatalkan.');
+          setPaymentMessage(t('messages.paymentCancelled'));
         },
       });
     } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : 'Gagal membuka pembayaran.');
+      setPaymentError(error instanceof Error ? error.message : t('messages.paymentOpenFailed'));
     } finally {
       setIsPaying(false);
     }
@@ -1104,7 +1111,7 @@ export default function Page() {
                 letterSpacing: '0.1em',
               }}
             >
-              Kembali ke Dashboard
+              {t('tenant.billing.backToDashboard')}
             </span>
           </div>
           <h2
@@ -1117,7 +1124,7 @@ export default function Page() {
               fontFamily: 'Manrope, sans-serif',
             }}
           >
-            Pembayaran Sewa
+            {t('tenant.detail.paymentSummary')}
           </h2>
           <p
             style={{
@@ -1126,7 +1133,7 @@ export default function Page() {
               lineHeight: 1.6,
             }}
           >
-            Selesaikan pembayaran Anda sebelum jatuh tempo untuk kenyamanan layanan Digital Concierge kami.
+            {t('tenant.billing.subtitle')}
           </p>
         </header>
 

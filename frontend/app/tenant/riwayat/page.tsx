@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
 
@@ -222,6 +223,8 @@ function Icon({ name, className = '', style }: { name: string; className?: strin
 }
 
 function StatusBadge({ status }: { status: Transaction['status'] }) {
+  const { t } = useLanguage();
+
   if (status === 'Lunas') {
     return (
       <span
@@ -232,7 +235,7 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
         }}
         className="text-[11px] font-bold px-3 py-1 rounded-full"
       >
-        Lunas
+        {t('status.paid')}
       </span>
     );
   }
@@ -246,7 +249,7 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
         }}
         className="text-[11px] font-bold px-3 py-1 rounded-full"
       >
-        Gagal
+        {t('status.failed')}
       </span>
     );
   }
@@ -259,7 +262,7 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
       }}
       className="text-[11px] font-bold px-3 py-1 rounded-full"
     >
-      Pending
+      {t('status.pending')}
     </span>
   );
 }
@@ -277,8 +280,9 @@ function SideNav({
   onLogout: () => Promise<void>;
   isLoggingOut: boolean;
 }) {
-  const displayName = currentUser?.full_name || currentUser?.email || 'Tenant';
-  const displaySubtitle = currentUser?.email || 'Tenant Area';
+  const { t } = useLanguage();
+  const displayName = currentUser?.full_name || currentUser?.email || t('common.tenant');
+  const displaySubtitle = currentUser?.email || t('tenant.applications.tenantArea');
   const profilePhoto =
     currentUser?.profile_photo_url ||
     'https://lh3.googleusercontent.com/aida-public/AB6AXuC96Sewl9eO6LFyL4YtlIUyYYMGLK9sxB841-UdivA4BJkrj_LBrQ2jvTAm4tRJKB--5zXLDZbJ7GMtN-EMkjWaowmWT8SKehRa6YGK6KqT-AYWNFEHSAAkEtAPCEv0oC-iGZi0Pq1upDFDZWxkfsAMADQKBkPB1FNZRH8EKCKOZ2QkaXNRym1AcXzD1w8SNH4ZSZW0n6Zo5UDVZo2USk8diEqUyOEwJQBoGufzXKtsXIlNn9mg8c30HMnA7oNPehqmozp1A7YQBbLL';
@@ -449,6 +453,7 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
 }
 
 function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
+  const { t } = useLanguage();
   const paidTransactions = transactions.filter((transaction) => transaction.status === 'Lunas');
   const totalPaid = paidTransactions.reduce((total, transaction) => {
     const numericAmount = Number(transaction.amount.replace(/[^\d]/g, ''));
@@ -466,7 +471,7 @@ function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
       >
         <div className="relative z-10">
           <p className="font-medium text-sm mb-1" style={{ color: 'rgba(255,255,255,0.8)' }}>
-            Total Pembayaran
+            {t('tenant.history.totalPayments')}
           </p>
           <h3 className="font-headline font-black tracking-tighter mb-4" style={{ fontSize: '2.8rem', lineHeight: 1.1 }}>
             {formatRupiah(totalPaid)}
@@ -475,14 +480,14 @@ function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
             <div
               className="glass-effect px-4 py-2 rounded-lg"
             >
-              <p className="text-[10px] font-bold uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>Terakhir Bayar</p>
+              <p className="text-[10px] font-bold uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>{t('tenant.history.lastPayment')}</p>
               <p className="text-sm font-semibold text-white">{lastPaid?.payDate ?? '-'}</p>
             </div>
             <div
               className="glass-effect px-4 py-2 rounded-lg"
             >
-              <p className="text-[10px] font-bold uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>Total Transaksi</p>
-              <p className="text-sm font-semibold text-white">{transactions.length} Transaksi</p>
+              <p className="text-[10px] font-bold uppercase" style={{ color: 'rgba(255,255,255,0.7)' }}>{t('tenant.history.totalTransactions')}</p>
+              <p className="text-sm font-semibold text-white">{t('tenant.history.transactionCount', { count: transactions.length })}</p>
             </div>
           </div>
         </div>
@@ -514,15 +519,15 @@ function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
               className="text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest"
               style={{ background: 'rgba(34,197,94,0.2)', color: '#004b1e' }}
             >
-              {lastPaid?.status ?? 'Pending'}
+              {lastPaid?.status === 'Lunas' ? t('status.paid') : lastPaid?.status === 'Gagal' ? t('status.failed') : t('status.pending')}
             </span>
           </div>
-          <p className="text-sm mb-1" style={{ color: '#3d4a3d' }}>Status Terakhir</p>
+          <p className="text-sm mb-1" style={{ color: '#3d4a3d' }}>{t('tenant.history.latestStatus')}</p>
           <h4 className="font-headline font-bold text-2xl" style={{ color: '#0f172a' }}>{lastPaid?.payDate ?? '-'}</h4>
         </div>
         <div className="mt-4 pt-4" style={{ borderTop: '1px solid #f8fafc' }}>
           <p className="text-xs" style={{ color: '#3d4a3d' }}>
-            {lastPaid ? `${lastPaid.periodDetail} telah diverifikasi oleh sistem.` : 'Belum ada pembayaran lunas yang tercatat.'}
+            {lastPaid ? t('tenant.history.verifiedBySystem', { item: lastPaid.periodDetail }) : t('tenant.history.noPaidPayment')}
           </p>
         </div>
       </div>
@@ -531,6 +536,7 @@ function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
 }
 
 function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const rowsPerPage = 4;
@@ -552,7 +558,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
         className="px-4 sm:px-8 py-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
         style={{ borderBottom: '1px solid #f8fafc' }}
       >
-        <h3 className="font-headline font-bold" style={{ color: '#0f172a' }}>Daftar Transaksi</h3>
+        <h3 className="font-headline font-bold" style={{ color: '#0f172a' }}>{t('tenant.history.transactionList')}</h3>
         <div className="flex gap-2 w-full sm:w-auto">
           <div
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm flex-1 sm:flex-none transition-all"
@@ -561,7 +567,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
             <Icon name="search" className="text-sm" style={{ fontSize: '18px' }} />
             <input
               className="bg-transparent border-none focus:outline-none p-0 text-sm w-full sm:w-40"
-              placeholder="Cari ID Transaksi..."
+              placeholder={t('tenant.history.searchPlaceholder')}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               style={{ color: '#111c2d' }}
@@ -583,7 +589,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr style={{ background: 'rgba(240,243,255,0.5)' }}>
-              {['ID Transaksi', 'Periode', 'Tanggal Bayar', 'Nominal', 'Status', 'Aksi'].map((h, i) => (
+              {[t('tenant.history.transactionId'), t('tenant.history.period'), t('tenant.history.paidDate'), t('tenant.history.amount'), t('common.status'), t('common.action')].map((h, i) => (
                 <th
                   key={h}
                   className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest"
@@ -627,7 +633,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
                       style={{ color: '#006e2f' }}
                     >
                       <Icon name="download" className="" style={{ fontSize: '18px' }} />
-                      Unduh
+                      {t('tenant.history.download')}
                     </button>
                   ) : (
                     <span className="text-xs italic" style={{ color: '#cbd5e1' }}>N/A</span>
@@ -662,7 +668,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
                   style={{ color: '#006e2f' }}
                 >
                   <Icon name="download" style={{ fontSize: '18px' }} />
-                  Unduh
+                  {t('tenant.history.download')}
                 </button>
               ) : (
                 <span className="text-xs italic" style={{ color: '#cbd5e1' }}>N/A</span>
@@ -805,6 +811,7 @@ export default function Page() {
   useInjectLink(GOOGLE_FONTS_URL);
   useInjectLink(MATERIAL_SYMBOLS_URL);
   const { user, logout, isLoading } = useAuth();
+  const { t } = useLanguage();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [historyError, setHistoryError] = useState('');
@@ -825,7 +832,7 @@ export default function Page() {
         }
       } catch (error) {
         if (isMounted) {
-          setHistoryError(error instanceof Error ? error.message : 'Gagal memuat riwayat.');
+          setHistoryError(error instanceof Error ? error.message : t('messages.loadPaymentsFailed'));
         }
       }
     }
@@ -844,7 +851,7 @@ export default function Page() {
       isMounted = false;
       window.removeEventListener('tenant-data-sync', handleTenantDataSync);
     };
-  }, [user?.role]);
+  }, [t, user?.role]);
 
   return (
     <>
@@ -873,10 +880,10 @@ export default function Page() {
                     className="font-headline font-black tracking-tight mb-2"
                     style={{ fontSize: 'clamp(1.75rem, 4vw, 2.5rem)', color: '#0f172a' }}
                   >
-                    Riwayat Pembayaran
+                    {t('tenant.history.title')}
                   </h2>
                   <p className="max-w-lg" style={{ color: '#3d4a3d' }}>
-                    Pantau semua transaksi penyewaan kamar Anda secara transparan dan akurat.
+                    {t('tenant.history.subtitle')}
                   </p>
                 </div>
                 <button
@@ -886,7 +893,7 @@ export default function Page() {
                   onMouseLeave={(e) => (e.currentTarget.style.background = '#f0f3ff')}
                 >
                   <Icon name="arrow_back" className="text-sm" style={{ fontSize: '18px' }} />
-                  Kembali ke Beranda
+                  {t('tenant.history.backHome')}
                 </button>
               </div>
 

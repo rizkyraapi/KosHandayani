@@ -4,18 +4,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ClipboardList, LayoutDashboard, LogOut, ReceiptText, ScrollText, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const tenantNavItems = [
-  { label: 'Dashboard', href: '/tenant/dashboard', icon: LayoutDashboard },
-  { label: 'Pengajuan Sewa', href: '/tenant/rental-applications', icon: ClipboardList },
-  { label: 'Tagihan', href: '/tenant/tagihan', icon: ReceiptText },
-  { label: 'Riwayat', href: '/tenant/riwayat', icon: ScrollText },
-  { label: 'Profil', href: '/tenant/profil', icon: UserRound },
+  { labelKey: 'common.dashboard', href: '/tenant/dashboard', icon: LayoutDashboard },
+  { labelKey: 'common.rentalApplications', href: '/tenant/rental-applications', icon: ClipboardList },
+  { labelKey: 'common.bill', href: '/tenant/tagihan', icon: ReceiptText },
+  { labelKey: 'common.history', href: '/tenant/riwayat', icon: ScrollText },
+  { labelKey: 'common.profile', href: '/tenant/profil', icon: UserRound },
 ];
 
 export default function TenantSidebar() {
   const pathname = usePathname();
   const { logout, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   return (
     <aside
@@ -42,13 +45,16 @@ export default function TenantSidebar() {
               }`}
             >
               <Icon size={18} />
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           );
         })}
       </nav>
 
       <div className="mt-auto border-t border-slate-200 pt-4">
+        <div className="mb-3">
+          <LanguageSwitcher compact />
+        </div>
         <button
           type="button"
           disabled={isLoading}
@@ -56,7 +62,7 @@ export default function TenantSidebar() {
           className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <LogOut size={18} />
-          Logout
+          {t('common.logout')}
         </button>
       </div>
     </aside>

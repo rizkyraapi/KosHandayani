@@ -3,6 +3,7 @@
 import axios from 'axios';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { createRoom, getBranches, getRoomById, updateRoom, type ApiBranch, type ApiRoom } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 
@@ -29,10 +30,10 @@ const genderTypes: Array<{ label: string; value: ApiRoom['gender_type'] }> = [
   { label: 'Mixed', value: 'mixed' },
 ];
 
-const roomStatuses: Array<{ label: string; value: ApiRoom['room_status'] }> = [
-  { label: 'Available', value: 'available' },
-  { label: 'Occupied', value: 'occupied' },
-  { label: 'Maintenance', value: 'maintenance' },
+const roomStatuses: Array<{ labelKey: string; value: ApiRoom['room_status'] }> = [
+  { labelKey: 'status.available', value: 'available' },
+  { labelKey: 'status.occupied', value: 'occupied' },
+  { labelKey: 'status.maintenance', value: 'maintenance' },
 ];
 
 const minRoomImages = 4;
@@ -125,6 +126,7 @@ function formatError(error: unknown) {
 function RoomFormPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
   const editRoomId = searchParams.get('edit');
   const isEditMode = Boolean(editRoomId);
   const [form, setForm] = useState({
@@ -607,7 +609,7 @@ function RoomFormPage() {
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={labelStyle}>Room Status</span>
+                <span style={labelStyle}>{t('owner.rooms.roomStatus')}</span>
                 <select
                   style={inputStyle}
                   value={form.room_status}
@@ -615,7 +617,7 @@ function RoomFormPage() {
                   onChange={(event) => setForm((current) => ({ ...current, room_status: event.target.value as ApiRoom['room_status'] }))}
                 >
                   {roomStatuses.map((status) => (
-                    <option key={status.value} value={status.value}>{status.label}</option>
+                    <option key={status.value} value={status.value}>{t(status.labelKey)}</option>
                   ))}
                 </select>
               </label>

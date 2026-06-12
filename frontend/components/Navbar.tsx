@@ -6,12 +6,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getRedirectPathForRole } from '@/lib/auth';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const navLinks = [
-  { label: 'Beranda', href: '/' },
-  { label: 'Semua Kamar', href: '/rooms' },
-  { label: 'Bantuan', href: '/#bantuan' },
+  { labelKey: 'common.home', href: '/' },
+  { labelKey: 'common.allRooms', href: '/rooms' },
+  { labelKey: 'common.help', href: '/#bantuan' },
 ];
 
 function isActiveLink(pathname: string, href: string) {
@@ -25,6 +27,7 @@ function isActiveLink(pathname: string, href: string) {
 export default function Navbar() {
   const pathname = usePathname();
   const { user, logout, isLoading } = useAuth();
+  const { t } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const dashboardHref = user ? getRedirectPathForRole(user.role) : '/login';
@@ -73,7 +76,7 @@ export default function Navbar() {
                 }`}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                {link.label}
+                {t(link.labelKey)}
               </Link>
             );
           })}
@@ -81,8 +84,9 @@ export default function Navbar() {
 
         {user ? (
           <div
-            className="hidden md:block relative"
+            className="hidden md:flex relative items-center gap-3"
           >
+            <LanguageSwitcher compact />
             <button
               type="button"
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-700 hover:bg-green-50 hover:text-green-700 transition-colors"
@@ -111,7 +115,7 @@ export default function Navbar() {
                   onClick={() => setProfileOpen(false)}
                 >
                   <LayoutDashboard size={18} />
-                  Dashboard
+                  {t('common.dashboard')}
                 </Link>
                 <button
                   type="button"
@@ -121,7 +125,7 @@ export default function Navbar() {
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <LogOut size={18} />
-                  Logout
+                  {t('common.logout')}
                 </button>
               </div>
             )}
@@ -132,7 +136,7 @@ export default function Navbar() {
               href="/login"
               className="px-5 py-2 font-medium text-slate-600 text-base tracking-[-0.4px] hover:text-green-600 transition-colors"
             >
-              Login
+              {t('common.login')}
             </Link>
             <Link
               href="/register"
@@ -141,15 +145,16 @@ export default function Navbar() {
                 background: 'linear-gradient(90deg, rgba(0,110,47,1) 0%, rgba(34,197,94,1) 100%)',
               }}
             >
-              Daftar
+              {t('common.register')}
             </Link>
+            <LanguageSwitcher compact />
           </div>
         )}
 
         <button
           type="button"
           className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
-          aria-label={mobileMenuOpen ? 'Tutup menu' : 'Buka menu'}
+          aria-label={mobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
           aria-expanded={mobileMenuOpen}
           onClick={() => setMobileMenuOpen((open) => !open)}
         >
@@ -171,7 +176,7 @@ export default function Navbar() {
                 }`}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                {link.label}
+                {t(link.labelKey)}
               </Link>
             );
           })}
@@ -191,7 +196,7 @@ export default function Navbar() {
                   className="flex-1 py-2 text-center font-medium text-slate-600 border border-slate-200 rounded-lg"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Dashboard
+                  {t('common.dashboard')}
                 </Link>
                 <button
                   type="button"
@@ -199,7 +204,7 @@ export default function Navbar() {
                   onClick={handleLogout}
                   className="flex-1 py-2 text-center font-semibold text-red-600 border border-red-100 rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Logout
+                  {t('common.logout')}
                 </button>
               </div>
             </div>
@@ -210,7 +215,7 @@ export default function Navbar() {
                 className="flex-1 py-2 text-center font-medium text-slate-600 border border-slate-200 rounded-lg"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Login
+                {t('common.login')}
               </Link>
               <Link
                 href="/register"
@@ -221,10 +226,11 @@ export default function Navbar() {
                 }}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Daftar
+                {t('common.register')}
               </Link>
             </div>
           )}
+          <LanguageSwitcher />
           </div>
         )}
       </nav>

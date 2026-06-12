@@ -2,8 +2,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
 import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
+import type { Locale } from '@/lib/i18n';
 
 /* ═══════════════════════════════════════════════════════════════
    ALL CUSTOM STYLES — fonts, colors, utilities, Material Symbols,
@@ -195,11 +197,11 @@ body { font-family: 'Inter', sans-serif; }
    Static data
 ───────────────────────────────────────────── */
 const NAV_ITEMS = [
-  { icon: 'home',           label: 'Dashboard',   href: '/tenant/dashboard', active: true  },
-  { icon: 'door_front',     label: 'Kamar Saya',  href: '/rooms', active: false },
-  { icon: 'request_quote',  label: 'Tagihan',     href: '/tenant/tagihan', active: false },
-  { icon: 'history',        label: 'Riwayat',     href: '/tenant/riwayat', active: false },
-  { icon: 'account_circle', label: 'Profil',      href: '/tenant/profil', active: false },
+  { icon: 'home',           labelKey: 'common.dashboard', href: '/tenant/dashboard', active: true  },
+  { icon: 'door_front',     labelKey: 'tenant.billing.myRoom', href: '/rooms', active: false },
+  { icon: 'request_quote',  labelKey: 'common.bill', href: '/tenant/tagihan', active: false },
+  { icon: 'history',        labelKey: 'common.history', href: '/tenant/riwayat', active: false },
+  { icon: 'account_circle', labelKey: 'common.profile', href: '/tenant/profil', active: false },
 ];
 
 const HOUSE_RULES = [
@@ -273,9 +275,9 @@ function formatRupiah(value?: number | null) {
   }).format(value ?? 0);
 }
 
-function formatDate(value?: string | null) {
+function formatDate(value?: string | null, locale: Locale = 'id') {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', { dateStyle: 'medium' }).format(new Date(value));
 }
 
 function normalizePaymentStatus(payment?: Payment | null) {
@@ -286,13 +288,13 @@ function normalizePaymentStatus(payment?: Payment | null) {
   return 'pending';
 }
 
-function getPaymentStatusLabel(payment?: Payment | null) {
+function getPaymentStatusLabel(payment: Payment | null | undefined, t: (key: string) => string) {
   const status = normalizePaymentStatus(payment);
-  if (status === 'paid') return 'Lunas';
-  if (status === 'failed') return 'Gagal';
-  if (status === 'pending') return 'Menunggu Pembayaran';
+  if (status === 'paid') return t('status.paid');
+  if (status === 'failed') return t('status.failed');
+  if (status === 'pending') return t('status.pendingPayment');
 
-  return 'Belum ada tagihan';
+  return t('tenant.billing.noActiveBill');
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -300,11 +302,12 @@ function getPaymentStatusLabel(payment?: Payment | null) {
 ═══════════════════════════════════════════════════════════════ */
 export default function Page() {
   const { user, logout, isLoading } = useAuth();
+  const { locale, t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [applications, setApplications] = useState<RentalApplication[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [applicationsError, setApplicationsError] = useState('');
-  const displayName = user?.full_name || 'Tenant';
+  const displayName = user?.full_name || t('common.tenant');
   const isProfileComplete = Boolean(user?.profile_completed);
   const activePayment = payments.find((payment) => normalizePaymentStatus(payment) === 'pending')
     ?? payments.find((payment) => normalizePaymentStatus(payment) === 'failed')
@@ -316,7 +319,7 @@ export default function Page() {
     ?? applications[0]
     ?? null;
   const activeRoom = activeApplication?.room;
-  const paymentStatus = getPaymentStatusLabel(activePayment);
+  const paymentStatus = getPaymentStatusLabel(activePayment, t);
 
   useEffect(() => {
     if (document.getElementById('kos-styles')) return;
@@ -394,7 +397,7 @@ export default function Page() {
           {NAV_ITEMS.map((item) =>
             item.active ? (
               <a
-                key={item.label}
+                key={item.labelKey}
                 href={item.href}
                 className="bg-green-50 text-green-700 rounded-lg flex items-center gap-3 px-4 py-3 font-semibold"
                 style={{ transform: 'scale(0.95)' }}
@@ -405,17 +408,17 @@ export default function Page() {
                 >
                   {item.icon}
                 </span>
-                <span className="font-inter text-sm">{item.label}</span>
+                <span className="font-inter text-sm">{t(item.labelKey)}</span>
               </a>
             ) : (
               <a
-                key={item.label}
+                key={item.labelKey}
                 href={item.href}
                 className="text-slate-500 hover:bg-slate-200 flex items-center gap-3 px-4 py-3 rounded-lg transition-all"
                 style={{ transform: 'scale(0.95)' }}
               >
                 <span className="material-symbols-outlined">{item.icon}</span>
-                <span className="font-inter text-sm">{item.label}</span>
+                <span className="font-inter text-sm">{t(item.labelKey)}</span>
               </a>
             )
           )}
@@ -431,7 +434,7 @@ export default function Page() {
             />
             <div className="overflow-hidden">
               <p className="text-xs font-bold text-on-surface truncate">{displayName}</p>
-              <p className="text-on-surface-variant truncate" style={{ fontSize: '10px' }}>Premium Tenant</p>
+              <p className="text-on-surface-variant truncate" style={{ fontSize: '10px' }}>{t('tenant.dashboard.premiumTenant')}</p>
             </div>
           </div>
           <button
@@ -442,7 +445,7 @@ export default function Page() {
             style={{ cursor: isLoading ? 'not-allowed' : 'pointer' }}
           >
             <span className="material-symbols-outlined text-sm">logout</span>
-            Logout
+            {t('common.logout')}
           </button>
         </div>
       </aside>
@@ -456,16 +459,16 @@ export default function Page() {
             <button
               className="mobile-menu-btn lg:hidden p-2 rounded-lg bg-surface-container-lowest shadow-sm"
               onClick={() => setSidebarOpen(true)}
-              aria-label="Buka menu"
+              aria-label={t('nav.openMenu')}
             >
               <span className="material-symbols-outlined text-on-surface-variant">menu</span>
             </button>
             <div>
               <h2 className="text-2xl lg:text-3xl font-extrabold text-on-surface font-manrope tracking-tight">
-                Selamat Datang, {displayName}!
+                {t('tenant.dashboard.welcome', { name: displayName })}
               </h2>
               <p className="text-on-surface-variant mt-1 font-medium text-sm lg:text-base">
-                Senang melihat Anda kembali di hunian kami.
+                {t('tenant.dashboard.subtitle')}
               </p>
             </div>
           </div>
@@ -532,10 +535,10 @@ export default function Page() {
                 <div>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary-container text-on-primary-container rounded-full text-xs font-bold mb-4">
                     <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    Status sewa ({activeApplication?.payment_status === 'paid' ? 'Aktif' : activeApplication ? 'Pengajuan' : 'Belum Ada'})
+                    {t('tenant.dashboard.rentalStatus')} ({activeApplication?.payment_status === 'paid' ? t('status.active') : activeApplication ? t('common.rentalApplication') : t('empty.noData')})
                   </span>
                   <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">
-                    Tagihan terkini
+                    {t('tenant.dashboard.currentBill')}
                   </h3>
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-3xl lg:text-4xl font-extrabold text-on-surface font-manrope">
@@ -545,35 +548,39 @@ export default function Page() {
                   </div>
                   <p className="text-error font-bold text-sm mt-2 flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">event</span>
-                    {activePayment?.paid_at ? `Dibayar ${formatDate(activePayment.paid_at)}` : activeApplication?.move_in_date ? `Mulai ${formatDate(activeApplication.move_in_date)}` : 'Belum ada jadwal sewa'}
+                    {activePayment?.paid_at
+                      ? t('tenant.dashboard.paidAt', { date: formatDate(activePayment.paid_at, locale) })
+                      : activeApplication?.move_in_date
+                        ? t('tenant.dashboard.startAt', { date: formatDate(activeApplication.move_in_date, locale) })
+                        : t('tenant.dashboard.noSchedule')}
                   </p>
                 </div>
                 <div className="text-left sm:text-right">
                   <p className="text-xs text-on-surface-variant font-bold uppercase tracking-widest mb-1">
-                    Metode Pembayaran
+                    {t('tenant.dashboard.paymentMethod')}
                   </p>
                   <p className="text-sm font-semibold text-on-surface">{activePayment?.payment_type || '-'}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
                 <Link href="/tenant/tagihan" className="bg-linear-to-r from-primary to-primary-container text-on-primary py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-shadow-primary-20 transition-all active:scale-95 group">
-                  {normalizePaymentStatus(activePayment) === 'paid' ? 'Lihat Tagihan' : 'Bayar Sekarang'}
+                  {normalizePaymentStatus(activePayment) === 'paid' ? t('tenant.dashboard.viewBill') : t('tenant.applications.payNow')}
                   <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
                     arrow_forward
                   </span>
                 </Link>
                 <Link href="/tenant/tagihan" className="bg-surface-container-low text-on-surface py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-bg-surface-container-high transition-all active:scale-95">
-                  Rincian Tagihan
+                  {t('tenant.dashboard.billDetails')}
                   <span className="material-symbols-outlined">receipt_long</span>
                 </Link>
               </div>
             </div>
             <div className="bg-surface-container-low px-6 lg:px-8 py-4 flex items-center justify-between">
               <p className="text-xs text-on-surface-variant font-medium">
-                Terakhir dibayar: {formatDate(activePayment?.paid_at)}
+                {t('tenant.dashboard.lastPaid', { date: formatDate(activePayment?.paid_at, locale) })}
               </p>
               <Link href="/tenant/riwayat" className="text-xs text-primary font-bold hover:underline">
-                Lihat Invoice Sebelumnya
+                {t('tenant.dashboard.previousInvoice')}
               </Link>
             </div>
           </div>
@@ -582,14 +589,14 @@ export default function Page() {
           <div className="col-span-12 lg:col-span-4 bg-surface-container-low rounded-2xl p-6 lg:p-8 relative overflow-hidden flex flex-col">
             <div className="relative z-10">
               <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                Hunian Anda
+                {t('tenant.dashboard.yourResidence')}
               </p>
               <h3 className="text-xl lg:text-2xl font-bold text-on-surface font-manrope leading-tight">
-                {activeRoom?.room_name || 'Belum ada kamar aktif'}
+                {activeRoom?.room_name || t('tenant.dashboard.noActiveRoom')}
               </h3>
               <p className="text-on-surface-variant font-semibold flex items-center gap-1.5 mt-1">
                 <span className="material-symbols-outlined text-base">location_on</span>
-                {activeRoom?.branch?.branch_name || 'Cabang belum diatur'}
+                {activeRoom?.branch?.branch_name || t('tenant.applications.branchUnset')}
               </p>
             </div>
             <div className="mt-8 flex-1">
@@ -610,7 +617,7 @@ export default function Page() {
             <div className="relative mt-auto">
               <img
                 src={activeRoom?.thumbnail || activeRoom?.image_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAwEFa1B7bMp3MpBhenzOvyffcPdrh39WdKdbm1KUM8U085YD1T7EaIU5VlsP_N_uKwbUbXuZHRf2nlM7sz_8mWwvO35Q-xNRRTu0NAsRmelljA6ntwBx6bYCklPej3fsGXzKZ9qOSgwwtsWV9vkFJa9jBZrBXV1wrCx72UKXPwDJLHuo4ua95ICftEoQmxKN04tU-7y6irRemrxebklyqJicNqKnKbeM5q_fjMSa3kVwIYwJjD7zfY_apG4NfuAiNyQGPbpgUFD2N_'}
-                alt={activeRoom?.room_name || 'Kamar'}
+                alt={activeRoom?.room_name || t('common.room')}
                 className="w-full h-32 object-cover rounded-xl shadow-inner brightness-90"
               />
               <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent rounded-xl flex items-end p-4">
@@ -700,16 +707,16 @@ export default function Page() {
             <div className="bg-surface-container-lowest rounded-2xl p-6 lg:p-8 shadow-sm">
               <div className="flex justify-between items-center mb-6">
                 <h4 className="text-xl font-bold font-manrope text-on-surface">
-                  Pengajuan Sewa
+                  {t('tenant.applications.title')}
                 </h4>
                 <Link href="/tenant/rental-applications" className="text-primary font-bold text-sm">
-                  Lihat Semua
+                  {t('tenant.dashboard.viewAll')}
                 </Link>
               </div>
               {applicationsError ? (
                 <p className="text-error text-sm font-bold">{applicationsError}</p>
               ) : applications.length === 0 ? (
-                <p className="text-on-surface-variant text-sm">Belum ada pengajuan sewa.</p>
+                <p className="text-on-surface-variant text-sm">{t('empty.noApplications')}</p>
               ) : (
                 <div className="space-y-3">
                   {applications.map((application) => (
@@ -719,8 +726,8 @@ export default function Page() {
                       className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-container-low p-4 text-on-surface no-underline"
                     >
                       <div>
-                        <p className="font-bold">{application.room?.room_name || 'Kamar tidak tersedia'}</p>
-                        <p className="text-sm text-on-surface-variant">{application.room?.branch?.branch_name || 'Cabang belum diatur'} - {application.duration}</p>
+                        <p className="font-bold">{application.room?.room_name || t('tenant.applications.roomUnavailable')}</p>
+                        <p className="text-sm text-on-surface-variant">{application.room?.branch?.branch_name || t('tenant.applications.branchUnset')} - {application.duration}</p>
                       </div>
                       <RentalApplicationStatusBadge status={application.status} />
                     </Link>

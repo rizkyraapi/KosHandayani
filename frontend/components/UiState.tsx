@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertCircle, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type UiStateProps = {
   title: string;
@@ -9,13 +10,15 @@ type UiStateProps = {
   onAction?: () => void;
 };
 
-export function LoadingState({ title = 'Memuat data', description }: Partial<UiStateProps>) {
+export function LoadingState({ title, description }: Partial<UiStateProps>) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-xl border border-[#e7eeff] bg-[#f9f9ff] px-5 py-10 text-center">
       <span className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#006e2f] shadow-sm">
         <Loader2 className="animate-spin" size={20} />
       </span>
-      <p className="mt-3 text-base font-semibold text-[#111c2d]">{title}</p>
+      <p className="mt-3 text-base font-semibold text-[#111c2d]">{title || t('common.loading')}</p>
       {description && <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[#3d4a3d]">{description}</p>}
     </div>
   );
@@ -43,7 +46,9 @@ export function EmptyState({ title, description, actionLabel, onAction }: UiStat
   );
 }
 
-export function ErrorState({ title, description, actionLabel = 'Coba lagi', onAction }: UiStateProps) {
+export function ErrorState({ title, description, actionLabel, onAction }: UiStateProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-xl border border-red-100 bg-red-50 px-5 py-5 text-red-800">
       <div className="flex items-start gap-3">
@@ -58,7 +63,7 @@ export function ErrorState({ title, description, actionLabel = 'Coba lagi', onAc
               className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-white px-3 text-sm font-bold text-red-800 transition hover:bg-red-100"
             >
               <RefreshCw size={15} />
-              {actionLabel}
+              {actionLabel || t('common.tryAgain')}
             </button>
           )}
         </div>

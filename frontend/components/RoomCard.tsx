@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface Amenity {
   icon: string;
@@ -40,6 +41,7 @@ export default function RoomCard({
   amenities = defaultAmenities,
 }: RoomCardProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [isHovered, setIsHovered] = React.useState(false);
   const [failedImageUrl, setFailedImageUrl] = React.useState<string | null>(null);
   const [buttonHoverStates, setButtonHoverStates] = React.useState({
@@ -49,9 +51,9 @@ export default function RoomCard({
   const displayedImageUrl = failedImageUrl === resolvedImageUrl ? fallbackImageUrl : resolvedImageUrl;
   const normalizedStatus = status === 'Kosong' ? 'available' : status === 'Terisi' ? 'occupied' : status;
   const statusMeta = {
-    available: { label: 'Available', background: '#dcfce7', color: '#166534', dot: '#15803d' },
-    occupied: { label: 'Occupied', background: '#fee2e2', color: '#991b1b', dot: '#dc2626' },
-    maintenance: { label: 'Maintenance', background: '#e7eeff', color: '#3d4a3d', dot: '#6d7b6c' },
+    available: { label: t('room.available'), background: '#dcfce7', color: '#166534', dot: '#15803d' },
+    occupied: { label: t('room.occupied'), background: '#fee2e2', color: '#991b1b', dot: '#dc2626' },
+    maintenance: { label: t('room.maintenance'), background: '#e7eeff', color: '#3d4a3d', dot: '#6d7b6c' },
   }[normalizedStatus];
 
   function openDetail() {
@@ -332,7 +334,7 @@ export default function RoomCard({
                 margin: 0,
               }}
             >
-              PER BULAN
+              {t('tenant.applications.perMonth').replace('/', '').trim().toUpperCase()}
             </p>
           </div>
         </div>
@@ -395,7 +397,7 @@ export default function RoomCard({
               openDetail();
             }}
           >
-            Lihat Detail
+            {t('room.viewDetail')}
           </button>
         </div>
       </div>

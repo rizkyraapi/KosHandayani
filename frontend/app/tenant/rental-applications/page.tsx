@@ -17,16 +17,18 @@ import {
   XCircle,
 } from 'lucide-react';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { createPayment, getMyRentalApplications, syncPaymentStatus, type RentalApplication } from '@/lib/api';
+import type { Locale } from '@/lib/i18n';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=700';
 
-function formatDate(value?: string | null) {
+function formatDate(value?: string | null, locale: Locale = 'id') {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', { dateStyle: 'medium' }).format(new Date(value));
 }
 
 function formatRupiah(value?: number | null) {
@@ -42,14 +44,14 @@ function isAwaitingPayment(application: RentalApplication) {
     && (application.payment_status === 'pending' || application.payment_status === 'unpaid');
 }
 
-function paymentStatusLabel(application: RentalApplication) {
-  if (application.status === 'pending') return 'Menunggu Persetujuan Owner';
-  if (isAwaitingPayment(application)) return 'Menunggu Pembayaran';
-  if (application.status === 'approved' && application.payment_status === 'paid') return 'Pembayaran Berhasil';
-  if (application.payment_status === 'failed') return 'Pembayaran Gagal';
-  if (application.status === 'rejected') return 'Pengajuan Ditolak';
+function paymentStatusLabel(application: RentalApplication, t: (key: string) => string) {
+  if (application.status === 'pending') return t('status.awaitingOwnerApproval');
+  if (isAwaitingPayment(application)) return t('status.pendingPayment');
+  if (application.status === 'approved' && application.payment_status === 'paid') return t('status.paymentSuccessful');
+  if (application.payment_status === 'failed') return t('status.paymentFailed');
+  if (application.status === 'rejected') return t('status.applicationRejected');
 
-  return application.payment_status ?? '-';
+  return application.payment_status ? t(`status.${application.payment_status}`) : t('common.none');
 }
 
 function paymentTone(application: RentalApplication) {
@@ -172,6 +174,7 @@ function LoadingCards() {
 
 export default function Page() {
   const router = useRouter();
+  const { locale, t } = useLanguage();
   const [applications, setApplications] = useState<RentalApplication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -192,11 +195,11 @@ export default function Page() {
       const data = await getMyRentalApplications();
       setApplications(data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat pengajuan sewa.');
+      setError(loadError instanceof Error ? loadError.message : t('messages.loadApplicationsFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void Promise.resolve().then(refreshApplications);
@@ -225,22 +228,22 @@ export default function Page() {
         onSuccess: () => {
           void syncPaymentStatus(payment.order_id)
             .catch(() => null)
-            .then(() => refreshAfterPayment('Pembayaran berhasil. Data pengajuan diperbarui.', true));
+            .then(() => refreshAfterPayment(t('messages.paymentSuccessRefresh'), true));
         },
         onPending: () => {
           void syncPaymentStatus(payment.order_id)
             .catch(() => null)
-            .then(() => refreshAfterPayment('Pembayaran sedang diproses.', true));
+            .then(() => refreshAfterPayment(t('messages.paymentPending'), true));
         },
         onError: () => {
-          void refreshAfterPayment('Pembayaran gagal diproses.');
+          void refreshAfterPayment(t('status.paymentFailed'));
         },
         onClose: () => {
-          setMessage('Pembayaran dibatalkan.');
+          setMessage(t('messages.paymentCancelled'));
         },
       });
     } catch (paymentError) {
-      setError(paymentError instanceof Error ? paymentError.message : 'Gagal membuka pembayaran.');
+      setError(paymentError instanceof Error ? paymentError.message : t('messages.paymentOpenFailed'));
     } finally {
       setPayingApplicationId(null);
     }
@@ -257,16 +260,16 @@ export default function Page() {
             <div className="max-w-2xl">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[#006e2f]">
                 <FileText size={14} />
-                Tenant Area
+                {t('tenant.applications.tenantArea')}
               </div>
               <h1
                 className="m-0 text-3xl font-extrabold tracking-tight text-[#111c2d] sm:text-4xl"
                 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
               >
-                Pengajuan Sewa
+                {t('tenant.applications.title')}
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[#3d4a3d] sm:text-base">
-                Pantau progres pengajuan kamar, cek detail dokumen, dan lanjutkan pembayaran dari satu tempat yang rapi.
+                {t('tenant.applications.subtitle')}
               </p>
             </div>
             <Link
@@ -274,7 +277,7 @@ export default function Page() {
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#d8e3fb] bg-[#f0f3ff] px-4 text-sm font-bold text-[#111c2d] transition hover:border-[#bccbb9] hover:bg-[#e7eeff]"
             >
               <Home size={17} />
-              Lihat Kamar
+              {t('tenant.applications.viewRooms')}
             </Link>
           </div>
         </header>
@@ -283,10 +286,10 @@ export default function Page() {
         {error && <Notice type="error">{error}</Notice>}
 
         <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total Pengajuan" value={summary.total} icon={FileText} tone="blue" />
-          <StatCard label="Menunggu Review" value={summary.pending} icon={Clock3} tone="amber" />
-          <StatCard label="Disetujui" value={summary.approved} icon={CheckCircle2} tone="green" />
-          <StatCard label="Perlu Dibayar" value={summary.needPayment} icon={CreditCard} tone="green" />
+          <StatCard label={t('tenant.applications.total')} value={summary.total} icon={FileText} tone="blue" />
+          <StatCard label={t('tenant.applications.waitingReview')} value={summary.pending} icon={Clock3} tone="amber" />
+          <StatCard label={t('tenant.applications.approved')} value={summary.approved} icon={CheckCircle2} tone="green" />
+          <StatCard label={t('tenant.applications.needPayment')} value={summary.needPayment} icon={CreditCard} tone="green" />
         </section>
 
         <section className="rounded-2xl border border-white bg-white p-4 shadow-sm sm:p-5 lg:p-6">
@@ -296,10 +299,10 @@ export default function Page() {
                 className="m-0 text-xl font-extrabold text-[#111c2d]"
                 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
               >
-                Daftar Pengajuan
+                {t('tenant.applications.listTitle')}
               </h2>
               <p className="mt-1 text-sm text-[#3d4a3d]">
-                Status terbaru akan muncul otomatis setelah owner atau sistem pembayaran memperbarui data.
+                {t('tenant.applications.listDescription')}
               </p>
             </div>
           </div>
@@ -315,16 +318,16 @@ export default function Page() {
                 className="mt-4 text-xl font-extrabold text-[#111c2d]"
                 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
               >
-                Belum ada pengajuan sewa
+                {t('empty.noApplications')}
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#3d4a3d]">
-                Setelah memilih kamar dan mengirim dokumen, status pengajuan akan tampil di sini.
+                {t('owner.applications.emptyDescription')}
               </p>
               <Link
                 href="/rooms"
                 className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#006e2f] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#005321]"
               >
-                Cari Kamar
+                {t('tenant.applications.findRoom')}
                 <ChevronRight size={17} />
               </Link>
             </div>
@@ -346,11 +349,11 @@ export default function Page() {
                       <Link
                         href={`/tenant/rental-applications/${application.id}`}
                         className="block overflow-hidden rounded-xl bg-[#e7eeff]"
-                        aria-label={`Detail ${room?.room_name || 'pengajuan sewa'}`}
+                        aria-label={`${t('common.detail')} ${room?.room_name || t('common.rentalApplication')}`}
                       >
                         <img
                           src={room?.thumbnail || room?.image_url || fallbackImageUrl}
-                          alt={room?.room_name || 'Kamar'}
+                          alt={room?.room_name || t('common.room')}
                           className="h-28 w-full object-cover transition duration-300 hover:scale-105 sm:h-24"
                         />
                       </Link>
@@ -360,7 +363,7 @@ export default function Page() {
                           <RentalApplicationStatusBadge status={application.status} />
                           <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${tone.bg} ${tone.text}`}>
                             <ToneIcon size={13} />
-                            {paymentStatusLabel(application)}
+                            {paymentStatusLabel(application, t)}
                           </span>
                         </div>
 
@@ -372,14 +375,14 @@ export default function Page() {
                             className="m-0 truncate text-lg font-extrabold tracking-tight"
                             style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
                           >
-                            {room?.room_name || 'Kamar tidak tersedia'}
+                            {room?.room_name || t('tenant.applications.roomUnavailable')}
                           </h3>
                         </Link>
 
                         <div className="mt-2 grid gap-2 text-sm text-[#3d4a3d] sm:grid-cols-2">
                           <span className="flex min-w-0 items-center gap-2">
                             <MapPin className="shrink-0 text-[#006e2f]" size={16} />
-                            <span className="truncate">{room?.branch?.branch_name || 'Cabang belum diatur'}</span>
+                            <span className="truncate">{room?.branch?.branch_name || t('tenant.applications.branchUnset')}</span>
                           </span>
                           <span className="flex items-center gap-2">
                             <Clock3 className="shrink-0 text-[#006e2f]" size={16} />
@@ -387,12 +390,12 @@ export default function Page() {
                           </span>
                           <span className="flex items-center gap-2">
                             <CalendarDays className="shrink-0 text-[#006e2f]" size={16} />
-                            <span>Diajukan {formatDate(application.created_at)}</span>
+                            <span>{t('tenant.applications.submitted', { date: formatDate(application.created_at, locale) })}</span>
                           </span>
                           {typeof room?.price === 'number' && (
                             <span className="flex items-center gap-2 font-semibold text-[#111c2d]">
                               <CreditCard className="shrink-0 text-[#006e2f]" size={16} />
-                              <span>{formatRupiah(room.price)} / bulan</span>
+                              <span>{formatRupiah(room.price)} {t('tenant.applications.perMonth')}</span>
                             </span>
                           )}
                         </div>
@@ -407,14 +410,14 @@ export default function Page() {
                             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#006e2f] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#005321] disabled:cursor-not-allowed disabled:opacity-70 lg:flex-none"
                           >
                             {isPaying ? <Loader2 className="animate-spin" size={17} /> : <CreditCard size={17} />}
-                            {isPaying ? 'Memproses...' : 'Bayar Sekarang'}
+                            {isPaying ? t('common.processing') : t('tenant.applications.payNow')}
                           </button>
                         )}
                         <Link
                           href={`/tenant/rental-applications/${application.id}`}
                           className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[#d8e3fb] bg-[#f0f3ff] px-4 text-sm font-bold text-[#111c2d] transition hover:border-[#bccbb9] hover:bg-[#e7eeff] lg:flex-none"
                         >
-                          Detail
+                          {t('common.detail')}
                           <ChevronRight size={17} />
                         </Link>
                       </div>

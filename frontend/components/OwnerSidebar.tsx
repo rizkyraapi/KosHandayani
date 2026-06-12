@@ -13,14 +13,16 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const ownerNavItems = [
-  { label: 'Dashboard', href: '/owner/dashboard', icon: LayoutDashboard },
-  { label: 'Data Kamar', href: '/owner/rooms', icon: BedDouble },
-  { label: 'Pengajuan Sewa', href: '/owner/rental-applications', icon: ClipboardList },
-  { label: 'Penyewa Aktif', href: '/owner/tenants', icon: UsersRound },
-  { label: 'Tagihan', href: '/owner/payments', icon: ReceiptText },
-  { label: 'Laporan', href: '/owner/reports', icon: BarChart3 },
+  { labelKey: 'common.dashboard', href: '/owner/dashboard', icon: LayoutDashboard },
+  { labelKey: 'nav.ownerRooms', href: '/owner/rooms', icon: BedDouble },
+  { labelKey: 'common.rentalApplications', href: '/owner/rental-applications', icon: ClipboardList },
+  { labelKey: 'common.activeTenants', href: '/owner/tenants', icon: UsersRound },
+  { labelKey: 'common.payments', href: '/owner/payments', icon: ReceiptText },
+  { labelKey: 'common.reports', href: '/owner/reports', icon: BarChart3 },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -34,6 +36,7 @@ function isActivePath(pathname: string, href: string) {
 export default function OwnerSidebar() {
   const pathname = usePathname();
   const { logout, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   return (
     <aside
@@ -56,7 +59,7 @@ export default function OwnerSidebar() {
     >
       <Link
         href="/owner/dashboard"
-        aria-label="Owner Dashboard"
+        aria-label={t('common.ownerDashboard')}
         style={{
           display: 'block',
           marginBottom: 28,
@@ -105,13 +108,16 @@ export default function OwnerSidebar() {
               }}
             >
               <Icon size={20} style={{ flexShrink: 0 }} />
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           );
         })}
       </nav>
 
       <div style={{ marginTop: 'auto', borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+        <div style={{ marginBottom: 12 }}>
+          <LanguageSwitcher compact />
+        </div>
         <button
           type="button"
           disabled={isLoading}
@@ -133,7 +139,7 @@ export default function OwnerSidebar() {
           }}
         >
           <LogOut size={20} style={{ flexShrink: 0 }} />
-          Logout
+          {t('common.logout')}
         </button>
       </div>
     </aside>
