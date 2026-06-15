@@ -32,7 +32,7 @@ class RentalApplicationController extends Controller
             'kk_file' => $kkPath,
             'status' => 'pending',
             'payment_status' => 'pending',
-        ])->load(['user', 'payment', 'room.branch', 'room.facilities', 'room.images']);
+        ])->load(['user', 'payment', 'roomOccupancy', 'room.branch', 'room.facilities', 'room.images']);
 
         return response()->json([
             'success' => true,
@@ -47,7 +47,7 @@ class RentalApplicationController extends Controller
             return $response;
         }
 
-        $applications = RentalApplication::with(['payment', 'room.branch', 'room.facilities'])
+        $applications = RentalApplication::with(['payment', 'roomOccupancy', 'room.branch', 'room.facilities'])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->get()
@@ -66,7 +66,7 @@ class RentalApplicationController extends Controller
             return $response;
         }
 
-        $application = RentalApplication::with(['user', 'payment', 'room.branch', 'room.facilities', 'room.images'])
+        $application = RentalApplication::with(['user', 'payment', 'roomOccupancy', 'room.branch', 'room.facilities', 'room.images'])
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
 
@@ -228,6 +228,8 @@ class RentalApplicationController extends Controller
                 'rental_application_id' => $payment->rental_application_id,
                 'order_id' => $payment->order_id,
                 'transaction_id' => $payment->transaction_id,
+                'subtotal_amount' => $payment->subtotal_amount,
+                'discount_amount' => $payment->discount_amount,
                 'gross_amount' => $payment->gross_amount,
                 'payment_type' => $payment->payment_type,
                 'transaction_status' => $payment->transaction_status,
@@ -235,6 +237,20 @@ class RentalApplicationController extends Controller
                 'paid_at' => optional($payment->paid_at)->toDateTimeString(),
                 'created_at' => $payment->created_at,
                 'updated_at' => $payment->updated_at,
+            ] : null;
+        }
+
+        if ($application->relationLoaded('roomOccupancy')) {
+            $occupancy = $application->getRelation('roomOccupancy');
+            $data['room_occupancy'] = $occupancy ? [
+                'id' => $occupancy->id,
+                'room_occupancy_id' => $occupancy->id,
+                'user_id' => $occupancy->user_id,
+                'room_id' => $occupancy->room_id,
+                'rental_application_id' => $occupancy->rental_application_id,
+                'start_date' => optional($occupancy->start_date)->toDateString(),
+                'end_date' => optional($occupancy->end_date)->toDateString(),
+                'status' => $occupancy->status,
             ] : null;
         }
 

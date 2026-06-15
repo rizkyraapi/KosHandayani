@@ -26,6 +26,7 @@ import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBa
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { RentalApplication } from '@/lib/api';
 import type { Locale } from '@/lib/i18n';
+import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=900';
 
@@ -42,12 +43,6 @@ function formatRupiah(value?: number | null) {
     currency: 'IDR',
     maximumFractionDigits: 0,
   }).format(value ?? 0);
-}
-
-function getDurationInMonths(application: RentalApplication) {
-  const matches = application.duration?.match(/\d+/);
-
-  return Math.max(1, Number(matches?.[0] ?? 1));
 }
 
 function isAwaitingPayment(application: RentalApplication) {
@@ -246,9 +241,18 @@ function TenantRentalApplicationDetailView({
   const canPay = isAwaitingPayment(application);
   const tone = tenantPaymentTone(application);
   const ToneIcon = tone.icon;
-  const durationMonths = getDurationInMonths(application);
   const monthlyPrice = typeof room?.price === 'number' ? room.price : null;
-  const totalAmount = payment?.gross_amount ?? (monthlyPrice ? monthlyPrice * durationMonths : null);
+  const paymentBreakdown = getRentalPaymentBreakdown({
+    monthlyPrice,
+    duration: application.duration,
+    subtotalAmount: payment?.subtotal_amount,
+    discountAmount: payment?.discount_amount,
+    grossAmount: payment?.gross_amount,
+  });
+  const durationMonths = paymentBreakdown.durationMonths;
+  const subtotalAmount = payment || monthlyPrice !== null ? paymentBreakdown.subtotalAmount : null;
+  const discountAmount = payment || monthlyPrice !== null ? paymentBreakdown.discountAmount : null;
+  const totalAmount = payment || monthlyPrice !== null ? paymentBreakdown.grossAmount : null;
   const roomImage = room?.thumbnail || room?.image_url || fallbackImageUrl;
   const isPaid = application.payment_status === 'paid';
 
@@ -393,6 +397,8 @@ function TenantRentalApplicationDetailView({
             <div className="mt-3">
               <SummaryRow label={t('tenant.detail.monthlyPrice')} value={monthlyPrice !== null ? formatRupiah(monthlyPrice) : '-'} />
               <SummaryRow label={t('tenant.detail.duration')} value={t('tenant.detail.months', { count: durationMonths })} />
+              <SummaryRow label={t('tenant.detail.subtotal')} value={subtotalAmount !== null ? formatRupiah(subtotalAmount) : '-'} />
+              <SummaryRow label={t('tenant.detail.discount')} value={discountAmount !== null ? (discountAmount > 0 ? `-${formatRupiah(discountAmount)}` : formatRupiah(0)) : '-'} />
               <SummaryRow label={t('tenant.detail.paymentAmount')} value={totalAmount !== null ? formatRupiah(totalAmount) : '-'} />
               <SummaryRow label={t('tenant.detail.orderId')} value={payment?.order_id || '-'} />
               <SummaryRow label={t('owner.applications.moveInDate')} value={formatDate(application.move_in_date, locale)} />

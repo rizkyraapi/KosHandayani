@@ -2,11 +2,14 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\OwnerDataController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RentalApplicationController;
 use App\Http\Controllers\RoomController;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 
 // PUBLIC
@@ -16,6 +19,46 @@ Route::get('/branches', [BranchController::class, 'index']);
 Route::get('/rooms', [RoomController::class, 'index']);
 Route::get('/rooms/{room}', [RoomController::class, 'show']);
 Route::post('/payments/notification', [PaymentController::class, 'notification']);
+Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->middleware('signed')
+    ->name('verification.verify');
+Route::get('/test-email', function () {
+    $recipient = 'koshandayanipbl@gmail.com';
+    $subject = 'Test Email KosHandayani';
+    $body = 'Jika email ini diterima maka konfigurasi SMTP Laravel berhasil.';
+
+    Log::info('Test email endpoint called', [
+        'to' => $recipient,
+        'subject' => $subject,
+    ]);
+
+    try {
+        Mail::raw($body, function ($message) use ($recipient, $subject): void {
+            $message->to($recipient)->subject($subject);
+        });
+
+        Log::info('Test email sent successfully', [
+            'to' => $recipient,
+            'subject' => $subject,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Email sent successfully',
+        ]);
+    } catch (\Throwable $exception) {
+        Log::error('Test email failed', [
+            'to' => $recipient,
+            'subject' => $subject,
+            'message' => $exception->getMessage(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $exception->getMessage(),
+        ], 500);
+    }
+});
 
 // PROTECTED
 Route::middleware('auth:sanctum')->group(function () {
@@ -24,6 +67,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/email/resend-verification', [EmailVerificationController::class, 'resend']);
+    Route::get('/email/verification-status', [EmailVerificationController::class, 'status']);
 
     // profile
     Route::get('/profile', [ProfileController::class, 'show']);
@@ -31,7 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/update', [ProfileController::class, 'update']);
 
-    Route::post('/rental-applications', [RentalApplicationController::class, 'store']);
+    Route::post('/rental-applications', [RentalApplicationController::class, 'store'])->middleware('verified.email');
     Route::get('/my-rental-applications', [RentalApplicationController::class, 'myApplications']);
     Route::get('/my-rental-applications/{id}', [RentalApplicationController::class, 'myApplicationDetail']);
 
@@ -42,7 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/owner/payments', [OwnerDataController::class, 'payments']);
     Route::get('/owner/tenants', [OwnerDataController::class, 'tenants']);
 
-    Route::post('/payments/create', [PaymentController::class, 'create']);
+    Route::post('/payments/create', [PaymentController::class, 'create'])->middleware('verified.email');
     Route::post('/payments/sync-status', [PaymentController::class, 'syncStatus']);
     Route::get('/my-payments', [PaymentController::class, 'index']);
     Route::get('/payments/{id}', [PaymentController::class, 'show'])->whereNumber('id');

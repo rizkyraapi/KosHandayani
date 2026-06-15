@@ -7,6 +7,7 @@ import { createPayment, getMyPayments, syncPaymentStatus, type Payment } from '@
 import type { AuthUser } from '@/lib/auth';
 import type { Locale } from '@/lib/i18n';
 import { payWithMidtransSnap } from '@/lib/midtrans';
+import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
@@ -344,6 +345,14 @@ function BillSummaryCard({
 }) {
   const { locale, t } = useLanguage();
   const room = payment?.rental_application?.room;
+  const breakdown = getRentalPaymentBreakdown({
+    monthlyPrice: room?.price,
+    duration: payment?.rental_application?.duration,
+    subtotalAmount: payment?.subtotal_amount,
+    discountAmount: payment?.discount_amount,
+    grossAmount: payment?.gross_amount,
+  });
+  const discountLabel = breakdown.discountAmount > 0 ? `-${formatRupiah(breakdown.discountAmount)}` : formatRupiah(0);
 
   return (
     <section
@@ -427,9 +436,27 @@ function BillSummaryCard({
                 fontFamily: 'Manrope, sans-serif',
               }}
             >
-              {formatRupiah(payment?.gross_amount)}
+              {formatRupiah(payment ? breakdown.grossAmount : null)}
             </p>
           </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+          {[
+            { label: t('tenant.billing.subtotal'), value: formatRupiah(payment ? breakdown.subtotalAmount : null), icon: 'receipt', accent: '#111c2d' },
+            { label: t('tenant.billing.discount'), value: payment ? discountLabel : '-', icon: 'sell', accent: '#006e2f' },
+            { label: t('tenant.billing.totalPaid'), value: formatRupiah(payment ? breakdown.grossAmount : null), icon: 'payments', accent: '#006e2f' },
+          ].map((item) => (
+            <div key={item.label} style={{ backgroundColor: '#f0f3ff', padding: '1rem', borderRadius: '0.5rem' }}>
+              <p style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 700, color: '#3d4a3d', marginBottom: '0.25rem' }}>
+                {item.label}
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: item.accent }}>
+                <Icon name={item.icon} style={{ fontSize: '1.125rem' }} />
+                <span style={{ fontWeight: 800 }}>{item.value}</span>
+              </div>
+            </div>
+          ))}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -616,12 +643,21 @@ function ConfirmationSidebar({
 }) {
   const { t } = useLanguage();
   const room = payment?.rental_application?.room;
+  const breakdown = getRentalPaymentBreakdown({
+    monthlyPrice: room?.price,
+    duration: payment?.rental_application?.duration,
+    subtotalAmount: payment?.subtotal_amount,
+    discountAmount: payment?.discount_amount,
+    grossAmount: payment?.gross_amount,
+  });
+  const discountLabel = breakdown.discountAmount > 0 ? `-${formatRupiah(breakdown.discountAmount)}` : formatRupiah(0);
   const normalizedStatus = normalizePaymentStatus(payment);
   const canPay = ['pending', 'failed'].includes(normalizedStatus) && Boolean(payment);
   const summaryItems = [
-    { label: room?.room_name ? t('tenant.billing.roomRent', { room: room.room_name }) : t('tenant.billing.roomRentFallback'), amount: formatRupiah(payment?.gross_amount) },
-    { label: t('owner.applications.paymentStatus'), amount: paymentStatusLabel(payment, t) },
-    { label: t('tenant.billing.serviceFee'), amount: t('tenant.billing.free'), isGratis: true },
+    { label: room?.room_name ? t('tenant.billing.roomRent', { room: room.room_name }) : t('tenant.billing.roomRentFallback'), amount: formatRupiah(payment ? breakdown.subtotalAmount : null), isDiscount: false, isGratis: false },
+    { label: t('tenant.billing.discount'), amount: payment ? discountLabel : '-', isDiscount: breakdown.discountAmount > 0, isGratis: false },
+    { label: t('owner.applications.paymentStatus'), amount: paymentStatusLabel(payment, t), isDiscount: false, isGratis: false },
+    { label: t('tenant.billing.serviceFee'), amount: t('tenant.billing.free'), isDiscount: false, isGratis: true },
   ];
 
   return (
@@ -663,7 +699,7 @@ function ConfirmationSidebar({
                 style={{
                   fontSize: '0.875rem',
                   fontWeight: 600,
-                  color: item.isGratis ? '#006e2f' : '#111c2d',
+                  color: item.isGratis || item.isDiscount ? '#006e2f' : '#111c2d',
                 }}
               >
                 {item.amount}
@@ -691,7 +727,7 @@ function ConfirmationSidebar({
                 fontFamily: 'Manrope, sans-serif',
               }}
             >
-              {formatRupiah(payment?.gross_amount)}
+              {formatRupiah(payment ? breakdown.grossAmount : null)}
             </span>
           </div>
         </div>

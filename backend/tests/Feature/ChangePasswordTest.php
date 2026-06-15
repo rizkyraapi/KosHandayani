@@ -27,7 +27,7 @@ class ChangePasswordTest extends TestCase
             ->assertOk()
             ->assertJson([
                 'success' => true,
-                'message' => 'Password changed successfully',
+                'message' => 'Kata sandi berhasil diubah',
             ]);
 
         $this->assertTrue(Hash::check('Newpassword1', $user->refresh()->password));
@@ -49,7 +49,7 @@ class ChangePasswordTest extends TestCase
             ->assertStatus(422)
             ->assertJson([
                 'success' => false,
-                'message' => 'Current password is incorrect',
+                'message' => 'Kata sandi saat ini tidak sesuai.',
             ]);
 
         $this->assertTrue(Hash::check('old-password', $user->refresh()->password));

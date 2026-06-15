@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { createRentalApplication, type ApiRoom } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 type FieldErrors = Record<string, string[]>;
 
@@ -31,6 +33,7 @@ function collectErrors(error: unknown): FieldErrors {
 }
 
 export default function RentalApplicationForm({ room, onSuccess, onCancel }: Props) {
+  const { t } = useLanguage();
   const [moveInDate, setMoveInDate] = useState('');
   const [duration, setDuration] = useState(durations[0]);
   const [ktpFile, setKtpFile] = useState<File | null>(null);
@@ -82,6 +85,13 @@ export default function RentalApplicationForm({ room, onSuccess, onCancel }: Pro
   }
 
   const firstError = (field: string) => errors[field]?.[0];
+  const paymentBreakdown = getRentalPaymentBreakdown({
+    monthlyPrice: room.price,
+    duration,
+  });
+  const discountLabel = paymentBreakdown.discountAmount > 0
+    ? `-${formatRupiah(paymentBreakdown.discountAmount)}`
+    : formatRupiah(0);
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 18 }}>
@@ -125,6 +135,28 @@ export default function RentalApplicationForm({ room, onSuccess, onCancel }: Pro
         </select>
         {firstError('duration') && <span style={{ color: '#ba1a1a', fontSize: 12 }}>{firstError('duration')}</span>}
       </label>
+
+      <div style={{ border: '1px solid #d8e3fb', borderRadius: 12, background: '#f0f3ff', padding: 16, display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ margin: 0, color: '#111c2d', fontFamily: 'Manrope, sans-serif', fontSize: 16, fontWeight: 800 }}>
+            {t('tenant.detail.paymentSummary')}
+          </p>
+          <span style={{ color: '#006e2f', fontSize: 12, fontWeight: 800, background: '#dcfce7', borderRadius: 999, padding: '5px 10px' }}>
+            {t('tenant.detail.total')}: {formatRupiah(paymentBreakdown.grossAmount)}
+          </span>
+        </div>
+        {[
+          { label: t('tenant.detail.monthlyPrice'), value: formatRupiah(paymentBreakdown.monthlyPrice), tone: '#111c2d' },
+          { label: t('tenant.detail.duration'), value: t('tenant.detail.months', { count: paymentBreakdown.durationMonths }), tone: '#111c2d' },
+          { label: t('tenant.detail.subtotal'), value: formatRupiah(paymentBreakdown.subtotalAmount), tone: '#111c2d' },
+          { label: t('tenant.detail.discount'), value: discountLabel, tone: paymentBreakdown.discountAmount > 0 ? '#006e2f' : '#3d4a3d' },
+        ].map((item) => (
+          <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: '#3d4a3d', fontSize: 13 }}>
+            <span>{item.label}</span>
+            <strong style={{ color: item.tone }}>{item.value}</strong>
+          </div>
+        ))}
+      </div>
 
       <label style={{ display: 'grid', gap: 7, color: '#3d4a3d', fontWeight: 700, fontSize: 14 }}>
         Upload KTP

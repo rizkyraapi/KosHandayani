@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -20,9 +21,6 @@ class AuthController extends Controller
             'phone' => ['required', 'string', 'max:30', 'regex:/^(\+62|62|0)8[0-9]{8,13}$/'],
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
-        ], [
-            'phone.regex' => 'Nomor WhatsApp harus berupa nomor Indonesia yang valid, contoh 081234567890.',
-            'email.unique' => 'Email sudah digunakan.',
         ]);
 
         $user = User::create([
@@ -36,6 +34,13 @@ class AuthController extends Controller
 
             // profile belum lengkap
             'profile_completed' => false,
+        ]);
+
+        $user->sendEmailVerificationNotification();
+
+        Log::info('Email verification notification sent after registration', [
+            'user_id' => $user->id,
+            'email' => $user->email,
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -62,7 +67,7 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($request->password, $user->password)) {
 
             throw ValidationException::withMessages([
-                'email' => ['Email atau password salah'],
+                'email' => [__('validation.custom.email.credentials')],
             ]);
         }
 
@@ -113,7 +118,10 @@ class AuthController extends Controller
         if (! Hash::check($validated['current_password'], $user->password)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Current password is incorrect',
+                'message' => __('validation.custom.current_password.current'),
+                'errors' => [
+                    'current_password' => [__('validation.custom.current_password.current')],
+                ],
             ], 422);
         }
 
@@ -123,7 +131,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Password changed successfully',
+            'message' => 'Kata sandi berhasil diubah',
         ]);
     }
 

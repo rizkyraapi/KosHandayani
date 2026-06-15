@@ -149,6 +149,11 @@
     "tenantsNotFound": "Penyewa tidak ditemukan",
     "noHistory": "Belum ada riwayat"
   },
+  "emailVerification": {
+    "successTitle": "Email Berhasil Diverifikasi",
+    "successDescription": "Terima kasih. Akun Anda sudah dapat menggunakan fitur pengajuan sewa dan pembayaran.",
+    "backToDashboard": "Kembali ke Dashboard"
+  },
   "owner": {
     "dashboard": {
       "title": "Dashboard Pemilik",
@@ -215,6 +220,9 @@
       "branch": "Cabang",
       "status": "Status Pembayaran",
       "paidDate": "Tanggal Bayar",
+      "subtotal": "Subtotal",
+      "discount": "Diskon",
+      "totalPaid": "Total Dibayar",
       "reconciliationTitle": "Rekonsiliasi pembayaran penyewa",
       "reconciliationDescription": "Data tagihan tersambung langsung dengan status transaksi Midtrans dan pengajuan sewa penyewa.",
       "manageTenants": "Kelola Penyewa"
@@ -261,6 +269,11 @@
       "welcome": "Selamat Datang, {{name}}!",
       "subtitle": "Senang melihat Anda kembali di hunian kami.",
       "currentBill": "Tagihan terkini",
+      "activeLease": "Masa Sewa Aktif",
+      "leaseEndsAt": "Tanggal berakhir",
+      "remainingLease": "Sisa masa sewa",
+      "daysLeft": "{{count}} hari",
+      "leaseOverdue": "Masa sewa telah berakhir",
       "paidAt": "Dibayar {{date}}",
       "startAt": "Mulai {{date}}",
       "noSchedule": "Belum ada jadwal sewa",
@@ -298,6 +311,9 @@
       "estimatedTotal": "Total Estimasi",
       "monthlyPrice": "Harga per bulan",
       "duration": "Durasi",
+      "subtotal": "Subtotal",
+      "discount": "Diskon",
+      "total": "Total",
       "paymentAmount": "Nominal pembayaran",
       "orderId": "Order ID",
       "paymentDate": "Tanggal pembayaran",
@@ -330,6 +346,9 @@
       "loadingBill": "Memuat Tagihan",
       "roomRent": "Sewa {{room}}",
       "roomRentFallback": "Sewa kamar",
+      "subtotal": "Subtotal",
+      "discount": "Diskon",
+      "totalPaid": "Total Dibayar",
       "totalBill": "Total Tagihan",
       "selectPaymentMethod": "Pilih Metode Pembayaran",
       "paymentOptions": "Opsi Pembayaran",
@@ -351,6 +370,7 @@
       "period": "Periode",
       "paidDate": "Tanggal Bayar",
       "amount": "Nominal",
+      "discountReceived": "Diskon diterima",
       "subtitle": "Pantau semua transaksi penyewaan kamar Anda secara transparan dan akurat.",
       "backHome": "Kembali ke Beranda",
       "totalPayments": "Total Pembayaran",
@@ -380,7 +400,14 @@
       "paymentMethods": "Metode Pembayaran",
       "paymentMethodsSubtitle": "Tautkan akun bank atau e-wallet.",
       "manage": "Kelola",
-      "settings": "Pengaturan"
+      "settings": "Pengaturan",
+      "emailVerified": "Email Terverifikasi",
+      "emailUnverified": "Belum Terverifikasi",
+      "resendVerificationEmail": "Kirim Ulang Email Verifikasi",
+      "verificationEmailSent": "Link verifikasi berhasil dikirim",
+      "verificationEmailFailed": "Gagal mengirim email verifikasi.",
+      "profileComplete": "Profil Lengkap",
+      "profileIncomplete": "Belum Lengkap"
     }
   },
   "room": {

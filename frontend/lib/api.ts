@@ -241,7 +241,19 @@ export type RentalApplication = {
   updated_at?: string;
   tenant?: AuthUser | null;
   room?: Partial<ApiRoom> | null;
+  room_occupancy?: RoomOccupancySummary | null;
   payment?: RentalApplicationPayment | null;
+};
+
+export type RoomOccupancySummary = {
+  id: number;
+  room_occupancy_id?: number;
+  user_id: number;
+  room_id: number;
+  rental_application_id: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  status: 'active' | string;
 };
 
 export type RentalApplicationPayment = {
@@ -249,6 +261,8 @@ export type RentalApplicationPayment = {
   rental_application_id: number;
   order_id: string;
   transaction_id?: string | null;
+  subtotal_amount?: number | null;
+  discount_amount?: number | null;
   gross_amount: number;
   payment_type?: string | null;
   transaction_status: 'pending' | 'settlement' | 'capture' | 'expire' | 'cancel' | 'deny' | string;
@@ -277,6 +291,8 @@ export type Payment = {
   rental_application_id: number;
   order_id: string;
   transaction_id?: string | null;
+  subtotal_amount?: number | null;
+  discount_amount?: number | null;
   gross_amount: number;
   payment_type?: string | null;
   transaction_status: 'pending' | 'settlement' | 'capture' | 'expire' | 'cancel' | 'deny' | string;
@@ -363,6 +379,18 @@ export async function syncPaymentStatus(orderId: string): Promise<Payment> {
   return unwrapData(data, 'Status pembayaran tidak ditemukan.');
 }
 
+export async function resendEmailVerification(): Promise<ApiEnvelope<null>> {
+  const { data } = await apiClient.post<ApiEnvelope<null>>('/email/resend-verification');
+
+  return data;
+}
+
+export async function getEmailVerificationStatus(): Promise<{ verified: boolean }> {
+  const { data } = await apiClient.get<{ verified: boolean }>('/email/verification-status');
+
+  return data;
+}
+
 export async function getOwnerRentalApplications(): Promise<RentalApplication[]> {
   const { data } = await apiClient.get<ApiEnvelope<RentalApplication[]>>('/owner/rental-applications');
 
@@ -427,6 +455,8 @@ export type OwnerTenantOccupancy = {
   payment_status?: PaymentStatus | null;
   payment?: {
     order_id: string;
+    subtotal_amount?: number | null;
+    discount_amount?: number | null;
     gross_amount: number;
     transaction_status: string;
     paid_at?: string | null;

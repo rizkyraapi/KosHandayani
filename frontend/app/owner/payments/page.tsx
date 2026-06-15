@@ -18,6 +18,9 @@ type PaymentRow = {
   status: 'paid' | 'failed' | 'pending';
   paidDate: string;
   orderId: string;
+  subtotal: string;
+  discount: string;
+  discountValue: number;
   amount: string;
   href: string;
 };
@@ -98,6 +101,8 @@ function buildRows(payments: OwnerPaymentOverview['payments'], locale: Locale, f
   return payments.map((payment) => {
     const tenantName = payment.tenant?.full_name || payment.tenant?.email || fallbackTenant;
     const status = normalizePaymentStatus(payment.transaction_status);
+    const subtotalAmount = payment.subtotal_amount ?? payment.gross_amount;
+    const discountAmount = Math.max(0, payment.discount_amount ?? 0);
 
     return {
       id: payment.id,
@@ -109,6 +114,9 @@ function buildRows(payments: OwnerPaymentOverview['payments'], locale: Locale, f
       status,
       paidDate: status === 'paid' ? formatDateTime(payment.paid_at, locale) : formatDateTime(payment.created_at, locale),
       orderId: payment.order_id,
+      subtotal: formatRupiah(subtotalAmount),
+      discount: discountAmount > 0 ? `-${formatRupiah(discountAmount)}` : formatRupiah(0),
+      discountValue: discountAmount,
       amount: formatRupiah(payment.gross_amount),
       href: `/owner/rental-applications/${payment.rental_application_id}`,
     };
@@ -254,9 +262,18 @@ function PaymentTableRow({ row }: { row: PaymentRow }) {
       <td style={{ padding: '20px 24px' }}>
         <StatusBadge status={row.status} />
       </td>
+      <td style={{ padding: '20px 24px', fontSize: 14, fontWeight: 700, color: '#111c2d', whiteSpace: 'nowrap' }}>
+        {row.subtotal}
+      </td>
+      <td style={{ padding: '20px 24px', fontSize: 14, fontWeight: 800, color: row.discountValue > 0 ? '#006e2f' : '#3d4a3d', whiteSpace: 'nowrap' }}>
+        {row.discount}
+      </td>
+      <td style={{ padding: '20px 24px', fontSize: 14, fontWeight: 900, color: '#006e2f', whiteSpace: 'nowrap' }}>
+        {row.amount}
+      </td>
       <td style={{ padding: '20px 24px', fontSize: 14, fontWeight: 500, color: row.status === 'failed' ? '#ba1a1a' : '#3d4a3d' }}>
         <div>{row.paidDate}</div>
-        <div style={{ marginTop: 2, fontSize: 12, fontWeight: 800, color: '#006e2f' }}>{row.amount}</div>
+        <div style={{ marginTop: 2, fontSize: 12, fontWeight: 700, color: '#64748b' }}>{row.orderId}</div>
       </td>
       <td style={{ padding: '20px 24px', textAlign: 'center' }}>
         <Link
@@ -458,7 +475,7 @@ export default function Page() {
           ) : (
             <>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: 720 }}>
+                <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: 1080 }}>
                   <thead>
                     <tr style={{ background: 'rgba(248,250,252,0.5)' }}>
                       {[
@@ -466,6 +483,9 @@ export default function Page() {
                         t('owner.payments.room'),
                         t('owner.payments.branch'),
                         t('owner.payments.status'),
+                        t('owner.payments.subtotal'),
+                        t('owner.payments.discount'),
+                        t('owner.payments.totalPaid'),
                         t('owner.payments.paidDate'),
                         t('common.action'),
                       ].map((heading, index) => (
@@ -479,7 +499,7 @@ export default function Page() {
                             letterSpacing: '0.08em',
                             color: '#3d4a3d',
                             borderBottom: '1px solid #f1f5f9',
-                            textAlign: index === 5 ? 'center' : 'left',
+                            textAlign: index === 8 ? 'center' : 'left',
                             whiteSpace: 'nowrap',
                           }}
                         >

@@ -36,7 +36,7 @@ class StoreRentalApplicationRequest extends FormRequest
             if ($user && ! $user->isProfileComplete()) {
                 $validator->errors()->add(
                     'profile',
-                    'Lengkapi profil terlebih dahulu: whatsapp, alamat, dan pekerjaan wajib diisi.'
+                    __('validation.custom.profile.complete')
                 );
             }
 
@@ -51,7 +51,7 @@ class StoreRentalApplicationRequest extends FormRequest
             }
 
             if (! $room->is_available || $room->room_status !== 'available') {
-                $validator->errors()->add('room_id', 'Kamar tidak tersedia untuk diajukan.');
+                $validator->errors()->add('room_id', __('validation.custom.room_id.unavailable'));
             }
 
             if ($user && RentalApplication::query()
@@ -61,7 +61,7 @@ class StoreRentalApplicationRequest extends FormRequest
                 ->whereIn('payment_status', ['pending', 'unpaid', 'paid'])
                 ->exists()
             ) {
-                $validator->errors()->add('room_id', 'Anda sudah memiliki pengajuan aktif untuk kamar ini.');
+                $validator->errors()->add('room_id', __('validation.custom.room_id.active_application'));
             }
         });
     }

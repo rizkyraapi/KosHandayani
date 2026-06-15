@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
+import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 /* ─────────────────────────────────────────────
    INJECT FONTS & MATERIAL SYMBOLS
@@ -137,6 +138,10 @@ interface Transaction {
   periodDetail: string;
   payDate: string;
   amount: string;
+  amountValue: number;
+  subtotal: string;
+  discount: string;
+  discountValue: number;
   status: 'Lunas' | 'Gagal' | 'Pending';
 }
 
@@ -174,24 +179,53 @@ function normalizeApplicationStatus(application: RentalApplication): Transaction
 
 function buildTransactions(payments: Payment[], applications: RentalApplication[]): Transaction[] {
   const paymentApplicationIds = new Set(payments.map((payment) => payment.rental_application_id));
-  const paymentRows = payments.map((payment) => ({
-    id: payment.order_id,
-    period: formatPeriod(payment.paid_at ?? payment.created_at),
-    periodDetail: `Pembayaran ${payment.rental_application?.room?.room_name || 'sewa kamar'}`,
-    payDate: formatDate(payment.paid_at ?? payment.created_at),
-    amount: formatRupiah(payment.gross_amount),
-    status: normalizePaymentStatus(payment),
-  }));
+  const paymentRows = payments.map((payment) => {
+    const breakdown = getRentalPaymentBreakdown({
+      monthlyPrice: payment.rental_application?.room?.price,
+      duration: payment.rental_application?.duration,
+      subtotalAmount: payment.subtotal_amount,
+      discountAmount: payment.discount_amount,
+      grossAmount: payment.gross_amount,
+    });
+
+    return {
+      id: payment.order_id,
+      period: formatPeriod(payment.paid_at ?? payment.created_at),
+      periodDetail: `Pembayaran ${payment.rental_application?.room?.room_name || 'sewa kamar'}`,
+      payDate: formatDate(payment.paid_at ?? payment.created_at),
+      amount: formatRupiah(breakdown.grossAmount),
+      amountValue: breakdown.grossAmount,
+      subtotal: formatRupiah(breakdown.subtotalAmount),
+      discount: breakdown.discountAmount > 0 ? `-${formatRupiah(breakdown.discountAmount)}` : formatRupiah(0),
+      discountValue: breakdown.discountAmount,
+      status: normalizePaymentStatus(payment),
+    };
+  });
   const applicationRows = applications
     .filter((application) => !paymentApplicationIds.has(application.id))
-    .map((application) => ({
-      id: `APP-${application.id}`,
-      period: formatPeriod(application.created_at),
-      periodDetail: `Pengajuan ${application.room?.room_name || 'sewa kamar'} - ${application.duration}`,
-      payDate: formatDate(application.created_at),
-      amount: application.payment?.gross_amount ? formatRupiah(application.payment.gross_amount) : '-',
-      status: normalizeApplicationStatus(application),
-    }));
+    .map((application) => {
+      const breakdown = getRentalPaymentBreakdown({
+        monthlyPrice: application.room?.price,
+        duration: application.duration,
+        subtotalAmount: application.payment?.subtotal_amount,
+        discountAmount: application.payment?.discount_amount,
+        grossAmount: application.payment?.gross_amount,
+      });
+      const hasPaymentAmount = typeof application.payment?.gross_amount === 'number';
+
+      return {
+        id: `APP-${application.id}`,
+        period: formatPeriod(application.created_at),
+        periodDetail: `Pengajuan ${application.room?.room_name || 'sewa kamar'} - ${application.duration}`,
+        payDate: formatDate(application.created_at),
+        amount: hasPaymentAmount ? formatRupiah(breakdown.grossAmount) : '-',
+        amountValue: hasPaymentAmount ? breakdown.grossAmount : 0,
+        subtotal: formatRupiah(breakdown.subtotalAmount),
+        discount: breakdown.discountAmount > 0 ? `-${formatRupiah(breakdown.discountAmount)}` : formatRupiah(0),
+        discountValue: breakdown.discountAmount,
+        status: normalizeApplicationStatus(application),
+      };
+    });
 
   return [...paymentRows, ...applicationRows];
 }
@@ -455,11 +489,7 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
 function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
   const { t } = useLanguage();
   const paidTransactions = transactions.filter((transaction) => transaction.status === 'Lunas');
-  const totalPaid = paidTransactions.reduce((total, transaction) => {
-    const numericAmount = Number(transaction.amount.replace(/[^\d]/g, ''));
-
-    return total + (Number.isNaN(numericAmount) ? 0 : numericAmount);
-  }, 0);
+  const totalPaid = paidTransactions.reduce((total, transaction) => total + transaction.amountValue, 0);
   const lastPaid = paidTransactions[0];
 
   return (
@@ -620,7 +650,12 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
                   <div className="text-[11px]" style={{ color: '#3d4a3d' }}>{tx.periodDetail}</div>
                 </td>
                 <td className="px-8 py-6 text-sm" style={{ color: '#3d4a3d' }}>{tx.payDate}</td>
-                <td className="px-8 py-6 text-sm font-bold" style={{ color: '#111c2d' }}>{tx.amount}</td>
+                <td className="px-8 py-6">
+                  <div className="text-sm font-bold" style={{ color: '#111c2d' }}>{tx.amount}</div>
+                  <div className="text-[11px]" style={{ color: tx.discountValue > 0 ? '#006e2f' : '#3d4a3d' }}>
+                    {t('tenant.history.discountReceived')}: {tx.discount}
+                  </div>
+                </td>
                 <td className="px-8 py-6">
                   <div className="flex justify-center">
                     <StatusBadge status={tx.status} />
@@ -661,6 +696,9 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
               <div>
                 <p className="text-xs" style={{ color: '#3d4a3d' }}>{tx.payDate}</p>
                 <p className="text-sm font-bold mt-0.5" style={{ color: '#111c2d' }}>{tx.amount}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: tx.discountValue > 0 ? '#006e2f' : '#3d4a3d' }}>
+                  {t('tenant.history.discountReceived')}: {tx.discount}
+                </p>
               </div>
               {tx.status !== 'Gagal' ? (
                 <button

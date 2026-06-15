@@ -6,6 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
 import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
 import type { Locale } from '@/lib/i18n';
+import { getDurationInMonths } from '@/lib/rental-payment';
 
 /* ═══════════════════════════════════════════════════════════════
    ALL CUSTOM STYLES — fonts, colors, utilities, Material Symbols,
@@ -297,6 +298,34 @@ function getPaymentStatusLabel(payment: Payment | null | undefined, t: (key: str
   return t('tenant.billing.noActiveBill');
 }
 
+function parseDateOnly(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function calculateFallbackEndDate(application?: RentalApplication | null) {
+  const moveInDate = parseDateOnly(application?.move_in_date);
+
+  if (!moveInDate) return null;
+
+  const endDate = new Date(moveInDate);
+  endDate.setMonth(endDate.getMonth() + getDurationInMonths(application?.duration));
+
+  return endDate;
+}
+
+function getDaysLeft(endDate: Date | null) {
+  if (!endDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const normalizedEndDate = new Date(endDate);
+  normalizedEndDate.setHours(0, 0, 0, 0);
+
+  return Math.ceil((normalizedEndDate.getTime() - today.getTime()) / 86400000);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PAGE COMPONENT
 ═══════════════════════════════════════════════════════════════ */
@@ -319,6 +348,15 @@ export default function Page() {
     ?? applications[0]
     ?? null;
   const activeRoom = activeApplication?.room;
+  const activeLeaseEndDate = parseDateOnly(activeApplication?.room_occupancy?.end_date)
+    ?? calculateFallbackEndDate(activeApplication);
+  const activeLeaseDaysLeft = getDaysLeft(activeLeaseEndDate);
+  const activeLeaseTone = activeLeaseDaysLeft === null || activeLeaseDaysLeft > 30
+    ? 'normal'
+    : activeLeaseDaysLeft > 7
+      ? 'warning'
+      : 'danger';
+  const activeLeaseIsOverdue = typeof activeLeaseDaysLeft === 'number' && activeLeaseDaysLeft < 0;
   const paymentStatus = getPaymentStatusLabel(activePayment, t);
 
   useEffect(() => {
@@ -524,6 +562,62 @@ export default function Page() {
             ))}
           </div>
         </div>
+
+        <section
+          className="mb-10 rounded-2xl p-5 lg:p-6 shadow-sm"
+          style={{
+            background: '#ffffff',
+            border: `1px solid ${
+              activeLeaseTone === 'danger'
+                ? 'rgba(186,26,26,0.18)'
+                : activeLeaseTone === 'warning'
+                  ? 'rgba(158,64,54,0.22)'
+                  : 'rgba(188,203,185,0.2)'
+            }`,
+          }}
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <span
+                className="material-symbols-outlined rounded-xl p-3"
+                style={{
+                  background: activeLeaseTone === 'danger' ? '#ffdad6' : activeLeaseTone === 'warning' ? 'rgba(255,139,124,0.2)' : '#afefb4',
+                  color: activeLeaseTone === 'danger' ? '#ba1a1a' : activeLeaseTone === 'warning' ? '#9e4036' : '#006e2f',
+                }}
+              >
+                event_available
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                  {t('tenant.dashboard.activeLease')}
+                </p>
+                <h3 className="mt-1 text-xl font-extrabold text-on-surface font-manrope">
+                  {activeRoom?.room_name || t('tenant.dashboard.noActiveRoom')}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-on-surface-variant">
+                  {t('tenant.dashboard.leaseEndsAt')}: {activeLeaseEndDate ? formatDate(activeLeaseEndDate.toISOString(), locale) : '-'}
+                </p>
+              </div>
+            </div>
+            <div className="md:text-right">
+              <p
+                className="text-2xl font-extrabold font-manrope"
+                style={{
+                  color: activeLeaseTone === 'danger' ? '#ba1a1a' : activeLeaseTone === 'warning' ? '#9e4036' : '#006e2f',
+                }}
+              >
+                {activeLeaseIsOverdue
+                  ? t('tenant.dashboard.leaseOverdue')
+                  : activeLeaseDaysLeft !== null
+                    ? t('tenant.dashboard.daysLeft', { count: Math.max(0, activeLeaseDaysLeft) })
+                    : '-'}
+              </p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                {t('tenant.dashboard.remainingLease')}
+              </p>
+            </div>
+          </div>
+        </section>
 
         {/* Bento grid */}
         <div className="grid grid-cols-12 gap-6">

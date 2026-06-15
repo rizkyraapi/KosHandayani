@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\MidtransService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PaymentFlowTest extends TestCase
@@ -39,10 +40,14 @@ class PaymentFlowTest extends TestCase
             ->once()
             ->with(Mockery::on(function (array $payload) use ($application, $room): bool {
                 return str_starts_with($payload['transaction_details']['order_id'], 'KH-'.$application->id.'-')
-                    && $payload['transaction_details']['gross_amount'] === 4500000
+                    && $payload['transaction_details']['gross_amount'] === 4400000
                     && $payload['item_details'][0]['id'] === 'ROOM-'.$room->id
                     && $payload['item_details'][0]['price'] === 1500000
                     && $payload['item_details'][0]['quantity'] === 3
+                    && $payload['item_details'][1]['id'] === 'DISC-3M'
+                    && $payload['item_details'][1]['price'] === -100000
+                    && $payload['item_details'][1]['quantity'] === 1
+                    && $this->payloadItemTotal($payload['item_details']) === $payload['transaction_details']['gross_amount']
                     && $payload['callbacks']['finish'] === 'http://localhost:3000/tenant/rental-applications/'.$application->id;
             }))
             ->andReturn('snap-token-123');
@@ -64,8 +69,61 @@ class PaymentFlowTest extends TestCase
 
         $this->assertDatabaseHas('payments', [
             'rental_application_id' => $application->id,
-            'gross_amount' => 4500000,
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
             'snap_token' => 'snap-token-123',
+            'transaction_status' => 'pending',
+        ]);
+    }
+
+    #[DataProvider('durationDiscountCases')]
+    public function test_payment_amounts_apply_duration_discount_rules(
+        string $duration,
+        int $durationMonths,
+        int $subtotalAmount,
+        int $discountAmount,
+        int $grossAmount,
+    ): void {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom(500000);
+        $application = $this->createApprovedApplication($tenant, $room, $duration);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('createSnapToken')
+            ->once()
+            ->with(Mockery::on(function (array $payload) use ($room, $durationMonths, $discountAmount, $grossAmount): bool {
+                $hasExpectedDiscountItem = $discountAmount === 0
+                    ? count($payload['item_details']) === 1
+                    : (
+                        count($payload['item_details']) === 2
+                        && $payload['item_details'][1]['price'] === -$discountAmount
+                        && $payload['item_details'][1]['quantity'] === 1
+                    );
+
+                return $payload['transaction_details']['gross_amount'] === $grossAmount
+                    && $payload['item_details'][0]['id'] === 'ROOM-'.$room->id
+                    && $payload['item_details'][0]['price'] === 500000
+                    && $payload['item_details'][0]['quantity'] === $durationMonths
+                    && $hasExpectedDiscountItem
+                    && $this->payloadItemTotal($payload['item_details']) === $grossAmount;
+            }))
+            ->andReturn('snap-token-'.$durationMonths);
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/create', [
+                'rental_application_id' => $application->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('payments', [
+            'rental_application_id' => $application->id,
+            'subtotal_amount' => $subtotalAmount,
+            'discount_amount' => $discountAmount,
+            'gross_amount' => $grossAmount,
             'transaction_status' => 'pending',
         ]);
     }
@@ -92,8 +150,10 @@ class PaymentFlowTest extends TestCase
             ->with(Mockery::on(function (array $payload) use ($application): bool {
                 return str_starts_with($payload['transaction_details']['order_id'], 'KH-'.$application->id.'-')
                     && $payload['transaction_details']['order_id'] !== 'OLD-ORDER-'.$application->id
-                    && $payload['transaction_details']['gross_amount'] === 4500000
-                    && $payload['item_details'][0]['quantity'] === 3;
+                    && $payload['transaction_details']['gross_amount'] === 4400000
+                    && $payload['item_details'][0]['quantity'] === 3
+                    && $payload['item_details'][1]['price'] === -100000
+                    && $this->payloadItemTotal($payload['item_details']) === $payload['transaction_details']['gross_amount'];
             }))
             ->andReturn('retry-snap-token');
         $this->app->instance(MidtransService::class, $midtrans);
@@ -113,7 +173,9 @@ class PaymentFlowTest extends TestCase
         ]);
         $this->assertDatabaseHas('payments', [
             'rental_application_id' => $application->id,
-            'gross_amount' => 4500000,
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
             'snap_token' => 'retry-snap-token',
             'transaction_id' => null,
             'payment_type' => null,
@@ -176,7 +238,9 @@ class PaymentFlowTest extends TestCase
         $payment = Payment::create([
             'rental_application_id' => $application->id,
             'order_id' => 'KH-'.$application->id.'-1234567890',
-            'gross_amount' => 1500000,
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
             'transaction_status' => 'pending',
             'snap_token' => 'snap-token-123',
         ]);
@@ -192,7 +256,7 @@ class PaymentFlowTest extends TestCase
             'transaction_status' => 'settlement',
             'signature_key' => 'valid-signature',
             'status_code' => '200',
-            'gross_amount' => '1500000.00',
+            'gross_amount' => '4400000.00',
             'transaction_id' => 'midtrans-transaction-1',
             'payment_type' => 'bank_transfer',
         ];
@@ -243,7 +307,9 @@ class PaymentFlowTest extends TestCase
         $payment = Payment::create([
             'rental_application_id' => $application->id,
             'order_id' => 'KH-'.$application->id.'-0987654321',
-            'gross_amount' => 1500000,
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
             'transaction_status' => 'pending',
             'snap_token' => 'snap-token-123',
         ]);
@@ -260,7 +326,7 @@ class PaymentFlowTest extends TestCase
                 'transaction_status' => 'expire',
                 'signature_key' => 'valid-signature',
                 'status_code' => '407',
-                'gross_amount' => '1500000.00',
+                'gross_amount' => '4400000.00',
                 'transaction_id' => 'midtrans-transaction-expired',
                 'payment_type' => 'bank_transfer',
             ])
@@ -286,7 +352,9 @@ class PaymentFlowTest extends TestCase
         $payment = Payment::create([
             'rental_application_id' => $application->id,
             'order_id' => 'KH-'.$application->id.'-sync-success',
-            'gross_amount' => 4500000,
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
             'transaction_status' => 'pending',
             'snap_token' => 'snap-token-sync',
         ]);
@@ -298,7 +366,7 @@ class PaymentFlowTest extends TestCase
             ->andReturn([
                 'order_id' => $payment->order_id,
                 'transaction_status' => 'settlement',
-                'gross_amount' => '4500000.00',
+                'gross_amount' => '4400000.00',
                 'transaction_id' => 'midtrans-sync-transaction',
                 'payment_type' => 'bank_transfer',
             ]);
@@ -334,7 +402,17 @@ class PaymentFlowTest extends TestCase
         ]);
     }
 
-    private function createRoom(): Room
+    public static function durationDiscountCases(): array
+    {
+        return [
+            '1 month' => ['1 Bulan', 1, 500000, 0, 500000],
+            '3 months' => ['3 Bulan', 3, 1500000, 100000, 1400000],
+            '6 months' => ['6 Bulan', 6, 3000000, 200000, 2800000],
+            '12 months' => ['12 Bulan', 12, 6000000, 300000, 5700000],
+        ];
+    }
+
+    private function createRoom(int $price = 1500000): Room
     {
         return Room::create([
             'room_name' => 'Kamar Payment',
@@ -342,22 +420,31 @@ class PaymentFlowTest extends TestCase
             'room_type' => 'single',
             'gender_type' => 'mixed',
             'room_status' => 'available',
-            'price' => 1500000,
+            'price' => $price,
             'max_guest' => 1,
             'is_available' => true,
         ]);
     }
 
-    private function createApprovedApplication(User $tenant, Room $room): RentalApplication
+    private function createApprovedApplication(User $tenant, Room $room, string $duration = '3 Bulan'): RentalApplication
     {
         return RentalApplication::create([
             'user_id' => $tenant->id,
             'room_id' => $room->id,
             'move_in_date' => '2026-06-10',
-            'duration' => '3 Bulan',
+            'duration' => $duration,
             'status' => 'approved',
             'payment_status' => 'unpaid',
             'approved_at' => now(),
         ]);
+    }
+
+    private function payloadItemTotal(array $items): int
+    {
+        return array_reduce(
+            $items,
+            fn (int $total, array $item): int => $total + ((int) $item['price'] * (int) $item['quantity']),
+            0,
+        );
     }
 }

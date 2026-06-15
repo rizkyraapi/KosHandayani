@@ -149,6 +149,11 @@
     "tenantsNotFound": "Tenants not found",
     "noHistory": "No history yet"
   },
+  "emailVerification": {
+    "successTitle": "Email Verified Successfully",
+    "successDescription": "Thank you. Your account can now use rental application and payment features.",
+    "backToDashboard": "Back to Dashboard"
+  },
   "owner": {
     "dashboard": {
       "title": "Owner Dashboard",
@@ -215,6 +220,9 @@
       "branch": "Branch",
       "status": "Payment Status",
       "paidDate": "Payment Date",
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "totalPaid": "Total Paid",
       "reconciliationTitle": "Tenant payment reconciliation",
       "reconciliationDescription": "Bill data is connected directly to Midtrans transaction status and tenant rental applications.",
       "manageTenants": "Manage Tenants"
@@ -261,6 +269,11 @@
       "welcome": "Welcome, {{name}}!",
       "subtitle": "Good to see you back at your residence.",
       "currentBill": "Current bill",
+      "activeLease": "Active Lease Period",
+      "leaseEndsAt": "End date",
+      "remainingLease": "Remaining lease",
+      "daysLeft": "{{count}} days",
+      "leaseOverdue": "Rental period has expired",
       "paidAt": "Paid {{date}}",
       "startAt": "Starts {{date}}",
       "noSchedule": "No rental schedule yet",
@@ -298,6 +311,9 @@
       "estimatedTotal": "Estimated Total",
       "monthlyPrice": "Monthly price",
       "duration": "Duration",
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "total": "Total",
       "paymentAmount": "Payment amount",
       "orderId": "Order ID",
       "paymentDate": "Payment date",
@@ -330,6 +346,9 @@
       "loadingBill": "Loading Bill",
       "roomRent": "{{room}} Rent",
       "roomRentFallback": "Room rent",
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "totalPaid": "Total Paid",
       "totalBill": "Total Bill",
       "selectPaymentMethod": "Select Payment Method",
       "paymentOptions": "Payment Options",
@@ -351,6 +370,7 @@
       "period": "Period",
       "paidDate": "Payment Date",
       "amount": "Amount",
+      "discountReceived": "Discount received",
       "subtitle": "Track all of your room rental transactions transparently and accurately.",
       "backHome": "Back to Home",
       "totalPayments": "Total Payments",
@@ -380,7 +400,14 @@
       "paymentMethods": "Payment Methods",
       "paymentMethodsSubtitle": "Link a bank account or e-wallet.",
       "manage": "Manage",
-      "settings": "Settings"
+      "settings": "Settings",
+      "emailVerified": "Email Verified",
+      "emailUnverified": "Not Verified",
+      "resendVerificationEmail": "Resend Verification Email",
+      "verificationEmailSent": "Verification link sent successfully",
+      "verificationEmailFailed": "Failed to send verification email.",
+      "profileComplete": "Profile Complete",
+      "profileIncomplete": "Incomplete"
     }
   },
   "room": {

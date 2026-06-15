@@ -18,6 +18,13 @@ use Throwable;
 
 class PaymentController extends Controller
 {
+    private const DURATION_DISCOUNTS = [
+        1 => 0,
+        3 => 100000,
+        6 => 200000,
+        12 => 300000,
+    ];
+
     public function __construct(private readonly MidtransService $midtrans) {}
 
     public function create(Request $request): JsonResponse
@@ -69,18 +76,18 @@ class PaymentController extends Controller
                     ], 422));
                 }
 
-                $durationMonths = $this->getDurationInMonths($application);
-                $roomPrice = (int) $application->room->price;
-                $grossAmount = $roomPrice * $durationMonths;
+                $amounts = $this->calculatePaymentAmounts($application);
 
                 $payment = $application->payment ?? new Payment([
                     'rental_application_id' => $application->id,
                     'order_id' => $this->generateOrderId($application),
-                    'gross_amount' => $grossAmount,
+                    'subtotal_amount' => $amounts['subtotal_amount'],
+                    'discount_amount' => $amounts['discount_amount'],
+                    'gross_amount' => $amounts['gross_amount'],
                     'transaction_status' => 'pending',
                 ]);
 
-                if ($application->payment_status === 'failed') {
+                if ($application->payment_status === 'failed' || $this->paymentAmountsChanged($payment, $amounts)) {
                     $payment->order_id = $this->generateOrderId($application);
                     $payment->snap_token = null;
                     $payment->transaction_id = null;
@@ -92,7 +99,9 @@ class PaymentController extends Controller
 
                 if (! $payment->snap_token) {
                     $payment->order_id ??= $this->generateOrderId($application);
-                    $payment->gross_amount = $grossAmount;
+                    $payment->subtotal_amount = $amounts['subtotal_amount'];
+                    $payment->discount_amount = $amounts['discount_amount'];
+                    $payment->gross_amount = $amounts['gross_amount'];
                     $payment->transaction_status = 'pending';
                     $payment->snap_token = $this->midtrans->createSnapToken(
                         $this->buildSnapPayload($payment, $application, $this->resolveFrontendOrigin($request))
@@ -234,7 +243,7 @@ class PaymentController extends Controller
             return $response;
         }
 
-        $payments = Payment::with(['rentalApplication.room.branch'])
+        $payments = Payment::with(['rentalApplication.room.branch', 'rentalApplication.roomOccupancy'])
             ->whereHas('rentalApplication', fn ($query) => $query->where('user_id', $request->user()->id))
             ->latest()
             ->get();
@@ -251,7 +260,7 @@ class PaymentController extends Controller
             return $response;
         }
 
-        $payment = Payment::with(['rentalApplication.room.branch'])
+        $payment = Payment::with(['rentalApplication.room.branch', 'rentalApplication.roomOccupancy'])
             ->whereHas('rentalApplication', fn ($query) => $query->where('user_id', $request->user()->id))
             ->findOrFail($id);
 
@@ -330,9 +339,28 @@ class PaymentController extends Controller
     {
         $durationMonths = $this->getDurationInMonths($application);
         $roomPrice = (int) $application->room->price;
+        $discountAmount = max(0, (int) $payment->discount_amount);
         $finishUrl = $frontendOrigin
             ? rtrim($frontendOrigin, '/').'/tenant/rental-applications/'.$application->id
             : null;
+
+        $itemDetails = [
+            [
+                'id' => 'ROOM-'.$application->room->id,
+                'price' => $roomPrice,
+                'quantity' => $durationMonths,
+                'name' => 'Biaya sewa '.$application->room->room_name,
+            ],
+        ];
+
+        if ($discountAmount > 0) {
+            $itemDetails[] = [
+                'id' => 'DISC-'.$durationMonths.'M',
+                'price' => -$discountAmount,
+                'quantity' => 1,
+                'name' => 'Diskon Sewa '.$durationMonths.' Bulan',
+            ];
+        }
 
         $payload = [
             'transaction_details' => [
@@ -344,14 +372,7 @@ class PaymentController extends Controller
                 'email' => $application->user?->email,
                 'phone' => $application->user?->phone,
             ],
-            'item_details' => [
-                [
-                    'id' => 'ROOM-'.$application->room->id,
-                    'price' => $roomPrice,
-                    'quantity' => $durationMonths,
-                    'name' => $application->room->room_name,
-                ],
-            ],
+            'item_details' => $itemDetails,
         ];
 
         if ($finishUrl) {
@@ -361,6 +382,36 @@ class PaymentController extends Controller
         }
 
         return $payload;
+    }
+
+    private function calculatePaymentAmounts(RentalApplication $application): array
+    {
+        $durationMonths = $this->getDurationInMonths($application);
+        $roomPrice = max(0, (int) $application->room->price);
+        $subtotalAmount = $roomPrice * $durationMonths;
+        $discountAmount = min($subtotalAmount, $this->getDiscountAmount($durationMonths));
+
+        return [
+            'subtotal_amount' => $subtotalAmount,
+            'discount_amount' => $discountAmount,
+            'gross_amount' => max(0, $subtotalAmount - $discountAmount),
+        ];
+    }
+
+    private function getDiscountAmount(int $durationMonths): int
+    {
+        return max(0, self::DURATION_DISCOUNTS[$durationMonths] ?? 0);
+    }
+
+    private function paymentAmountsChanged(Payment $payment, array $amounts): bool
+    {
+        if (! $payment->exists) {
+            return false;
+        }
+
+        return (int) $payment->subtotal_amount !== $amounts['subtotal_amount']
+            || (int) $payment->discount_amount !== $amounts['discount_amount']
+            || (int) $payment->gross_amount !== $amounts['gross_amount'];
     }
 
     private function getDurationInMonths(RentalApplication $application): int

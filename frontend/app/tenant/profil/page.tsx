@@ -1,7 +1,7 @@
 'use client';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
-import { changePassword, getProfile, updateProfile, type ChangePasswordPayload, type ProfilePayload } from '@/lib/api';
+import { changePassword, getProfile, resendEmailVerification, updateProfile, type ChangePasswordPayload, type ProfilePayload } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -307,17 +307,26 @@ function ProfileIdentityCard({
   fullName,
   email,
   isComplete,
+  isEmailVerified,
   photoUrl,
   isDisabled,
+  isResendingVerification,
+  verificationMessage,
   onPhotoChange,
+  onResendVerification,
 }: {
   fullName: string;
   email: string;
   isComplete: boolean;
+  isEmailVerified: boolean;
   photoUrl: string;
   isDisabled: boolean;
+  isResendingVerification: boolean;
+  verificationMessage: string;
   onPhotoChange: (file: File) => void;
+  onResendVerification: () => void;
 }) {
+  const { t } = useLanguage();
   const defaultPhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'Tenant')}&background=006e2f&color=ffffff&size=256&bold=true`;
 
   return (
@@ -400,6 +409,55 @@ function ProfileIdentityCard({
           {email || 'Tenant'}
         </p>
 
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.35rem 0.75rem',
+              background: isEmailVerified ? C.secondaryContainer : C.errorContainer,
+              color: isEmailVerified ? C.onSecondaryContainer : C.error,
+              borderRadius: '9999px',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>
+              {isEmailVerified ? 'verified' : 'mark_email_unread'}
+            </span>
+            {isEmailVerified ? t('tenant.profile.emailVerified') : t('tenant.profile.emailUnverified')}
+          </span>
+        </div>
+
+        {!isEmailVerified && (
+          <button
+            type="button"
+            disabled={isResendingVerification}
+            onClick={onResendVerification}
+            style={{
+              border: 'none',
+              borderRadius: '0.65rem',
+              background: C.primary,
+              color: C.onPrimary,
+              padding: '0.65rem 0.9rem',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              cursor: isResendingVerification ? 'not-allowed' : 'pointer',
+              opacity: isResendingVerification ? 0.7 : 1,
+              marginBottom: verificationMessage ? '0.5rem' : '1rem',
+            }}
+          >
+            {isResendingVerification ? t('common.processing') : t('tenant.profile.resendVerificationEmail')}
+          </button>
+        )}
+
+        {verificationMessage && (
+          <p style={{ color: C.primary, fontSize: '0.75rem', fontWeight: 700, margin: '0 0 1rem' }}>
+            {verificationMessage}
+          </p>
+        )}
+
         <div
           style={{
             display: 'inline-flex',
@@ -416,7 +474,7 @@ function ProfileIdentityCard({
           }}
         >
           <span style={{ width: '0.375rem', height: '0.375rem', background: C.primary, borderRadius: '9999px', display: 'inline-block' }} />
-          {isComplete ? 'Profil Lengkap' : 'Belum Lengkap'}
+          {isComplete ? t('tenant.profile.profileComplete') : t('tenant.profile.profileIncomplete')}
         </div>
       </div>
 
@@ -1075,6 +1133,9 @@ export default function Page() {
   const [success, setSuccess] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState<ChangePasswordPayload>({
@@ -1101,6 +1162,8 @@ export default function Page() {
       });
       setSelectedPhoto(null);
       setPhotoPreviewUrl(profile.profile_photo_url || '');
+      setIsEmailVerified(Boolean(profile.email_verified));
+      setVerificationMessage('');
     } catch (profileError) {
       setError(getAuthErrorMessage(profileError, t('messages.loadProfileFailed')));
     } finally {
@@ -1164,6 +1227,7 @@ export default function Page() {
       });
       setSelectedPhoto(null);
       setPhotoPreviewUrl(profile.profile_photo_url || '');
+      setIsEmailVerified(Boolean(profile.email_verified));
       setIsEditing(false);
       setSuccess(t('tenant.profile.updateSuccess'));
       await refreshUser();
@@ -1192,6 +1256,19 @@ export default function Page() {
       setPasswordErrors(getApiErrorMessages(passwordError, t('tenant.profile.passwordChangeFailed')));
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      setIsResendingVerification(true);
+      setVerificationMessage('');
+      const response = await resendEmailVerification();
+      setVerificationMessage(response.message || t('tenant.profile.verificationEmailSent'));
+    } catch (verificationError) {
+      setVerificationMessage(getAuthErrorMessage(verificationError, t('tenant.profile.verificationEmailFailed')));
+    } finally {
+      setIsResendingVerification(false);
     }
   };
 
@@ -1270,9 +1347,13 @@ export default function Page() {
               fullName={form.full_name}
               email={form.email}
               isComplete={isComplete}
+              isEmailVerified={isEmailVerified}
               photoUrl={photoPreviewUrl}
               isDisabled={isFetching || isSaving || !isEditing}
+              isResendingVerification={isResendingVerification}
+              verificationMessage={verificationMessage}
               onPhotoChange={handlePhotoChange}
+              onResendVerification={handleResendVerification}
             />
             <SecurityCard
               form={passwordForm}

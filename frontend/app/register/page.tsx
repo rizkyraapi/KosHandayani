@@ -288,9 +288,6 @@ export default function Page() {
               >
                 {t('auth.registerSubtitle')}
               </p>
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-                <LanguageSwitcher />
-              </div>
             </div>
 
             {/* Card */}
@@ -511,6 +508,9 @@ export default function Page() {
             >
               © 2024 KosHandayani. Digital Concierge Property Management.
             </p>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+              <LanguageSwitcher compact />
+            </div>
           </div>
         </main>
 

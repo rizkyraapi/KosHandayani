@@ -105,6 +105,8 @@ class OwnerDataController extends Controller
                 'payment_status' => $occupancy->rentalApplication?->payment_status,
                 'payment' => $occupancy->rentalApplication?->payment ? [
                     'order_id' => $occupancy->rentalApplication->payment->order_id,
+                    'subtotal_amount' => $occupancy->rentalApplication->payment->subtotal_amount,
+                    'discount_amount' => $occupancy->rentalApplication->payment->discount_amount,
                     'gross_amount' => $occupancy->rentalApplication->payment->gross_amount,
                     'transaction_status' => $occupancy->rentalApplication->payment->transaction_status,
                     'paid_at' => optional($occupancy->rentalApplication->payment->paid_at)->toDateTimeString(),
@@ -124,6 +126,8 @@ class OwnerDataController extends Controller
             'rental_application_id' => $payment->rental_application_id,
             'order_id' => $payment->order_id,
             'transaction_id' => $payment->transaction_id,
+            'subtotal_amount' => $payment->subtotal_amount,
+            'discount_amount' => $payment->discount_amount,
             'gross_amount' => $payment->gross_amount,
             'payment_type' => $payment->payment_type,
             'transaction_status' => $payment->transaction_status,

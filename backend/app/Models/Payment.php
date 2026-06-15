@@ -12,6 +12,8 @@ class Payment extends Model
 
     protected $fillable = [
         'rental_application_id',
+        'subtotal_amount',
+        'discount_amount',
         'order_id',
         'transaction_id',
         'gross_amount',
@@ -24,6 +26,8 @@ class Payment extends Model
     protected function casts(): array
     {
         return [
+            'subtotal_amount' => 'integer',
+            'discount_amount' => 'integer',
             'gross_amount' => 'integer',
             'paid_at' => 'datetime',
         ];

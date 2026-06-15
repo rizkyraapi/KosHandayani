@@ -162,19 +162,29 @@ class RoomController extends Controller
         $totalImages = $existingImageIds->count() + count($newImages);
 
         if ($totalImages < 4) {
+            $message = trans('validation.min.array', [
+                'attribute' => trans('validation.attributes.images'),
+                'min' => 4,
+            ]);
+
             return response()->json([
-                'message' => 'The images field must have at least 4 items.',
+                'message' => $message,
                 'errors' => [
-                    'images' => ['The images field must have at least 4 items.'],
+                    'images' => [$message],
                 ],
             ], 422);
         }
 
         if ($totalImages > 10) {
+            $message = trans('validation.max.array', [
+                'attribute' => trans('validation.attributes.images'),
+                'max' => 10,
+            ]);
+
             return response()->json([
-                'message' => 'The images field must not have more than 10 items.',
+                'message' => $message,
                 'errors' => [
-                    'images' => ['The images field must not have more than 10 items.'],
+                    'images' => [$message],
                 ],
             ], 422);
         }

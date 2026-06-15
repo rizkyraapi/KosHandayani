@@ -22,17 +22,4 @@ class UpdateProfileRequest extends FormRequest
         ];
     }
 
-    public function messages(): array
-    {
-        return [
-            'full_name.required' => 'Nama lengkap wajib diisi.',
-            'whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
-            'whatsapp.regex' => 'Nomor WhatsApp harus berupa nomor Indonesia yang valid, contoh 081234567890.',
-            'pekerjaan.required' => 'Pekerjaan wajib diisi.',
-            'address.required' => 'Alamat wajib diisi.',
-            'profile_photo.image' => 'File foto profil harus berupa gambar.',
-            'profile_photo.mimes' => 'Foto profil harus berformat JPG, JPEG, atau PNG.',
-            'profile_photo.max' => 'Ukuran foto profil maksimal 2MB.',
-        ];
-    }
 }

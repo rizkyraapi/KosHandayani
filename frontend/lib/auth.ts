@@ -19,6 +19,8 @@ export type AuthUser = {
   pekerjaan?: string | null;
   address?: string | null;
   profile_completed: boolean;
+  email_verified?: boolean;
+  email_verified_at?: string | null;
   profile_photo?: string | null;
   profile_photo_url?: string | null;
 };
@@ -49,6 +51,8 @@ type ApiUser = {
   job?: string | null;
   address?: string | null;
   profile_completed?: boolean | null;
+  email_verified?: boolean | null;
+  email_verified_at?: string | null;
   profile_photo?: string | null;
   profile_photo_url?: string | null;
 };
@@ -94,6 +98,8 @@ function normalizeUser(user?: ApiUser): AuthUser {
     pekerjaan: user.pekerjaan ?? user.job ?? null,
     address: user.address ?? null,
     profile_completed: Boolean(user.profile_completed),
+    email_verified: Boolean(user.email_verified),
+    email_verified_at: user.email_verified_at ?? null,
     profile_photo: user.profile_photo ?? null,
     profile_photo_url: user.profile_photo_url ?? null,
   };
