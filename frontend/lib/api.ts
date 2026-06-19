@@ -7,7 +7,6 @@ export interface ApiRoom {
   name: string;
   branch_id: number | null;
   branch: ApiBranch | null;
-  room_type: 'single' | 'double' | 'suite';
   gender_type: 'male' | 'female' | 'mixed';
   price: number;
   description?: string | null;
@@ -40,7 +39,6 @@ export interface ApiBranch {
 export type RoomFilters = Partial<{
   search: string;
   branch_id: number | string;
-  room_type: ApiRoom['room_type'];
   gender_type: ApiRoom['gender_type'];
   room_status: ApiRoom['room_status'];
   price_min: number | string;
@@ -69,7 +67,6 @@ export async function getBranches(): Promise<ApiBranch[]> {
 
 export type CreateRoomPayload = {
   room_name: string;
-  room_type: ApiRoom['room_type'];
   branch_id: number;
   gender_type: ApiRoom['gender_type'];
   room_status: ApiRoom['room_status'];
@@ -94,7 +91,6 @@ export async function createRoom(payload: CreateRoomPayload): Promise<ApiRoom> {
   const formData = new FormData();
   formData.append('room_name', payload.room_name);
   formData.append('branch_id', String(payload.branch_id));
-  formData.append('room_type', payload.room_type);
   formData.append('gender_type', payload.gender_type);
   formData.append('room_status', payload.room_status);
   formData.append('price', String(payload.price));
@@ -126,7 +122,6 @@ export async function updateRoom(id: number | string, payload: UpdateRoomPayload
   formData.append('_method', 'PUT');
   formData.append('room_name', payload.room_name);
   formData.append('branch_id', String(payload.branch_id));
-  formData.append('room_type', payload.room_type);
   formData.append('gender_type', payload.gender_type);
   formData.append('room_status', payload.room_status);
   formData.append('price', String(payload.price));
@@ -219,7 +214,7 @@ export async function changePassword(payload: ChangePasswordPayload): Promise<Ap
   return data;
 }
 
-export type RentalApplicationStatus = 'pending' | 'approved' | 'rejected';
+export type RentalApplicationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 export type PaymentStatus = 'pending' | 'unpaid' | 'paid' | 'failed';
 
 export type RentalApplication = {
@@ -243,6 +238,16 @@ export type RentalApplication = {
   room?: Partial<ApiRoom> | null;
   room_occupancy?: RoomOccupancySummary | null;
   payment?: RentalApplicationPayment | null;
+  payment_history?: Array<Pick<
+    RentalApplicationPayment,
+    'id' | 'payment_category' | 'order_id' | 'gross_amount' | 'transaction_status' | 'period_start' | 'period_end' | 'paid_at' | 'created_at'
+  >>;
+  status_history?: Array<{
+    key: string;
+    label: string;
+    occurred_at: string;
+    status: string;
+  }>;
 };
 
 export type RoomOccupancySummary = {
@@ -259,15 +264,22 @@ export type RoomOccupancySummary = {
 export type RentalApplicationPayment = {
   id: number;
   rental_application_id: number;
+  room_occupancy_id?: number | null;
+  payment_category?: 'initial_rent' | 'renewal' | string;
   order_id: string;
   transaction_id?: string | null;
   subtotal_amount?: number | null;
   discount_amount?: number | null;
+  duration_months?: number | null;
+  monthly_price?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   gross_amount: number;
   payment_type?: string | null;
   transaction_status: 'pending' | 'settlement' | 'capture' | 'expire' | 'cancel' | 'deny' | string;
   snap_token?: string | null;
   paid_at?: string | null;
+  settlement_time?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -289,18 +301,42 @@ type ApiEnvelope<T> = {
 export type Payment = {
   id: number;
   rental_application_id: number;
+  room_occupancy_id?: number | null;
+  payment_category?: 'initial_rent' | 'renewal' | string;
   order_id: string;
   transaction_id?: string | null;
   subtotal_amount?: number | null;
   discount_amount?: number | null;
+  duration_months?: number | null;
+  monthly_price?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   gross_amount: number;
   payment_type?: string | null;
   transaction_status: 'pending' | 'settlement' | 'capture' | 'expire' | 'cancel' | 'deny' | string;
   snap_token?: string | null;
   paid_at?: string | null;
+  settlement_time?: string | null;
   created_at?: string;
   updated_at?: string;
   rental_application?: RentalApplication | null;
+  room_occupancy?: RoomOccupancySummary | null;
+};
+
+export type RenewalDurationOption = {
+  duration_months: number;
+  label: string;
+  subtotal_amount: number;
+  discount_amount: number;
+  gross_amount: number;
+};
+
+export type RenewalContext = {
+  occupancy: RoomOccupancySummary;
+  room: Partial<ApiRoom> | null;
+  rental_application: Pick<RentalApplication, 'id' | 'duration' | 'status' | 'payment_status'> | null;
+  duration_options: RenewalDurationOption[];
+  pending_renewal_payment?: Pick<Payment, 'id' | 'order_id' | 'gross_amount' | 'snap_token' | 'transaction_status' | 'period_start' | 'period_end'> | null;
 };
 
 type CreatePaymentResponse = {
@@ -344,6 +380,12 @@ export async function getMyRentalApplication(id: number | string): Promise<Renta
   return unwrapData(data, 'Detail pengajuan sewa tidak ditemukan.');
 }
 
+export async function cancelMyRentalApplication(id: number | string): Promise<RentalApplication> {
+  const { data } = await apiClient.post<ApiEnvelope<RentalApplication>>(`/my-rental-applications/${id}/cancel`);
+
+  return unwrapData(data, 'Pengajuan sewa tidak ditemukan.');
+}
+
 export async function createPayment(rentalApplicationId: number): Promise<{ snap_token: string; order_id: string }> {
   const { data } = await apiClient.post<CreatePaymentResponse>('/payments/create', {
     rental_application_id: rentalApplicationId,
@@ -356,6 +398,28 @@ export async function createPayment(rentalApplicationId: number): Promise<{ snap
   return {
     snap_token: data.snap_token,
     order_id: data.order_id,
+  };
+}
+
+export async function getRenewalContext(): Promise<RenewalContext> {
+  const { data } = await apiClient.get<ApiEnvelope<RenewalContext>>('/payments/renewal-context');
+
+  return unwrapData(data, 'Data perpanjangan sewa tidak ditemukan.');
+}
+
+export async function createRenewalPayment(durationMonths: number): Promise<{ snap_token: string; order_id: string; payment?: Payment }> {
+  const { data } = await apiClient.post<CreatePaymentResponse>('/payments/renewal/create', {
+    duration_months: durationMonths,
+  });
+
+  if (!data.snap_token || !data.order_id) {
+    throw new Error(data.message ?? 'Token pembayaran perpanjangan tidak ditemukan.');
+  }
+
+  return {
+    snap_token: data.snap_token,
+    order_id: data.order_id,
+    payment: data.payment,
   };
 }
 
@@ -405,28 +469,87 @@ export async function getOwnerRentalApplication(id: number | string): Promise<Re
 
 export async function updateOwnerRentalApplication(
   id: number | string,
-  payload: { status: Exclude<RentalApplicationStatus, 'pending'>; owner_notes?: string },
+  payload: { status: 'approved' | 'rejected'; owner_notes?: string },
 ): Promise<RentalApplication> {
   const { data } = await apiClient.put<ApiEnvelope<RentalApplication>>(`/owner/rental-applications/${id}`, payload);
 
   return unwrapData(data, 'Data pengajuan sewa tidak ditemukan.');
 }
 
-export type OwnerDashboardStats = {
-  total_rooms: number;
-  available_rooms: number;
-  occupied_rooms: number;
-  maintenance_rooms: number;
+export type OwnerLifecycleStatus = 'active' | 'h30' | 'h7' | 'h1' | 'overdue';
+export type OwnerRenewalStatus = 'none' | 'pending' | 'successful' | 'failed';
+
+export type OwnerAttentionItem = {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  href: string;
+  priority?: number;
+};
+
+export type OwnerActivity = {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  occurred_at: string;
+  href: string;
+};
+
+export type OwnerBranchStatistic = {
+  id: number;
+  branch_name: string;
+  room_count: number;
+  occupied_units: number;
+  occupancy_rate: number;
+  revenue: number;
   active_tenants: number;
-  pending_applications: number;
-  successful_payments: number;
-  paid_revenue: number;
-  pending_payments: number;
+};
+
+export type OwnerDashboardStats = {
+  units: {
+    total: number;
+    occupied: number;
+    vacant: number;
+    maintenance: number;
+    occupancy_rate: number;
+  };
+  revenue: {
+    this_month: number;
+    total: number;
+    renewal: number;
+    initial: number;
+  };
+  tenants: {
+    active: number;
+    h30: number;
+    h7: number;
+    h1: number;
+    overdue: number;
+  };
+  renewals: {
+    pending: number;
+    successful: number;
+    failed: number;
+  };
+  applications: {
+    pending_review: number;
+    awaiting_payment: number;
+  };
+  activities: OwnerActivity[];
+  branches: OwnerBranchStatistic[];
+  attention: OwnerAttentionItem[];
+  generated_at: string;
 };
 
 export type OwnerPaymentOverview = {
   stats: {
     total_collected: number;
+    revenue_initial: number;
+    revenue_renewal: number;
+    pending_amount: number;
+    failed_amount: number;
     paid_count: number;
     failed_count: number;
     pending_count: number;
@@ -453,30 +576,181 @@ export type OwnerTenantOccupancy = {
   end_date?: string | null;
   status: 'active' | string;
   payment_status?: PaymentStatus | null;
-  payment?: {
-    order_id: string;
-    subtotal_amount?: number | null;
-    discount_amount?: number | null;
-    gross_amount: number;
-    transaction_status: string;
-    paid_at?: string | null;
+  days_remaining?: number | null;
+  lifecycle_status: OwnerLifecycleStatus;
+  lifecycle_label: string;
+  lease_progress: number;
+  renewal_status: {
+    key: OwnerRenewalStatus;
+    label: string;
+    payment_id?: number | null;
+  };
+  latest_reminder?: {
+    id: number;
+    reminder_type: string;
+    channel: string;
+    sent_at?: string | null;
   } | null;
+  payments: Array<Payment & {
+    tenant?: AuthUser | null;
+    room?: Pick<ApiRoom, 'id' | 'room_name'> & {
+      branch?: Pick<ApiBranch, 'id' | 'branch_name'> | null;
+    } | null;
+  }>;
 };
 
-export async function getOwnerDashboardStats(): Promise<OwnerDashboardStats> {
-  const { data } = await apiClient.get<ApiEnvelope<OwnerDashboardStats>>('/owner/dashboard');
+export type OwnerRoomOverview = {
+  id: number;
+  room_name: string;
+  price: number;
+  room_status: ApiRoom['room_status'];
+  is_available: boolean;
+  thumbnail?: string | null;
+  branch?: Pick<ApiBranch, 'id' | 'branch_name' | 'city'> | null;
+  occupancy?: OwnerTenantOccupancy | null;
+};
+
+export type OwnerApplicationMonitoring = {
+  stats: {
+    pending_review: number;
+    awaiting_payment: number;
+    payment_success: number;
+    renewal_pending: number;
+  };
+  new_applications: OwnerApplicationMonitorItem[];
+  renewals: OwnerPaymentOverview['payments'];
+  cancelled: OwnerApplicationMonitorItem[];
+  rejected: OwnerApplicationMonitorItem[];
+  all_applications: OwnerApplicationMonitorItem[];
+};
+
+export type OwnerApplicationMonitorItem = {
+  id: number;
+  type: 'initial_rent';
+  status: RentalApplicationStatus;
+  payment_status?: PaymentStatus | null;
+  created_at: string;
+  updated_at?: string;
+  move_in_date?: string | null;
+  duration: string;
+  tenant?: AuthUser | null;
+  room?: Pick<ApiRoom, 'id' | 'room_name'> & {
+    branch?: Pick<ApiBranch, 'id' | 'branch_name' | 'city'> | null;
+  } | null;
+  payment_count: number;
+};
+
+export type OwnerReport = {
+  filters: {
+    year: number;
+    month?: number | null;
+    branch_id?: number | null;
+    years: number[];
+    branches: Array<Pick<ApiBranch, 'id' | 'branch_name'>>;
+  };
+  summary: {
+    total_revenue: number;
+    initial_revenue: number;
+    renewal_revenue: number;
+    occupancy_rate: number;
+    active_tenants: number;
+    renewal_rate: number;
+    average_revenue_per_room: number;
+  };
+  revenue_per_branch: Array<{
+    id: number;
+    branch_name: string;
+    revenue: number;
+    rooms: number;
+    occupied_units: number;
+    occupancy_rate: number;
+  }>;
+  monthly_trend: Array<{
+    month: number;
+    label: string;
+    revenue: number;
+    initial_revenue: number;
+    renewal_revenue: number;
+    occupied_units: number;
+    occupancy_rate: number;
+  }>;
+  recent_transactions: OwnerPaymentOverview['payments'];
+};
+
+export type OwnerBranchScope = 'all' | number | string;
+
+function ownerBranchParams(branchId: OwnerBranchScope = 'all') {
+  return { branch_id: branchId };
+}
+
+export async function getOwnerDashboardStats(branchId: OwnerBranchScope = 'all'): Promise<OwnerDashboardStats> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerDashboardStats>>('/owner/dashboard', {
+    params: ownerBranchParams(branchId),
+  });
 
   return unwrapData(data, 'Data dashboard owner tidak ditemukan.');
 }
 
-export async function getOwnerPayments(): Promise<OwnerPaymentOverview> {
-  const { data } = await apiClient.get<ApiEnvelope<OwnerPaymentOverview>>('/owner/payments');
+export async function getOwnerRoomsOverview(branchId: OwnerBranchScope = 'all'): Promise<OwnerRoomOverview[]> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerRoomOverview[]>>('/owner/rooms-overview', {
+    params: ownerBranchParams(branchId),
+  });
+
+  return unwrapData(data, 'Data monitoring kamar owner tidak ditemukan.');
+}
+
+export async function getOwnerApplicationMonitoring(branchId: OwnerBranchScope = 'all'): Promise<OwnerApplicationMonitoring> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerApplicationMonitoring>>('/owner/application-monitoring', {
+    params: ownerBranchParams(branchId),
+  });
+
+  return unwrapData(data, 'Data monitoring pengajuan owner tidak ditemukan.');
+}
+
+export async function getOwnerPayments(branchId: OwnerBranchScope = 'all'): Promise<OwnerPaymentOverview> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerPaymentOverview>>('/owner/payments', {
+    params: ownerBranchParams(branchId),
+  });
 
   return unwrapData(data, 'Data pembayaran owner tidak ditemukan.');
 }
 
-export async function getOwnerTenants(): Promise<OwnerTenantOccupancy[]> {
-  const { data } = await apiClient.get<ApiEnvelope<OwnerTenantOccupancy[]>>('/owner/tenants');
+export async function getOwnerTenants(branchId: OwnerBranchScope = 'all'): Promise<OwnerTenantOccupancy[]> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerTenantOccupancy[]>>('/owner/tenants', {
+    params: ownerBranchParams(branchId),
+  });
 
   return unwrapData(data, 'Data penyewa aktif tidak ditemukan.');
+}
+
+export type OwnerReportFilters = {
+  year?: number | string;
+  month?: number | string;
+  branch_id?: number | string;
+};
+
+export async function getOwnerReport(filters?: OwnerReportFilters): Promise<OwnerReport> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerReport>>('/owner/reports', { params: filters });
+
+  return unwrapData(data, 'Data laporan owner tidak ditemukan.');
+}
+
+export async function exportOwnerReportPdf(filters?: OwnerReportFilters): Promise<{
+  blob: Blob;
+  filename: string;
+}> {
+  const response = await apiClient.get<Blob>('/owner/reports/export-pdf', {
+    params: filters,
+    responseType: 'blob',
+  });
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  const encodedFilename = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plainFilename = disposition?.match(/filename="?([^";]+)"?/i)?.[1];
+
+  return {
+    blob: response.data,
+    filename: encodedFilename
+      ? decodeURIComponent(encodedFilename)
+      : plainFilename || 'laporan-keuangan-kos-handayani.pdf',
+  };
 }

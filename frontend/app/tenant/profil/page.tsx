@@ -154,7 +154,7 @@ function getApiErrorMessages(error: unknown, fallback: string) {
 function SideNav() {
   const { t } = useLanguage();
   const navItems = [
-    { icon: 'dashboard', labelKey: 'common.dashboard', active: false },
+    { icon: 'dashboard', labelKey: 'common.myRoom', active: false },
     { icon: 'domain', labelKey: 'owner.applications.branch', active: false },
     { icon: 'group', labelKey: 'common.tenants', active: false },
     { icon: 'payments', labelKey: 'common.payments', active: false },
@@ -695,6 +695,7 @@ function PersonalInfoForm({
   onReset: () => void;
 }) {
   const isDisabled = isFetching || isSaving || !isEditing;
+  const { t } = useLanguage();
 
   return (
     <form
@@ -704,35 +705,68 @@ function PersonalInfoForm({
       }}
       className="surface-shift-shadow"
       style={{
-        background: C.surfaceContainerLowest,
+        background: isEditing
+          ? 'linear-gradient(180deg, #ffffff 0%, #f8fff9 100%)'
+          : C.surfaceContainerLowest,
         padding: '2.5rem',
-        borderRadius: '0.75rem',
+        borderRadius: '1rem',
+        border: isEditing ? '1px solid rgba(0,110,47,0.55)' : '1px solid rgba(188,203,185,0.28)',
+        boxShadow: isEditing
+          ? '0 18px 46px rgba(0, 110, 47, 0.10)'
+          : '0 12px 40px rgba(17, 28, 45, 0.06)',
+        transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
       }}
     >
       {/* Section header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
-        <div
-          style={{
-            width: '2.5rem',
-            height: '2.5rem',
-            background: 'rgba(0,110,47,0.1)',
-            borderRadius: '0.75rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ color: C.primary }}>
-            person
-          </span>
-        </div>
-        <div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: C.onBackground }}>Informasi Pribadi</h3>
-          <p style={{ fontSize: '0.875rem', color: C.onSurfaceVariant }}>
-            Kelola data diri Anda untuk keperluan administrasi kos.
-          </p>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '1rem',
+          marginBottom: '1rem',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div
+            style={{
+              width: '2.75rem',
+              height: '2.75rem',
+              background: isEditing ? C.primary : 'rgba(0,110,47,0.1)',
+              borderRadius: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.2s',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ color: isEditing ? C.onPrimary : C.primary }}>
+              {isEditing ? 'edit_note' : 'person'}
+            </span>
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: C.onBackground, margin: 0 }}>
+              Informasi Pribadi
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: C.onSurfaceVariant, margin: '0.25rem 0 0' }}>
+              {isEditing ? t('tenant.profile.editModeSubtitle') : t('tenant.profile.viewModeSubtitle')}
+            </p>
+          </div>
         </div>
       </div>
+
+      <div
+        style={{
+          height: 4,
+          width: '100%',
+          marginBottom: '1.5rem',
+          borderRadius: 999,
+          background: isEditing
+            ? `linear-gradient(90deg, ${C.primary}, ${C.primaryContainer})`
+            : '#e2e8f0',
+          transition: 'background 0.2s',
+        }}
+      />
 
       {error && (
         <div
@@ -836,13 +870,22 @@ function PersonalInfoForm({
           paddingTop: '2.5rem',
           borderTop: '1px solid #f8fafc',
           display: 'flex',
-          justifyContent: 'space-between',
+          justifyContent: isEditing ? 'space-between' : 'flex-end',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '1rem',
         }}
       >
-
+        {isEditing && (
+          <div style={{ maxWidth: '21rem' }}>
+            <p style={{ margin: 0, color: C.onBackground, fontSize: '0.875rem', fontWeight: 800 }}>
+              {t('tenant.profile.unsavedChanges')}
+            </p>
+            <p style={{ margin: '0.3rem 0 0', color: C.onSurfaceVariant, fontSize: '0.75rem', lineHeight: 1.5 }}>
+              {t('tenant.profile.unsavedChangesDescription')}
+            </p>
+          </div>
+        )}
 
         {isEditing ? (
           <div style={{ display: 'flex', gap: '1rem' }}>
@@ -854,14 +897,17 @@ function PersonalInfoForm({
                 fontWeight: 700,
                 fontSize: '0.875rem',
                 color: '#64748b',
-                background: 'transparent',
-                border: 'none',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
                 cursor: 'pointer',
                 transition: 'color 0.15s',
               }}
               onClick={onReset}
               disabled={isFetching || isSaving}
             >
+              <span className="material-symbols-outlined" style={{ fontSize: '1rem', verticalAlign: '-2px', marginRight: '0.35rem' }}>
+                close
+              </span>
               Batal
             </button>
             <button
@@ -870,7 +916,7 @@ function PersonalInfoForm({
               style={{
                 padding: '0.75rem 2rem',
                 borderRadius: '0.75rem',
-                background: C.primary,
+                background: `linear-gradient(135deg, ${C.primary}, ${C.primaryContainer})`,
                 color: C.onPrimary,
                 fontWeight: 700,
                 fontSize: '0.875rem',
@@ -890,6 +936,9 @@ function PersonalInfoForm({
               onMouseDown={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)')}
               onMouseUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)')}
             >
+              <span className="material-symbols-outlined" style={{ fontSize: '1rem', verticalAlign: '-2px', marginRight: '0.35rem' }}>
+                save
+              </span>
               {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
           </div>
@@ -911,6 +960,9 @@ function PersonalInfoForm({
               transition: 'all 0.15s',
             }}
           >
+            <span className="material-symbols-outlined" style={{ fontSize: '1rem', verticalAlign: '-2px', marginRight: '0.35rem' }}>
+              edit
+            </span>
             Edit Profil
           </button>
         )}
@@ -933,15 +985,16 @@ function FormField({ label, type, value, icon, disabled = false, onChange }: For
     width: '100%',
     padding: icon ? '0.75rem 1rem 0.75rem 2.75rem' : '0.75rem 1rem',
     borderRadius: '0.75rem',
-    background: C.surfaceContainerLow,
-    border: 'none',
-    color: C.onBackground,
+    background: disabled ? '#f8fafc' : C.surfaceContainerLowest,
+    border: disabled ? '1px solid #e2e8f0' : '1px solid rgba(0,110,47,0.35)',
+    color: disabled ? '#64748b' : C.onBackground,
     fontWeight: 500,
     fontFamily: 'Inter, sans-serif',
     fontSize: '0.875rem',
     outline: 'none',
     boxSizing: 'border-box',
-    transition: 'background 0.15s, box-shadow 0.15s',
+    cursor: disabled ? 'not-allowed' : 'text',
+    transition: 'background 0.15s, box-shadow 0.15s, border-color 0.15s',
   };
 
   return (
@@ -970,12 +1023,15 @@ function FormField({ label, type, value, icon, disabled = false, onChange }: For
           onChange={(event) => onChange?.(event.target.value)}
           style={inputStyle}
           onFocus={(e) => {
+            if (disabled) return;
             (e.target as HTMLInputElement).style.background = C.surfaceContainerLowest;
             (e.target as HTMLInputElement).style.boxShadow = `0 0 0 2px rgba(0,110,47,0.2)`;
+            (e.target as HTMLInputElement).style.borderColor = C.primary;
           }}
           onBlur={(e) => {
-            (e.target as HTMLInputElement).style.background = C.surfaceContainerLow;
+            (e.target as HTMLInputElement).style.background = disabled ? '#f8fafc' : C.surfaceContainerLowest;
             (e.target as HTMLInputElement).style.boxShadow = 'none';
+            (e.target as HTMLInputElement).style.borderColor = disabled ? '#e2e8f0' : 'rgba(0,110,47,0.35)';
           }}
         />
       </div>
@@ -1020,24 +1076,28 @@ function FormFieldTextarea({ label, value, icon, disabled = false, onChange }: F
             width: '100%',
             padding: icon ? '0.75rem 1rem 0.75rem 2.75rem' : '0.75rem 1rem',
             borderRadius: '0.75rem',
-            background: C.surfaceContainerLow,
-            border: 'none',
-            color: C.onBackground,
+            background: disabled ? '#f8fafc' : C.surfaceContainerLowest,
+            border: disabled ? '1px solid #e2e8f0' : '1px solid rgba(0,110,47,0.35)',
+            color: disabled ? '#64748b' : C.onBackground,
             fontWeight: 500,
             fontFamily: 'Inter, sans-serif',
             fontSize: '0.875rem',
             outline: 'none',
             resize: 'none',
             boxSizing: 'border-box',
-            transition: 'background 0.15s, box-shadow 0.15s',
+            cursor: disabled ? 'not-allowed' : 'text',
+            transition: 'background 0.15s, box-shadow 0.15s, border-color 0.15s',
           }}
           onFocus={(e) => {
+            if (disabled) return;
             (e.target as HTMLTextAreaElement).style.background = C.surfaceContainerLowest;
             (e.target as HTMLTextAreaElement).style.boxShadow = `0 0 0 2px rgba(0,110,47,0.2)`;
+            (e.target as HTMLTextAreaElement).style.borderColor = C.primary;
           }}
           onBlur={(e) => {
-            (e.target as HTMLTextAreaElement).style.background = C.surfaceContainerLow;
+            (e.target as HTMLTextAreaElement).style.background = disabled ? '#f8fafc' : C.surfaceContainerLowest;
             (e.target as HTMLTextAreaElement).style.boxShadow = 'none';
+            (e.target as HTMLTextAreaElement).style.borderColor = disabled ? '#e2e8f0' : 'rgba(0,110,47,0.35)';
           }}
         />
       </div>

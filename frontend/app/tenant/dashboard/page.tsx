@@ -1,12 +1,21 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
-import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
+import RoomCard from '@/components/RoomCard';
+import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
+import {
+  getMyPayments,
+  getMyRentalApplications,
+  getRooms,
+  type ApiRoom,
+  type Payment,
+  type RentalApplication,
+} from '@/lib/api';
 import type { Locale } from '@/lib/i18n';
-import { getDurationInMonths } from '@/lib/rental-payment';
+import { getDurationInMonths, getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 /* ═══════════════════════════════════════════════════════════════
    ALL CUSTOM STYLES — fonts, colors, utilities, Material Symbols,
@@ -198,7 +207,7 @@ body { font-family: 'Inter', sans-serif; }
    Static data
 ───────────────────────────────────────────── */
 const NAV_ITEMS = [
-  { icon: 'home',           labelKey: 'common.dashboard', href: '/tenant/dashboard', active: true  },
+  { icon: 'home',           labelKey: 'common.myRoom', href: '/tenant/dashboard', active: true  },
   { icon: 'door_front',     labelKey: 'tenant.billing.myRoom', href: '/rooms', active: false },
   { icon: 'request_quote',  labelKey: 'common.bill', href: '/tenant/tagihan', active: false },
   { icon: 'history',        labelKey: 'common.history', href: '/tenant/riwayat', active: false },
@@ -326,6 +335,308 @@ function getDaysLeft(endDate: Date | null) {
   return Math.ceil((normalizedEndDate.getTime() - today.getTime()) / 86400000);
 }
 
+type LeaseVisualState = 'normal' | 'h30' | 'h7' | 'h1' | 'overdue';
+
+function getLeaseVisualState(daysLeft: number | null): LeaseVisualState {
+  if (daysLeft === null || daysLeft > 30) return 'normal';
+  if (daysLeft < 0) return 'overdue';
+  if (daysLeft <= 1) return 'h1';
+  if (daysLeft <= 7) return 'h7';
+
+  return 'h30';
+}
+
+function getLeaseVisualConfig(state: LeaseVisualState) {
+  const configs = {
+    normal: { border: 'rgba(34,197,94,0.24)', bg: '#afefb4', color: '#006e2f', labelKey: 'tenant.dashboard.leaseNormal' },
+    h30: { border: 'rgba(234,179,8,0.35)', bg: '#fef3c7', color: '#a16207', labelKey: 'tenant.dashboard.leaseH30' },
+    h7: { border: 'rgba(249,115,22,0.35)', bg: '#ffedd5', color: '#c2410c', labelKey: 'tenant.dashboard.leaseH7' },
+    h1: { border: 'rgba(239,68,68,0.35)', bg: '#fee2e2', color: '#b91c1c', labelKey: 'tenant.dashboard.leaseH1' },
+    overdue: { border: 'rgba(127,29,29,0.45)', bg: '#fee2e2', color: '#7f1d1d', labelKey: 'tenant.dashboard.leaseOverdueStatus' },
+  } satisfies Record<LeaseVisualState, { border: string; bg: string; color: string; labelKey: string }>;
+
+  return configs[state];
+}
+
+function hasActiveOccupancy(application: RentalApplication) {
+  return application.payment_status === 'paid' && application.room_occupancy?.status === 'active';
+}
+
+function isAwaitingPayment(application: RentalApplication) {
+  return application.status === 'approved' && application.payment_status !== 'paid';
+}
+
+function getApplicationPayment(application: RentalApplication | null, payments: Payment[]) {
+  if (!application) return null;
+
+  const payment = payments.find((item) => item.rental_application_id === application.id)
+    ?? application.payment
+    ?? null;
+
+  return payment ? ({ ...payment, rental_application: application } as Payment) : null;
+}
+
+function getApplicationTotal(application: RentalApplication | null, payment: Payment | null) {
+  if (!application) return 0;
+
+  return getRentalPaymentBreakdown({
+    monthlyPrice: application.room?.price,
+    duration: application.duration,
+    subtotalAmount: payment?.subtotal_amount ?? application.payment?.subtotal_amount,
+    discountAmount: payment?.discount_amount ?? application.payment?.discount_amount,
+    grossAmount: payment?.gross_amount ?? application.payment?.gross_amount,
+  }).grossAmount;
+}
+
+function getRoomImage(room: ApiRoom) {
+  return room.thumbnail
+    || room.image_url
+    || room.images?.find((image) => image.is_primary)?.image_url
+    || room.images?.[0]?.image_url
+    || '';
+}
+
+function getRoomAmenities(room: ApiRoom) {
+  return room.facilities.map((facility) => ({
+    icon: 'check_circle',
+    label: facility.facility_name || facility.name || 'Fasilitas',
+  }));
+}
+
+function TenantDashboardEmptyState({
+  rooms,
+  recommendationsError,
+}: {
+  rooms: ApiRoom[];
+  recommendationsError: string;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="space-y-8">
+      <section className="overflow-hidden rounded-3xl border border-outline-variant-20 bg-white shadow-sm">
+        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_280px] lg:items-center lg:p-10">
+          <div className="max-w-2xl">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary-container text-primary">
+              <span className="material-symbols-outlined">home_work</span>
+            </span>
+            <h3 className="mt-5 text-3xl font-extrabold leading-tight text-on-surface font-manrope">
+              {t('tenant.dashboard.emptyTitle')}
+            </h3>
+            <p className="mt-3 max-w-xl text-sm font-medium leading-7 text-on-surface-variant sm:text-base">
+              {t('tenant.dashboard.emptyDescription')}
+            </p>
+            <div className="mt-6">
+              <Link
+                href="/rooms"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:shadow-md"
+              >
+                {t('tenant.dashboard.viewRoomsCta')}
+                <span className="material-symbols-outlined text-base">arrow_forward</span>
+              </Link>
+            </div>
+          </div>
+          <div className="hidden rounded-3xl bg-surface-container-low p-5 lg:block">
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                {t('tenant.dashboard.nextStep')}
+              </p>
+              <div className="mt-4 space-y-4">
+                {[t('tenant.dashboard.stepChooseRoom'), t('tenant.dashboard.stepSubmitApplication'), t('tenant.dashboard.stepWaitReview')].map((step, index) => (
+                  <div key={step} className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary-container text-xs font-extrabold text-primary">
+                      {index + 1}
+                    </span>
+                    <p className="text-sm font-bold text-on-surface">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">
+              {t('tenant.dashboard.availableRoomsEyebrow')}
+            </p>
+            <h3 className="mt-1 text-xl font-extrabold text-on-surface font-manrope">
+              {t('tenant.dashboard.recommendedRooms')}
+            </h3>
+          </div>
+          <Link href="/rooms" className="text-sm font-bold text-primary hover:underline">
+            {t('tenant.dashboard.viewAll')}
+          </Link>
+        </div>
+
+        {recommendationsError ? (
+          <EmptyState
+            title={t('tenant.dashboard.recommendationsUnavailable')}
+            description={recommendationsError}
+          />
+        ) : rooms.length === 0 ? (
+          <EmptyState
+            title={t('tenant.dashboard.noRecommendedRooms')}
+            description={t('tenant.dashboard.noRecommendedRoomsDescription')}
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            {rooms.map((room) => (
+              <RoomCard
+                key={room.id}
+                id={room.id}
+                name={room.room_name || room.name}
+                location={room.branch?.branch_name || t('tenant.applications.branchUnset')}
+                price={formatRupiah(room.price)}
+                imageUrl={getRoomImage(room)}
+                status={room.room_status}
+                amenities={getRoomAmenities(room)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PendingApplicationState({ application, locale }: { application: RentalApplication; locale: Locale }) {
+  const { t } = useLanguage();
+
+  return (
+    <section className="rounded-3xl border border-outline-variant-20 bg-white p-6 shadow-sm sm:p-8">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <span className="material-symbols-outlined rounded-2xl bg-surface-container-low p-3 text-primary">
+            hourglass_top
+          </span>
+          <div>
+            <div className="mb-3">
+              <RentalApplicationStatusBadge status={application.status} />
+            </div>
+            <h3 className="text-2xl font-extrabold text-on-surface font-manrope">
+              {t('tenant.dashboard.pendingTitle')}
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-on-surface-variant">
+              {t('tenant.dashboard.pendingMessage')}
+            </p>
+          </div>
+        </div>
+        <Link
+          href={`/tenant/rental-applications/${application.id}`}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-outline-variant-30 bg-white px-5 py-3 text-sm font-bold text-primary transition hover:bg-surface-container-low"
+        >
+          {t('tenant.dashboard.viewApplication')}
+          <span className="material-symbols-outlined text-base">arrow_forward</span>
+        </Link>
+      </div>
+      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <ApplicationMetric
+          icon="fact_check"
+          label={t('owner.applications.applicationStatus')}
+          value={t('status.pending')}
+        />
+        <ApplicationMetric
+          icon="event"
+          label={t('tenant.dashboard.submittedAt')}
+          value={formatDate(application.created_at, locale)}
+        />
+        <ApplicationMetric
+          icon="door_front"
+          label={t('common.room')}
+          value={application.room?.room_name || t('tenant.applications.roomUnavailable')}
+        />
+      </div>
+    </section>
+  );
+}
+
+function AwaitingPaymentState({
+  application,
+  amount,
+}: {
+  application: RentalApplication;
+  amount: number;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <section
+      className="rounded-3xl border bg-white p-6 shadow-sm sm:p-8"
+      style={{ borderColor: 'rgba(175,239,180,0.7)' }}
+    >
+      <div className="grid gap-6 lg:grid-cols-[1fr_280px] lg:items-center">
+        <div className="flex items-start gap-4">
+          <span className="material-symbols-outlined rounded-2xl bg-secondary-container p-3 text-primary">
+            payments
+          </span>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">
+              {t('tenant.dashboard.awaitingPaymentEyebrow')}
+            </p>
+            <h3 className="mt-2 text-2xl font-extrabold text-on-surface font-manrope">
+              {t('tenant.dashboard.awaitingPaymentTitle')}
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-on-surface-variant">
+              {t('tenant.dashboard.awaitingPaymentDescription')}
+            </p>
+          </div>
+        </div>
+        <div className="rounded-2xl bg-surface-container-low p-5">
+          <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+            {t('tenant.dashboard.paymentTotal')}
+          </p>
+          <p className="mt-2 text-2xl font-extrabold text-on-surface font-manrope">
+            {formatRupiah(amount)}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-on-surface-variant">
+            {application.room?.room_name || t('tenant.applications.roomUnavailable')}
+          </p>
+        </div>
+      </div>
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid flex-1 gap-4 sm:grid-cols-2">
+          <ApplicationMetric
+            icon="door_front"
+            label={t('common.room')}
+            value={application.room?.room_name || t('tenant.applications.roomUnavailable')}
+          />
+          <ApplicationMetric
+            icon="calendar_month"
+            label={t('owner.applications.duration')}
+            value={application.duration}
+          />
+        </div>
+        <Link
+          href={`/tenant/rental-applications/${application.id}`}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:shadow-md"
+        >
+          {t('tenant.applications.payNow')}
+          <span className="material-symbols-outlined text-base">arrow_forward</span>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function ApplicationMetric({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-outline-variant-20 bg-surface-container-lowest p-4">
+      <div className="flex items-start gap-3">
+        <span className="material-symbols-outlined rounded-xl bg-surface-container-low p-2 text-primary">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{label}</p>
+          <p className="mt-1 truncate text-sm font-extrabold text-on-surface">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PAGE COMPONENT
 ═══════════════════════════════════════════════════════════════ */
@@ -335,27 +646,42 @@ export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [applications, setApplications] = useState<RentalApplication[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [recommendedRooms, setRecommendedRooms] = useState<ApiRoom[]>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState('');
+  const [recommendationsError, setRecommendationsError] = useState('');
   const displayName = user?.full_name || t('common.tenant');
   const isProfileComplete = Boolean(user?.profile_completed);
-  const activePayment = payments.find((payment) => normalizePaymentStatus(payment) === 'pending')
-    ?? payments.find((payment) => normalizePaymentStatus(payment) === 'failed')
-    ?? payments.find((payment) => normalizePaymentStatus(payment) === 'paid')
-    ?? null;
-  const activeApplication = activePayment?.rental_application
-    ?? applications.find((application) => application.payment_status === 'paid')
-    ?? applications.find((application) => application.status === 'approved')
-    ?? applications[0]
-    ?? null;
+  const activeApplication = useMemo(
+    () => applications.find(hasActiveOccupancy) ?? null,
+    [applications],
+  );
+  const pendingApplication = useMemo(
+    () => applications.find((application) => application.status === 'pending') ?? null,
+    [applications],
+  );
+  const awaitingPaymentApplication = useMemo(
+    () => applications.find(isAwaitingPayment) ?? null,
+    [applications],
+  );
+  const dashboardState = activeApplication
+    ? 'active'
+    : pendingApplication
+      ? 'pending'
+      : awaitingPaymentApplication
+        ? 'awaiting-payment'
+        : 'empty';
+  const showActiveRoomHeader = dashboardState === 'active';
+  const activePayment = getApplicationPayment(activeApplication, payments);
+  const awaitingPayment = getApplicationPayment(awaitingPaymentApplication, payments);
+  const awaitingPaymentTotal = getApplicationTotal(awaitingPaymentApplication, awaitingPayment);
+  const visibleApplications = applications.slice(0, 3);
   const activeRoom = activeApplication?.room;
   const activeLeaseEndDate = parseDateOnly(activeApplication?.room_occupancy?.end_date)
     ?? calculateFallbackEndDate(activeApplication);
   const activeLeaseDaysLeft = getDaysLeft(activeLeaseEndDate);
-  const activeLeaseTone = activeLeaseDaysLeft === null || activeLeaseDaysLeft > 30
-    ? 'normal'
-    : activeLeaseDaysLeft > 7
-      ? 'warning'
-      : 'danger';
+  const activeLeaseVisualState = getLeaseVisualState(activeLeaseDaysLeft);
+  const activeLeaseVisual = getLeaseVisualConfig(activeLeaseVisualState);
   const activeLeaseIsOverdue = typeof activeLeaseDaysLeft === 'number' && activeLeaseDaysLeft < 0;
   const paymentStatus = getPaymentStatusLabel(activePayment, t);
 
@@ -372,25 +698,47 @@ export default function Page() {
     let isMounted = true;
 
     async function loadDashboardData() {
-      try {
-        const [applicationData, paymentData] = await Promise.all([
-          getMyRentalApplications(),
-          getMyPayments(),
-        ]);
-        if (isMounted) {
-          setApplications(applicationData.slice(0, 3));
-          setPayments(paymentData);
-          setApplicationsError('');
-        }
-      } catch {
-        if (isMounted) {
-          setApplicationsError('Pengajuan sewa belum dapat dimuat.');
-        }
+      setDashboardLoading(true);
+
+      const [applicationResult, paymentResult, roomResult] = await Promise.allSettled([
+        getMyRentalApplications(),
+        getMyPayments(),
+        getRooms({ room_status: 'available', limit: 4 }),
+      ]);
+
+      if (!isMounted) {
+        return;
       }
+
+      if (applicationResult.status === 'fulfilled') {
+        setApplications(applicationResult.value);
+        setApplicationsError('');
+      } else {
+        setApplications([]);
+        setApplicationsError(t('tenant.dashboard.applicationsLoadFailed'));
+      }
+
+      if (paymentResult.status === 'fulfilled') {
+        setPayments(paymentResult.value);
+      } else {
+        setPayments([]);
+      }
+
+      if (roomResult.status === 'fulfilled') {
+        setRecommendedRooms(roomResult.value.slice(0, 4));
+        setRecommendationsError('');
+      } else {
+        setRecommendedRooms([]);
+        setRecommendationsError(t('tenant.dashboard.recommendationsLoadFailed'));
+      }
+
+      setDashboardLoading(false);
     }
 
-    if (user?.role === 'tenant') {
+    if (!isLoading && user?.role === 'tenant') {
       void loadDashboardData();
+    } else if (!isLoading) {
+      setDashboardLoading(false);
     }
 
     const handleTenantDataSync = () => {
@@ -403,7 +751,7 @@ export default function Page() {
       isMounted = false;
       window.removeEventListener('tenant-data-sync', handleTenantDataSync);
     };
-  }, [user?.role]);
+  }, [isLoading, t, user?.role]);
 
   return (
     <div className="bg-background text-on-background min-h-screen flex">
@@ -492,7 +840,7 @@ export default function Page() {
       <main className="main-offset flex-1 p-4 lg:p-8 overflow-y-auto min-h-screen">
 
         {/* Header */}
-        <header className="flex justify-between items-center mb-10">
+        <header className={`flex justify-between items-center ${showActiveRoomHeader ? 'mb-10' : 'mb-6'}`}>
           <div className="flex items-center gap-3">
             <button
               className="mobile-menu-btn lg:hidden p-2 rounded-lg bg-surface-container-lowest shadow-sm"
@@ -501,14 +849,16 @@ export default function Page() {
             >
               <span className="material-symbols-outlined text-on-surface-variant">menu</span>
             </button>
-            <div>
-              <h2 className="text-2xl lg:text-3xl font-extrabold text-on-surface font-manrope tracking-tight">
-                {t('tenant.dashboard.welcome', { name: displayName })}
-              </h2>
-              <p className="text-on-surface-variant mt-1 font-medium text-sm lg:text-base">
-                {t('tenant.dashboard.subtitle')}
-              </p>
-            </div>
+            {showActiveRoomHeader && (
+              <div>
+                <h2 className="text-2xl lg:text-3xl font-extrabold text-on-surface font-manrope tracking-tight">
+                  {t('tenant.dashboard.welcome', { name: displayName })}
+                </h2>
+                <p className="text-on-surface-variant mt-1 font-medium text-sm lg:text-base">
+                  {t('tenant.dashboard.subtitle')}
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex gap-3">
             <button className="p-3 bg-surface-container-lowest rounded-xl shadow-sm hover-bg-surface-container transition-colors">
@@ -540,6 +890,32 @@ export default function Page() {
           </div>
         )}
 
+        {dashboardLoading ? (
+          <LoadingState
+            title={t('tenant.dashboard.loadingTitle')}
+            description={t('tenant.dashboard.loadingDescription')}
+          />
+        ) : applicationsError ? (
+          <ErrorState
+            title={t('tenant.dashboard.loadFailed')}
+            description={applicationsError}
+            actionLabel={t('common.tryAgain')}
+            onAction={() => window.dispatchEvent(new Event('tenant-data-sync'))}
+          />
+        ) : dashboardState === 'empty' ? (
+          <TenantDashboardEmptyState
+            rooms={recommendedRooms}
+            recommendationsError={recommendationsError}
+          />
+        ) : dashboardState === 'pending' && pendingApplication ? (
+          <PendingApplicationState application={pendingApplication} locale={locale} />
+        ) : dashboardState === 'awaiting-payment' && awaitingPaymentApplication ? (
+          <AwaitingPaymentState
+            application={awaitingPaymentApplication}
+            amount={awaitingPaymentTotal}
+          />
+        ) : (
+          <>
         {/* House Rules */}
         <div className="mb-10 bg-surface-container-low-50 border border-outline-variant-30 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3 px-2">
@@ -567,13 +943,7 @@ export default function Page() {
           className="mb-10 rounded-2xl p-5 lg:p-6 shadow-sm"
           style={{
             background: '#ffffff',
-            border: `1px solid ${
-              activeLeaseTone === 'danger'
-                ? 'rgba(186,26,26,0.18)'
-                : activeLeaseTone === 'warning'
-                  ? 'rgba(158,64,54,0.22)'
-                  : 'rgba(188,203,185,0.2)'
-            }`,
+            border: `1px solid ${activeLeaseVisual.border}`,
           }}
         >
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -581,16 +951,24 @@ export default function Page() {
               <span
                 className="material-symbols-outlined rounded-xl p-3"
                 style={{
-                  background: activeLeaseTone === 'danger' ? '#ffdad6' : activeLeaseTone === 'warning' ? 'rgba(255,139,124,0.2)' : '#afefb4',
-                  color: activeLeaseTone === 'danger' ? '#ba1a1a' : activeLeaseTone === 'warning' ? '#9e4036' : '#006e2f',
+                  background: activeLeaseVisual.bg,
+                  color: activeLeaseVisual.color,
                 }}
               >
                 event_available
               </span>
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
-                  {t('tenant.dashboard.activeLease')}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                    {t('tenant.dashboard.activeLease')}
+                  </p>
+                  <span
+                    className="rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide"
+                    style={{ background: activeLeaseVisual.bg, color: activeLeaseVisual.color }}
+                  >
+                    {t(activeLeaseVisual.labelKey)}
+                  </span>
+                </div>
                 <h3 className="mt-1 text-xl font-extrabold text-on-surface font-manrope">
                   {activeRoom?.room_name || t('tenant.dashboard.noActiveRoom')}
                 </h3>
@@ -599,12 +977,10 @@ export default function Page() {
                 </p>
               </div>
             </div>
-            <div className="md:text-right">
+            <div className="flex flex-col gap-3 md:items-end md:text-right">
               <p
                 className="text-2xl font-extrabold font-manrope"
-                style={{
-                  color: activeLeaseTone === 'danger' ? '#ba1a1a' : activeLeaseTone === 'warning' ? '#9e4036' : '#006e2f',
-                }}
+                style={{ color: activeLeaseVisual.color }}
               >
                 {activeLeaseIsOverdue
                   ? t('tenant.dashboard.leaseOverdue')
@@ -615,6 +991,13 @@ export default function Page() {
               <p className="mt-1 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                 {t('tenant.dashboard.remainingLease')}
               </p>
+              <Link
+                href="/tenant/perpanjang-sewa"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:shadow-md"
+              >
+                {t('tenant.renewal.cta')}
+                <span className="material-symbols-outlined text-base">arrow_forward</span>
+              </Link>
             </div>
           </div>
         </section>
@@ -809,11 +1192,11 @@ export default function Page() {
               </div>
               {applicationsError ? (
                 <p className="text-error text-sm font-bold">{applicationsError}</p>
-              ) : applications.length === 0 ? (
+              ) : visibleApplications.length === 0 ? (
                 <p className="text-on-surface-variant text-sm">{t('empty.noApplications')}</p>
               ) : (
                 <div className="space-y-3">
-                  {applications.map((application) => (
+                  {visibleApplications.map((application) => (
                     <Link
                       key={application.id}
                       href={`/tenant/rental-applications/${application.id}`}
@@ -831,6 +1214,8 @@ export default function Page() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
         {/* Footer */}
         <footer className="mt-16 pb-8 flex flex-col items-center gap-4 text-slate-500 text-xs">

@@ -15,6 +15,7 @@ class LeaseReminderMail extends Mailable
     public function __construct(
         public readonly string $subjectLine,
         public readonly string $body,
+        public readonly array $details = [],
     ) {}
 
     public function envelope(): Envelope
@@ -27,10 +28,11 @@ class LeaseReminderMail extends Mailable
     public function content(): Content
     {
         return new Content(
+            view: 'emails.lease-reminder',
             text: 'emails.plain-text',
-            with: [
+            with: array_merge($this->details, [
                 'body' => $this->body,
-            ],
+            ]),
         );
     }
 }

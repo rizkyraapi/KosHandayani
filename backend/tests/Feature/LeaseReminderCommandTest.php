@@ -50,12 +50,15 @@ class LeaseReminderCommandTest extends TestCase
     {
         Mail::fake();
         $occupancy = $this->createOccupancy($daysLeft, $duration);
+        $expectedSubject = $reminderType === 'H-0'
+            ? 'Masa Sewa Anda Berakhir Hari Ini'
+            : 'Pengingat Masa Sewa Akan Berakhir';
 
         $this->artisan('lease:send-reminders')->assertExitCode(0);
 
-        Mail::assertSent(LeaseReminderMail::class, function (LeaseReminderMail $mail) use ($occupancy): bool {
+        Mail::assertSent(LeaseReminderMail::class, function (LeaseReminderMail $mail) use ($occupancy, $expectedSubject): bool {
             return $mail->hasTo($occupancy->user->email)
-                && $mail->subjectLine === 'Pengingat Masa Sewa Kos Handayani'
+                && $mail->subjectLine === $expectedSubject
                 && str_contains($mail->body, $occupancy->user->name);
         });
 
@@ -103,6 +106,34 @@ class LeaseReminderCommandTest extends TestCase
         ]);
     }
 
+    public function test_lease_reminder_email_template_renders_without_message_name_conflict(): void
+    {
+        $mail = new LeaseReminderMail(
+            'Pengingat Masa Sewa Akan Berakhir',
+            "Halo Tenant Reminder,\n\nMasa sewa Anda akan berakhir dalam 7 hari.",
+            [
+                'title' => 'Pengingat Masa Sewa Akan Berakhir',
+                'preheader' => 'Masa sewa Anda akan berakhir dalam 7 hari.',
+                'eyebrow' => 'Pengingat Sewa',
+                'tenantName' => 'Tenant Reminder',
+                'roomName' => 'Kamar Reminder',
+                'branchName' => 'Cabang Utama',
+                'endDate' => '08 Juni 2026',
+                'daysLeft' => 7,
+                'overdueDays' => null,
+                'actionUrl' => 'http://localhost:3000/tenant/rental-applications',
+                'reminderMessage' => 'masa sewa Anda akan berakhir dalam 7 hari.',
+                'tone' => 'upcoming',
+            ],
+        );
+
+        $html = $mail->render();
+
+        $this->assertStringContainsString('Halo <strong style="color:#111c2d;">Tenant Reminder</strong>', $html);
+        $this->assertStringContainsString('masa sewa Anda akan berakhir dalam 7 hari.', $html);
+        $this->assertStringContainsString('Kamar Reminder', $html);
+    }
+
     public static function upcomingReminderCases(): array
     {
         return [
@@ -123,7 +154,6 @@ class LeaseReminderCommandTest extends TestCase
         $room = Room::create([
             'room_name' => 'Kamar Reminder',
             'branch' => 'Cabang Utama',
-            'room_type' => 'single',
             'gender_type' => 'mixed',
             'room_status' => 'occupied',
             'price' => 500000,

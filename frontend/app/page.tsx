@@ -48,7 +48,6 @@ type HomepageRoom = {
   location: string;
   price: string;
   imageUrl: string;
-  roomType: string;
   genderType: string;
   status: ApiRoom['room_status'];
 };
@@ -68,7 +67,6 @@ function mapRoomToCard(room: ApiRoom, index: number): HomepageRoom {
     location: room.branch?.branch_name || 'Cabang belum diatur',
     price: formatRupiah(room.price),
     imageUrl: room.thumbnail || fallbackRoomImages[index % fallbackRoomImages.length],
-    roomType: room.room_type,
     genderType: room.gender_type,
     status: room.room_status,
   };
@@ -87,7 +85,11 @@ export default function Page() {
       setRoomsError('');
 
       const normalizedKeyword = keyword.trim();
-      const data = await getRooms(normalizedKeyword ? { search: normalizedKeyword } : undefined);
+      const data = await getRooms({
+        room_status: 'available',
+        limit: 10,
+        ...(normalizedKeyword ? { search: normalizedKeyword } : {}),
+      });
 
       setApiRooms(data);
       setActiveSearchKeyword(normalizedKeyword);
@@ -116,6 +118,10 @@ export default function Page() {
   }
 
   const rooms = useMemo(() => apiRooms.map(mapRoomToCard), [apiRooms]);
+  const homepageRooms = useMemo(
+    () => rooms.filter((room) => room.status === 'available').slice(0, 10),
+    [rooms],
+  );
 
   return (
     <div
@@ -156,11 +162,78 @@ export default function Page() {
           font-size: clamp(0.95rem, 2.5vw, 1.125rem) !important;
         }
         .search-grid {
-          display: grid;
-          grid-template-columns: minmax(180px, 1fr);
-          gap: 8px;
-          padding: 8px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 12px 16px;
           flex: 1;
+        }
+        .search-panel {
+          border: 1px solid rgba(255, 255, 255, 0.88);
+          background: rgba(255, 255, 255, 0.9) !important;
+          box-shadow: 0 24px 60px rgba(17, 28, 45, 0.14) !important;
+          transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+        .search-panel:focus-within {
+          border-color: rgba(0, 110, 47, 0.42);
+          box-shadow: 0 28px 70px rgba(0, 83, 33, 0.18) !important;
+          transform: translateY(-2px);
+        }
+        .search-icon-box {
+          width: 48px;
+          height: 48px;
+          flex: 0 0 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 14px;
+          color: #006e2f;
+          background: linear-gradient(145deg, #e6f7eb, #f0f3ff);
+          border: 1px solid rgba(0, 110, 47, 0.1);
+        }
+        .search-field {
+          min-width: 0;
+          flex: 1;
+          text-align: left;
+        }
+        .search-field-label {
+          display: block;
+          color: #006e2f;
+          font-family: 'Manrope', sans-serif;
+          font-size: 0.7rem;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          line-height: 1;
+          text-transform: uppercase;
+        }
+        .search-input-row {
+          position: relative;
+          display: flex;
+          align-items: center;
+          margin-top: 7px;
+        }
+        .search-input {
+          width: 100%;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: #111c2d;
+          font-family: 'Manrope', sans-serif;
+          font-size: 1.05rem;
+          font-weight: 700;
+          line-height: 1.35;
+          padding: 0 36px 0 0;
+        }
+        .search-input::placeholder {
+          color: #728074;
+          font-weight: 500;
+          opacity: 1;
+        }
+        .search-helper {
+          margin-top: 5px;
+          color: #657166;
+          font-size: 0.75rem;
+          line-height: 1.35;
         }
         .select-wrap {
           position: relative;
@@ -195,6 +268,14 @@ export default function Page() {
         .search-clear-button:hover {
           background-color: rgba(0, 110, 47, 0.08);
         }
+        .search-button {
+          min-width: 190px;
+          box-shadow: 0 12px 26px rgba(0, 110, 47, 0.22);
+        }
+        .search-button:hover {
+          box-shadow: 0 16px 32px rgba(0, 110, 47, 0.3);
+          transform: translateY(-1px);
+        }
         .section-heading-row {
           display: flex;
           align-items: baseline;
@@ -203,10 +284,29 @@ export default function Page() {
           margin-bottom: 48px;
         }
         .room-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          display: flex;
           gap: 24px;
+          overflow-x: auto;
+          overscroll-behavior-inline: contain;
+          scroll-snap-type: inline mandatory;
+          scrollbar-width: thin;
+          scrollbar-color: #bccbb9 transparent;
+          padding: 4px 2px 20px;
           margin-bottom: 64px;
+        }
+        .room-grid::-webkit-scrollbar {
+          height: 8px;
+        }
+        .room-grid::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .room-grid::-webkit-scrollbar-thumb {
+          background: #bccbb9;
+          border-radius: 9999px;
+        }
+        .room-grid > .room-card {
+          flex: 0 0 clamp(250px, 23vw, 292px);
+          scroll-snap-align: start;
         }
         .feature-grid {
           display: grid;
@@ -402,7 +502,7 @@ export default function Page() {
         }
         @media (max-width: 900px) {
           .room-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
           }
           .feature-grid {
             grid-template-columns: 1fr;
@@ -445,18 +545,33 @@ export default function Page() {
           }
           .search-panel {
             margin-top: 32px !important;
-            border-radius: 12px !important;
+            padding: 8px !important;
+            border-radius: 18px !important;
             flex-direction: column !important;
             align-items: stretch !important;
           }
           .search-grid {
-            grid-template-columns: 1fr;
-            padding: 4px;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 8px 12px;
             width: 100%;
           }
+          .search-icon-box {
+            width: 42px;
+            height: 42px;
+            flex-basis: 42px;
+            border-radius: 12px;
+          }
+          .search-input {
+            font-size: 0.92rem;
+          }
+          .search-helper {
+            font-size: 0.68rem;
+          }
           .search-button {
-            padding: 12px 20px !important;
-            border-radius: 8px !important;
+            min-width: 0;
+            padding: 14px 20px !important;
+            border-radius: 12px !important;
             width: 100%;
           }
           .section-heading-row {
@@ -470,9 +585,13 @@ export default function Page() {
             display: none !important;
           }
           .room-grid {
-            grid-template-columns: 1fr;
-            gap: 16px;
+            gap: 14px;
             margin-bottom: 40px;
+            margin-right: calc(clamp(16px, 4vw, 32px) * -1);
+            padding-right: clamp(16px, 4vw, 32px);
+          }
+          .room-grid > .room-card {
+            flex-basis: 168px;
           }
           .feature-section {
             padding-top: 56px !important;
@@ -524,6 +643,7 @@ export default function Page() {
           style={{
             position: 'relative',
             overflow: 'hidden',
+            backgroundColor: '#f9f9ff',
           }}
         >
           <div
@@ -538,6 +658,7 @@ export default function Page() {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
+                display: 'block',
                 opacity: 0.38,
                 filter: 'blur(1px)',
                 transform: 'scale(1.02)',
@@ -550,7 +671,7 @@ export default function Page() {
                 position: 'absolute',
                 inset: 0,
                 background:
-                  'linear-gradient(to bottom, rgba(249, 249, 255, 0.92), rgba(249, 249, 255, 0.45), rgba(249, 249, 255, 0.9))',
+                  'linear-gradient(to bottom, rgba(249, 249, 255, 0.92) 0%, rgba(249, 249, 255, 0.45) 48%, #f9f9ff 100%)',
               }}
             ></div>
           </div>
@@ -601,66 +722,33 @@ export default function Page() {
               style={{
                 marginTop: '48px',
                 padding: '8px',
-                backgroundColor: '#ffffff',
-                borderRadius: '1rem',
-                boxShadow: '0 20px 25px rgba(0, 0, 0, 0.1)',
+                borderRadius: '1.25rem',
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'stretch',
                 gap: '8px',
-                maxWidth: '80rem',
+                maxWidth: '56rem',
                 marginLeft: 'auto',
                 marginRight: 'auto',
                 ...glassEffectStyle,
               }}
             >
               <div className="search-grid">
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    paddingLeft: '16px',
-                    paddingRight: '16px',
-                    paddingTop: '8px',
-                    paddingBottom: '8px',
-                    borderRadius: '0.75rem',
-                    cursor: 'text',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f0f3ff';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <label
-                    style={{
-                      fontSize: '0.625rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      fontWeight: 700,
-                      color: '#3d4a3d',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    PENCARIAN
+                <span className="search-icon-box" aria-hidden="true">
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>bed</span>
+                </span>
+                <div className="search-field">
+                  <label htmlFor="homepage-room-search" className="search-field-label">
+                    Cari kamar tersedia
                   </label>
-                  <div className="select-wrap">
+                  <div className="search-input-row">
                     <input
+                      id="homepage-room-search"
+                      className="search-input"
                       type="text"
                       value={searchKeyword}
                       onChange={(event) => setSearchKeyword(event.target.value)}
-                      placeholder="Cari nama kamar, fasilitas, cabang, tipe, deskripsi..."
-                      style={{
-                        width: '100%',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        padding: '0 32px 0 0',
-                        fontWeight: 600,
-                        color: '#006e2f',
-                        fontSize: '1rem',
-                        outline: 'none',
-                      }}
+                      placeholder="Nama kamar, fasilitas, atau cabang..."
                     />
                     {searchKeyword || activeSearchKeyword ? (
                       <button
@@ -673,6 +761,7 @@ export default function Page() {
                       </button>
                     ) : null}
                   </div>
+                  <p className="search-helper">Temukan kamar yang cocok dari seluruh cabang KosHandayani.</p>
                 </div>
               </div>
 
@@ -680,7 +769,7 @@ export default function Page() {
                 type="submit"
                 className="search-button"
                 style={{
-                  background: 'linear-gradient(to right, #006e2f, #22c55e)',
+                  background: 'linear-gradient(135deg, #005b27, #13a84e)',
                   color: '#ffffff',
                   paddingLeft: '32px',
                   paddingRight: '32px',
@@ -697,17 +786,11 @@ export default function Page() {
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 10px 15px rgba(0, 0, 0, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
                   search
                 </span>
-                Cari Sekarang
+                Temukan Kamar
               </button>
             </form>
           </div>
@@ -732,45 +815,8 @@ export default function Page() {
                   : 'Daftar kamar kos terbaik yang siap kamu huni hari ini.'}
               </p>
             </div>
-            <div className="view-toggle" style={{ display: 'flex', gap: '8px' }}>
-              <button
-                style={{
-                  padding: '8px',
-                  borderRadius: '9999px',
-                  border: '1px solid #bccbb9',
-                  color: '#3d4a3d',
-                  backgroundColor: 'transparent',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#dee8ff';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <span className="material-symbols-outlined">grid_view</span>
-              </button>
-              <button
-                style={{
-                  padding: '8px',
-                  borderRadius: '9999px',
-                  border: '1px solid #bccbb9',
-                  color: '#3d4a3d',
-                  backgroundColor: 'transparent',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#dee8ff';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <span className="material-symbols-outlined">view_list</span>
-              </button>
+            <div className="view-toggle" style={{ color: '#3d4a3d', fontSize: '0.875rem', fontWeight: 700 }}>
+              Geser untuk melihat 10 kamar pilihan
             </div>
           </div>
 
@@ -782,9 +828,9 @@ export default function Page() {
             <div style={{ marginBottom: '64px', textAlign: 'center', color: '#b91c1c' }}>
               {roomsError}. Pastikan backend Laravel berjalan di http://127.0.0.1:8000.
             </div>
-          ) : rooms.length > 0 ? (
+          ) : homepageRooms.length > 0 ? (
             <div className="room-grid">
-              {rooms.map((room) => (
+              {homepageRooms.map((room) => (
                 <RoomCard
                   key={room.id}
                   id={room.id}
@@ -792,7 +838,6 @@ export default function Page() {
                   location={room.location}
                   price={room.price}
                   imageUrl={room.imageUrl}
-                  roomType={room.roomType}
                   genderType={room.genderType}
                   status={room.status}
                 />

@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { createPayment, getMyRentalApplications, syncPaymentStatus, type RentalApplication } from '@/lib/api';
+import { cancelMyRentalApplication, createPayment, getMyRentalApplications, syncPaymentStatus, type RentalApplication } from '@/lib/api';
+import { getAuthErrorMessage } from '@/lib/auth';
 import type { Locale } from '@/lib/i18n';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
@@ -49,6 +50,7 @@ function paymentStatusLabel(application: RentalApplication, t: (key: string) => 
   if (isAwaitingPayment(application)) return t('status.pendingPayment');
   if (application.status === 'approved' && application.payment_status === 'paid') return t('status.paymentSuccessful');
   if (application.payment_status === 'failed') return t('status.paymentFailed');
+  if (application.status === 'cancelled') return t('status.cancelled');
   if (application.status === 'rejected') return t('status.applicationRejected');
 
   return application.payment_status ? t(`status.${application.payment_status}`) : t('common.none');
@@ -79,7 +81,7 @@ function paymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'rejected' || application.payment_status === 'failed') {
+  if (application.status === 'rejected' || application.status === 'cancelled' || application.payment_status === 'failed') {
     return {
       bg: 'bg-red-50',
       text: 'text-red-700',
@@ -180,6 +182,8 @@ export default function Page() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [payingApplicationId, setPayingApplicationId] = useState<number | null>(null);
+  const [cancellingApplicationId, setCancellingApplicationId] = useState<number | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<RentalApplication | null>(null);
 
   const summary = useMemo(() => ({
     total: applications.length,
@@ -205,7 +209,36 @@ export default function Page() {
     void Promise.resolve().then(refreshApplications);
   }, [refreshApplications]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get('created') !== '1') return;
+
+    setMessage(t('messages.applicationSubmitted'));
+    router.replace('/tenant/rental-applications', { scroll: false });
+  }, [router, t]);
+
   useAutoRefresh(refreshApplications);
+
+  useEffect(() => {
+    if (!cancelTarget) return;
+
+    const originalOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !cancellingApplicationId) {
+        setCancelTarget(null);
+      }
+    }
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [cancelTarget, cancellingApplicationId]);
 
   async function handlePayment(application: RentalApplication) {
     async function refreshAfterPayment(nextMessage: string, shouldRedirect = false) {
@@ -246,6 +279,24 @@ export default function Page() {
       setError(paymentError instanceof Error ? paymentError.message : t('messages.paymentOpenFailed'));
     } finally {
       setPayingApplicationId(null);
+    }
+  }
+
+  async function confirmCancelApplication() {
+    if (!cancelTarget) return;
+
+    try {
+      setCancellingApplicationId(cancelTarget.id);
+      setMessage('');
+      setError('');
+      await cancelMyRentalApplication(cancelTarget.id);
+      setCancelTarget(null);
+      setMessage(t('messages.applicationCancelled'));
+      await refreshApplications();
+    } catch (cancelError) {
+      setError(getAuthErrorMessage(cancelError, t('messages.applicationCancelFailed')));
+    } finally {
+      setCancellingApplicationId(null);
     }
   }
 
@@ -336,9 +387,12 @@ export default function Page() {
               {applications.map((application) => {
                 const room = application.room;
                 const canPay = isAwaitingPayment(application);
+                const canCancel = application.status === 'pending';
+                const showPaymentBadge = application.status !== 'cancelled';
                 const tone = paymentTone(application);
                 const ToneIcon = tone.icon;
                 const isPaying = payingApplicationId === application.id;
+                const isCancelling = cancellingApplicationId === application.id;
 
                 return (
                   <article
@@ -361,10 +415,12 @@ export default function Page() {
                       <div className="min-w-0">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <RentalApplicationStatusBadge status={application.status} />
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${tone.bg} ${tone.text}`}>
-                            <ToneIcon size={13} />
-                            {paymentStatusLabel(application, t)}
-                          </span>
+                          {showPaymentBadge && (
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${tone.bg} ${tone.text}`}>
+                              <ToneIcon size={13} />
+                              {paymentStatusLabel(application, t)}
+                            </span>
+                          )}
                         </div>
 
                         <Link
@@ -401,7 +457,7 @@ export default function Page() {
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row lg:col-span-1 lg:flex-col">
+                      <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-1">
                         {canPay && (
                           <button
                             type="button"
@@ -420,6 +476,17 @@ export default function Page() {
                           {t('common.detail')}
                           <ChevronRight size={17} />
                         </Link>
+                        {canCancel && (
+                          <button
+                            type="button"
+                            disabled={isCancelling}
+                            onClick={() => setCancelTarget(application)}
+                            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 text-sm font-bold text-red-700 transition hover:border-red-200 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70 lg:flex-none"
+                          >
+                            {isCancelling ? <Loader2 className="animate-spin" size={17} /> : <XCircle size={17} />}
+                            {isCancelling ? t('common.processing') : t('tenant.applications.cancelApplication')}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -429,6 +496,82 @@ export default function Page() {
           )}
         </section>
       </div>
+
+      {cancelTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#111c2d]/45 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-application-title"
+          onMouseDown={() => {
+            if (!cancellingApplicationId) {
+              setCancelTarget(null);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-white/80 bg-white shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-red-50 via-white to-green-50 px-6 pt-6">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-700 ring-1 ring-red-100">
+                <XCircle size={22} />
+              </span>
+              <h2
+                id="cancel-application-title"
+                className="mt-4 text-xl font-extrabold tracking-tight text-[#111c2d]"
+                style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
+              >
+                {t('tenant.applications.cancelDialogTitle')}
+              </h2>
+              <p className="mt-2 pb-5 text-sm leading-6 text-[#3d4a3d]">
+                {t('tenant.applications.cancelDialogDescription')}
+              </p>
+            </div>
+
+            <div className="px-6 py-5">
+              <div className="rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#006e2f]">
+                  {t('common.room')}
+                </p>
+                <p
+                  className="mt-1 text-base font-extrabold text-[#111c2d]"
+                  style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
+                >
+                  {cancelTarget.room?.room_name || t('tenant.applications.roomUnavailable')}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-[#3d4a3d]">
+                  {cancelTarget.room?.branch?.branch_name || t('tenant.applications.branchUnset')} · {cancelTarget.duration}
+                </p>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-[#3d4a3d]">
+                {t('tenant.applications.cancelConfirmation')}
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={Boolean(cancellingApplicationId)}
+                  onClick={() => setCancelTarget(null)}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[#d8e3fb] bg-white px-4 text-sm font-bold text-[#111c2d] transition hover:bg-[#f0f3ff] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {t('tenant.applications.keepApplication')}
+                </button>
+                <button
+                  type="button"
+                  disabled={cancellingApplicationId === cancelTarget.id}
+                  onClick={() => void confirmCancelApplication()}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {cancellingApplicationId === cancelTarget.id ? <Loader2 className="animate-spin" size={17} /> : <XCircle size={17} />}
+                  {cancellingApplicationId === cancelTarget.id ? t('common.processing') : t('tenant.applications.confirmCancelApplication')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

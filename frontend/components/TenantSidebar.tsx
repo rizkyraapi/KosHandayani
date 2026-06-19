@@ -8,7 +8,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
 
 const tenantNavItems = [
-  { labelKey: 'common.dashboard', href: '/tenant/dashboard', icon: LayoutDashboard },
+  { labelKey: 'common.myRoom', href: '/tenant/dashboard', icon: LayoutDashboard },
   { labelKey: 'common.rentalApplications', href: '/tenant/rental-applications', icon: ClipboardList },
   { labelKey: 'common.bill', href: '/tenant/tagihan', icon: ReceiptText },
   { labelKey: 'common.history', href: '/tenant/riwayat', icon: ScrollText },

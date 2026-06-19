@@ -18,12 +18,6 @@ const facilityOptions = [
   'Cleaning Service',
 ];
 
-const roomTypes: Array<{ label: string; value: ApiRoom['room_type'] }> = [
-  { label: 'Single', value: 'single' },
-  { label: 'Double', value: 'double' },
-  { label: 'Suite', value: 'suite' },
-];
-
 const genderTypes: Array<{ label: string; value: ApiRoom['gender_type'] }> = [
   { label: 'Male', value: 'male' },
   { label: 'Female', value: 'female' },
@@ -57,7 +51,6 @@ const colors = {
 function readableRoomField(field: string) {
   if (field === 'room_name') return 'Nama kamar';
   if (field === 'branch_id') return 'Cabang';
-  if (field === 'room_type') return 'Tipe kamar';
   if (field === 'gender_type') return 'Gender';
   if (field === 'room_status') return 'Status kamar';
   if (field === 'price') return 'Harga';
@@ -132,7 +125,6 @@ function RoomFormPage() {
   const [form, setForm] = useState({
     room_name: '',
     branch_id: '',
-    room_type: 'single' as ApiRoom['room_type'],
     gender_type: 'mixed' as ApiRoom['gender_type'],
     room_status: 'available' as ApiRoom['room_status'],
     price: '',
@@ -214,7 +206,6 @@ function RoomFormPage() {
         setForm({
           room_name: room.room_name || '',
           branch_id: room.branch_id ? String(room.branch_id) : '',
-          room_type: room.room_type,
           gender_type: room.gender_type,
           room_status: room.room_status,
           price: String(room.price ?? ''),
@@ -329,7 +320,6 @@ function RoomFormPage() {
       setIsSubmitting(true);
       const payload = {
         room_name: form.room_name.trim(),
-        room_type: form.room_type,
         branch_id: Number(form.branch_id),
         gender_type: form.gender_type,
         room_status: form.room_status,
@@ -353,7 +343,6 @@ function RoomFormPage() {
       setForm({
         room_name: '',
         branch_id: branches[0] ? String(branches[0].id) : '',
-        room_type: 'single',
         gender_type: 'mixed',
         room_status: 'available',
         price: '',
@@ -563,34 +552,6 @@ function RoomFormPage() {
                   onChange={(event) => setForm((current) => ({ ...current, max_guest: event.target.value }))}
                 />
               </label>
-            </div>
-
-            <div style={{ marginTop: 18, display: 'grid', gap: 12 }}>
-              <span style={labelStyle}>Tipe Kamar</span>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-                {roomTypes.map((type) => {
-                  const active = form.room_type === type.value;
-                  return (
-                    <button
-                      key={type.value}
-                      type="button"
-                      disabled={isSubmitting || isLoadingRoom}
-                      onClick={() => setForm((current) => ({ ...current, room_type: type.value }))}
-                      style={{
-                        minHeight: 46,
-                        border: `2px solid ${active ? colors.primary : 'transparent'}`,
-                        borderRadius: 8,
-                        background: active ? colors.primarySoft : colors.field,
-                        color: active ? colors.primary : colors.muted,
-                        fontWeight: 900,
-                        cursor: isSubmitting || isLoadingRoom ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      {type.label}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             <div style={{ marginTop: 18 }} className="room-create-grid">

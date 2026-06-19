@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
-import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
+import { getDurationInMonths, getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 /* ─────────────────────────────────────────────
    INJECT FONTS & MATERIAL SYMBOLS
@@ -136,6 +136,7 @@ interface Transaction {
   id: string;
   period: string;
   periodDetail: string;
+  typeLabel: string;
   payDate: string;
   amount: string;
   amountValue: number;
@@ -177,12 +178,14 @@ function normalizeApplicationStatus(application: RentalApplication): Transaction
   return 'Pending';
 }
 
-function buildTransactions(payments: Payment[], applications: RentalApplication[]): Transaction[] {
+function buildTransactions(payments: Payment[], applications: RentalApplication[], t: (key: string, params?: Record<string, string | number>) => string): Transaction[] {
   const paymentApplicationIds = new Set(payments.map((payment) => payment.rental_application_id));
   const paymentRows = payments.map((payment) => {
+    const isRenewal = payment.payment_category === 'renewal';
+    const durationMonths = payment.duration_months ?? getDurationInMonths(payment.rental_application?.duration);
     const breakdown = getRentalPaymentBreakdown({
-      monthlyPrice: payment.rental_application?.room?.price,
-      duration: payment.rental_application?.duration,
+      monthlyPrice: payment.monthly_price ?? payment.rental_application?.room?.price,
+      duration: `${durationMonths} Bulan`,
       subtotalAmount: payment.subtotal_amount,
       discountAmount: payment.discount_amount,
       grossAmount: payment.gross_amount,
@@ -190,8 +193,11 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
 
     return {
       id: payment.order_id,
-      period: formatPeriod(payment.paid_at ?? payment.created_at),
-      periodDetail: `Pembayaran ${payment.rental_application?.room?.room_name || 'sewa kamar'}`,
+      period: payment.period_start && payment.period_end
+        ? `${formatDate(payment.period_start)} - ${formatDate(payment.period_end)}`
+        : formatPeriod(payment.paid_at ?? payment.created_at),
+      periodDetail: `${isRenewal ? t('tenant.renewal.paymentPurposeRenewal') : t('tenant.renewal.paymentPurposeInitial')} ${payment.rental_application?.room?.room_name || t('tenant.billing.roomRentFallback')} - ${t('tenant.renewal.months', { count: durationMonths })}`,
+      typeLabel: isRenewal ? t('tenant.renewal.paymentPurposeRenewal') : t('tenant.renewal.paymentPurposeInitial'),
       payDate: formatDate(payment.paid_at ?? payment.created_at),
       amount: formatRupiah(breakdown.grossAmount),
       amountValue: breakdown.grossAmount,
@@ -217,6 +223,7 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
         id: `APP-${application.id}`,
         period: formatPeriod(application.created_at),
         periodDetail: `Pengajuan ${application.room?.room_name || 'sewa kamar'} - ${application.duration}`,
+        typeLabel: t('common.rentalApplication'),
         payDate: formatDate(application.created_at),
         amount: hasPaymentAmount ? formatRupiah(breakdown.grossAmount) : '-',
         amountValue: hasPaymentAmount ? breakdown.grossAmount : 0,
@@ -232,16 +239,15 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
 
 interface NavItem {
   icon: string;
-  label: string;
+  labelKey: string;
   active?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { icon: 'dashboard', label: 'Dashboard' },
-  { icon: 'bed', label: 'Kamar Saya' },
-  { icon: 'receipt_long', label: 'Tagihan' },
-  { icon: 'history', label: 'Riwayat', active: true },
-  { icon: 'person', label: 'Profil' },
+  { icon: 'dashboard', labelKey: 'common.myRoom' },
+  { icon: 'receipt_long', labelKey: 'common.bill' },
+  { icon: 'history', labelKey: 'common.history', active: true },
+  { icon: 'person', labelKey: 'common.profile' },
 ];
 
 /* ─────────────────────────────────────────────
@@ -362,17 +368,17 @@ function SideNav({
           {navItems.map((item) =>
             item.active ? (
               <a
-                key={item.label}
+                key={item.labelKey}
                 href="#"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-sm font-semibold text-sm translate-x-1 transition-transform"
                 style={{ background: '#ffffff', color: '#16a34a' }}
               >
                 <Icon name={item.icon} />
-                {item.label}
+                {t(item.labelKey)}
               </a>
             ) : (
               <a
-                key={item.label}
+                key={item.labelKey}
                 href="#"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-sm font-medium"
                 style={{ color: '#64748b' }}
@@ -380,7 +386,7 @@ function SideNav({
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <Icon name={item.icon} />
-                {item.label}
+                {t(item.labelKey)}
               </a>
             )
           )}
@@ -421,6 +427,8 @@ function SideNav({
 }
 
 function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
+  const { t } = useLanguage();
+
   return (
     <header
       className="fixed top-0 right-0 z-40 flex justify-between items-center px-4 sm:px-8 lg:px-12 py-5"
@@ -453,9 +461,9 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
           <Icon name="arrow_back" />
         </button>
         <nav className="flex text-xs font-medium gap-2 items-center" style={{ color: '#94a3b8' }}>
-          <a href="#" className="hover:text-green-700 transition-colors">Dashboard</a>
+          <a href="#" className="hover:text-green-700 transition-colors">{t('common.myRoom')}</a>
           <Icon name="chevron_right" className="text-[10px]" />
-          <span className="font-bold" style={{ color: '#006e2f' }}>Riwayat</span>
+          <span className="font-bold" style={{ color: '#006e2f' }}>{t('common.history')}</span>
         </nav>
       </div>
 
@@ -644,6 +652,9 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
               >
                 <td className="px-8 py-6 font-mono text-sm font-semibold" style={{ color: '#006e2f' }}>
                   {tx.id}
+                  <div className="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold" style={{ background: '#eefdf2', color: '#006e2f', fontFamily: 'Inter, sans-serif' }}>
+                    {tx.typeLabel}
+                  </div>
                 </td>
                 <td className="px-8 py-6">
                   <div className="text-sm font-bold" style={{ color: '#111c2d' }}>{tx.period}</div>
@@ -687,6 +698,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
             <div className="flex justify-between items-start mb-3">
               <div>
                 <p className="font-mono text-sm font-semibold" style={{ color: '#006e2f' }}>{tx.id}</p>
+                <p className="mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-bold" style={{ background: '#eefdf2', color: '#006e2f' }}>{tx.typeLabel}</p>
                 <p className="text-sm font-bold mt-0.5" style={{ color: '#111c2d' }}>{tx.period}</p>
                 <p className="text-[11px]" style={{ color: '#3d4a3d' }}>{tx.periodDetail}</p>
               </div>
@@ -865,7 +877,7 @@ export default function Page() {
         ]);
 
         if (isMounted) {
-          setTransactions(buildTransactions(payments, applications));
+          setTransactions(buildTransactions(payments, applications, t));
           setHistoryError('');
         }
       } catch (error) {

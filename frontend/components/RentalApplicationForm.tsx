@@ -74,11 +74,11 @@ export default function RentalApplicationForm({ room, onSuccess, onCancel }: Pro
         ktp_file: ktpFile,
         kk_file: kkFile,
       });
-      setMessage('Pengajuan sewa berhasil dikirim.');
+      setMessage(t('messages.applicationSubmitted'));
       onSuccess?.();
     } catch (submitError) {
       setErrors(collectErrors(submitError));
-      setMessage(getAuthErrorMessage(submitError, 'Gagal mengirim pengajuan sewa.'));
+      setMessage(getAuthErrorMessage(submitError, t('messages.applicationSubmitFailed')));
     } finally {
       setIsSubmitting(false);
     }

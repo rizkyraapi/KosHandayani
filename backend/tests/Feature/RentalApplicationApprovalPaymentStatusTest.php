@@ -122,7 +122,6 @@ class RentalApplicationApprovalPaymentStatusTest extends TestCase
         $room = Room::create([
             'room_name' => 'Kamar Approval',
             'branch' => 'Cabang Utama',
-            'room_type' => 'single',
             'gender_type' => 'mixed',
             'room_status' => 'available',
             'price' => 1500000,

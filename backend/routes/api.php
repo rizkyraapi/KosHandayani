@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\EmailVerificationController;
+use App\Http\Controllers\EmailPreviewController;
 use App\Http\Controllers\OwnerDataController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
@@ -22,6 +23,11 @@ Route::post('/payments/notification', [PaymentController::class, 'notification']
 Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
     ->middleware('signed')
     ->name('verification.verify');
+Route::get('/debug/email-verification/{userId}', [EmailVerificationController::class, 'debug'])
+    ->whereNumber('userId');
+Route::get('/debug/email-preview/verification', [EmailPreviewController::class, 'verification']);
+Route::get('/debug/email-preview/reminder', [EmailPreviewController::class, 'reminder']);
+Route::get('/debug/email-preview/overdue', [EmailPreviewController::class, 'overdue']);
 Route::get('/test-email', function () {
     $recipient = 'koshandayanipbl@gmail.com';
     $subject = 'Test Email KosHandayani';
@@ -79,15 +85,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rental-applications', [RentalApplicationController::class, 'store'])->middleware('verified.email');
     Route::get('/my-rental-applications', [RentalApplicationController::class, 'myApplications']);
     Route::get('/my-rental-applications/{id}', [RentalApplicationController::class, 'myApplicationDetail']);
+    Route::post('/my-rental-applications/{id}/cancel', [RentalApplicationController::class, 'cancelMyApplication'])->whereNumber('id');
 
     Route::get('/owner/rental-applications', [RentalApplicationController::class, 'ownerIndex']);
     Route::get('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerShow'])->whereNumber('id');
     Route::put('/owner/rental-applications/{id}', [RentalApplicationController::class, 'ownerUpdate']);
     Route::get('/owner/dashboard', [OwnerDataController::class, 'dashboard']);
+    Route::get('/owner/rooms-overview', [OwnerDataController::class, 'rooms']);
+    Route::get('/owner/application-monitoring', [OwnerDataController::class, 'applications']);
     Route::get('/owner/payments', [OwnerDataController::class, 'payments']);
     Route::get('/owner/tenants', [OwnerDataController::class, 'tenants']);
+    Route::get('/owner/reports', [OwnerDataController::class, 'reports']);
+    Route::get('/owner/reports/export-pdf', [OwnerDataController::class, 'exportReportPdf']);
 
     Route::post('/payments/create', [PaymentController::class, 'create'])->middleware('verified.email');
+    Route::get('/payments/renewal-context', [PaymentController::class, 'renewalContext']);
+    Route::post('/payments/renewal/create', [PaymentController::class, 'createRenewal'])->middleware('verified.email');
     Route::post('/payments/sync-status', [PaymentController::class, 'syncStatus']);
     Route::get('/my-payments', [PaymentController::class, 'index']);
     Route::get('/payments/{id}', [PaymentController::class, 'show'])->whereNumber('id');

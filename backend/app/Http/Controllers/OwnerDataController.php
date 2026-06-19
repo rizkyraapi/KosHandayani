@@ -2,40 +2,43 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
-use App\Models\RentalApplication;
-use App\Models\Room;
-use App\Models\RoomOccupancy;
-use App\Models\User;
+use App\Services\OwnerAnalyticsService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class OwnerDataController extends Controller
 {
+    public function __construct(private readonly OwnerAnalyticsService $analytics) {}
+
     public function dashboard(Request $request): JsonResponse
     {
         if ($response = $this->ensureOwner($request)) {
             return $response;
         }
 
-        $successfulStatuses = ['settlement', 'capture'];
-        $rooms = Room::query()->get();
-        $payments = Payment::query();
+        return $this->success($this->analytics->dashboard($this->branchId($request)));
+    }
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'total_rooms' => $rooms->count(),
-                'available_rooms' => $rooms->where('room_status', 'available')->count(),
-                'occupied_rooms' => $rooms->where('room_status', 'occupied')->count(),
-                'maintenance_rooms' => $rooms->where('room_status', 'maintenance')->count(),
-                'active_tenants' => RoomOccupancy::where('status', 'active')->distinct('user_id')->count('user_id'),
-                'pending_applications' => RentalApplication::where('status', 'pending')->count(),
-                'successful_payments' => (clone $payments)->whereIn('transaction_status', $successfulStatuses)->count(),
-                'paid_revenue' => (int) Payment::whereIn('transaction_status', $successfulStatuses)->sum('gross_amount'),
-                'pending_payments' => Payment::where('transaction_status', 'pending')->count(),
-            ],
-        ]);
+    public function rooms(Request $request): JsonResponse
+    {
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        return $this->success($this->analytics->rooms($this->branchId($request)));
+    }
+
+    public function applications(Request $request): JsonResponse
+    {
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        return $this->success($this->analytics->applicationMonitoring($this->branchId($request)));
     }
 
     public function payments(Request $request): JsonResponse
@@ -44,32 +47,7 @@ class OwnerDataController extends Controller
             return $response;
         }
 
-        $payments = Payment::with(['rentalApplication.user', 'rentalApplication.room.branch'])
-            ->latest()
-            ->get();
-
-        $successfulStatuses = ['settlement', 'capture'];
-        $failedStatuses = ['expire', 'cancel', 'deny'];
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'stats' => [
-                    'total_collected' => (int) $payments
-                        ->whereIn('transaction_status', $successfulStatuses)
-                        ->sum('gross_amount'),
-                    'paid_count' => $payments->whereIn('transaction_status', $successfulStatuses)->count(),
-                    'failed_count' => $payments->whereIn('transaction_status', $failedStatuses)->count(),
-                    'pending_count' => $payments->where('transaction_status', 'pending')->count(),
-                    'tenant_count' => $payments
-                        ->pluck('rentalApplication.user_id')
-                        ->filter()
-                        ->unique()
-                        ->count(),
-                ],
-                'payments' => $payments->map(fn (Payment $payment) => $this->formatPayment($payment))->values(),
-            ],
-        ]);
+        return $this->success($this->analytics->payments($this->branchId($request)));
     }
 
     public function tenants(Request $request): JsonResponse
@@ -78,80 +56,93 @@ class OwnerDataController extends Controller
             return $response;
         }
 
-        $occupancies = RoomOccupancy::with(['user', 'room.branch', 'rentalApplication.payment'])
-            ->where('status', 'active')
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $occupancies->map(fn (RoomOccupancy $occupancy) => [
-                'id' => $occupancy->id,
-                'user_id' => $occupancy->user_id,
-                'room_id' => $occupancy->room_id,
-                'rental_application_id' => $occupancy->rental_application_id,
-                'tenant' => $occupancy->user?->toProfileArray(),
-                'room' => $occupancy->room ? [
-                    'id' => $occupancy->room->id,
-                    'room_name' => $occupancy->room->room_name,
-                    'branch' => $occupancy->room->branch ? [
-                        'id' => $occupancy->room->branch->id,
-                        'branch_name' => $occupancy->room->branch->branch_name,
-                    ] : null,
-                ] : null,
-                'start_date' => optional($occupancy->start_date)->toDateString(),
-                'end_date' => optional($occupancy->end_date)->toDateString(),
-                'status' => $occupancy->status,
-                'payment_status' => $occupancy->rentalApplication?->payment_status,
-                'payment' => $occupancy->rentalApplication?->payment ? [
-                    'order_id' => $occupancy->rentalApplication->payment->order_id,
-                    'subtotal_amount' => $occupancy->rentalApplication->payment->subtotal_amount,
-                    'discount_amount' => $occupancy->rentalApplication->payment->discount_amount,
-                    'gross_amount' => $occupancy->rentalApplication->payment->gross_amount,
-                    'transaction_status' => $occupancy->rentalApplication->payment->transaction_status,
-                    'paid_at' => optional($occupancy->rentalApplication->payment->paid_at)->toDateTimeString(),
-                ] : null,
-            ])->values(),
-        ]);
+        return $this->success($this->analytics->tenants($this->branchId($request)));
     }
 
-    private function formatPayment(Payment $payment): array
+    public function reports(Request $request): JsonResponse
     {
-        $application = $payment->rentalApplication;
-        $tenant = $application?->user;
-        $room = $application?->room;
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        $filters = $this->reportFilters($request);
+
+        return $this->success($this->analytics->reports(
+            year: $filters['year'],
+            month: $filters['month'],
+            branchId: $filters['branch_id'],
+        ));
+    }
+
+    public function exportReportPdf(Request $request): Response
+    {
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        $filters = $this->reportFilters($request);
+        $report = $this->analytics->reports(
+            year: $filters['year'],
+            month: $filters['month'],
+            branchId: $filters['branch_id'],
+        );
+        $logoPath = resource_path('images/koshandayani-logo.svg');
+        $logoDataUri = is_file($logoPath)
+            ? 'data:image/svg+xml;base64,'.base64_encode((string) file_get_contents($logoPath))
+            : null;
+        $filename = implode('-', array_filter([
+            'laporan-keuangan-kos-handayani',
+            (string) $filters['year'],
+            $filters['month'] ? str_pad((string) $filters['month'], 2, '0', STR_PAD_LEFT) : null,
+            Str::slug($report['export']['meta']['branch_label']),
+        ])).'.pdf';
+
+        return Pdf::loadView('owner.reports.pdf', [
+            'report' => $report,
+            'logoDataUri' => $logoDataUri,
+        ])
+            ->setOption('isPhpEnabled', true)
+            ->setPaper('a4', 'portrait')
+            ->download($filename);
+    }
+
+    /**
+     * @return array{year: int, month: ?int, branch_id: ?int}
+     */
+    private function reportFilters(Request $request): array
+    {
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+        ]);
 
         return [
-            'id' => $payment->id,
-            'rental_application_id' => $payment->rental_application_id,
-            'order_id' => $payment->order_id,
-            'transaction_id' => $payment->transaction_id,
-            'subtotal_amount' => $payment->subtotal_amount,
-            'discount_amount' => $payment->discount_amount,
-            'gross_amount' => $payment->gross_amount,
-            'payment_type' => $payment->payment_type,
-            'transaction_status' => $payment->transaction_status,
-            'snap_token' => $payment->snap_token,
-            'paid_at' => optional($payment->paid_at)->toDateTimeString(),
-            'created_at' => $payment->created_at,
-            'updated_at' => $payment->updated_at,
-            'tenant' => $tenant?->toProfileArray(),
-            'room' => $room ? [
-                'id' => $room->id,
-                'room_name' => $room->room_name,
-                'branch' => $room->branch ? [
-                    'id' => $room->branch->id,
-                    'branch_name' => $room->branch->branch_name,
-                ] : null,
-            ] : null,
-            'rental_application' => $application ? [
-                'id' => $application->id,
-                'duration' => $application->duration,
-                'status' => $application->status,
-                'payment_status' => $application->payment_status,
-                'move_in_date' => optional($application->move_in_date)->toDateString(),
-            ] : null,
+            'year' => (int) ($validated['year'] ?? now()->year),
+            'month' => isset($validated['month']) ? (int) $validated['month'] : null,
+            'branch_id' => $this->branchId($request),
         ];
+    }
+
+    private function branchId(Request $request): ?int
+    {
+        $branchScope = $request->query('branch_id');
+
+        if ($branchScope === null || $branchScope === '' || $branchScope === 'all') {
+            return null;
+        }
+
+        return (int) Validator::make(
+            ['branch_id' => $branchScope],
+            ['branch_id' => ['required', 'integer', 'exists:branches,id']],
+        )->validate()['branch_id'];
+    }
+
+    private function success(array $data): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
     }
 
     private function ensureOwner(Request $request): ?JsonResponse

@@ -2,197 +2,246 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
-import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { getOwnerRentalApplications, type RentalApplication } from '@/lib/api';
-import type { Locale } from '@/lib/i18n';
+import {
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  FileClock,
+  RefreshCw,
+  RotateCw,
+  Search,
+} from 'lucide-react';
+import {
+  BranchScopeControl,
+  EmptyPanel,
+  ErrorPanel,
+  LoadingPanel,
+  MetricCard,
+  OwnerButton,
+  OwnerCard,
+  OwnerInput,
+  OwnerPage,
+  OwnerPageHeader,
+  PaymentStatusPill,
+  SectionHeader,
+  StatusPill,
+} from '@/components/owner/OwnerUi';
+import {
+  getOwnerApplicationMonitoring,
+  type OwnerApplicationMonitorItem,
+  type OwnerApplicationMonitoring,
+  type OwnerPaymentOverview,
+} from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
+import { useOwnerBranchScope } from '@/lib/use-owner-branch-scope';
 
-function formatDate(value?: string | null, locale: Locale = 'id') {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', { dateStyle: 'medium' }).format(new Date(value));
+type Tab = 'new' | 'renewal' | 'cancelled' | 'rejected' | 'all';
+
+function date(value?: string | null) {
+  return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value)) : '-';
 }
 
-function paymentStatusLabel(application: RentalApplication, t: (key: string) => string) {
-  if (application.payment_status === 'paid') return t('status.paid');
-  if (application.payment_status === 'failed') return t('status.paymentFailed');
-  if (application.status === 'approved') return t('status.pendingPayment');
-
-  return t('status.unpaid');
+function rupiah(value: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
-function paymentStatusStyle(application: RentalApplication) {
-  if (application.payment_status === 'paid') {
-    return { background: '#dcfce7', color: '#15803d' };
-  }
-
-  if (application.payment_status === 'failed') {
-    return { background: '#fee2e2', color: '#b91c1c' };
-  }
-
-  return { background: '#fef3c7', color: '#b45309' };
+function applicationPaymentLabel(item: OwnerApplicationMonitorItem) {
+  if (item.payment_status === 'paid') return 'Pembayaran berhasil';
+  if (item.payment_status === 'failed') return 'Pembayaran gagal';
+  if (item.status === 'approved') return 'Menunggu pembayaran';
+  if (item.status === 'cancelled') return 'Dibatalkan';
+  if (item.status === 'rejected') return 'Ditolak';
+  return 'Belum diproses';
 }
 
-export default function Page() {
-  const { locale, t } = useLanguage();
-  const [applications, setApplications] = useState<RentalApplication[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-
-  const loadApplications = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError('');
-      const data = await getOwnerRentalApplications();
-      setApplications(data);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t('messages.loadApplicationsFailed'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    void Promise.resolve().then(loadApplications);
-  }, [loadApplications]);
-
-  useAutoRefresh(loadApplications);
-
-  const filteredApplications = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return applications.filter((application) => {
-      const searchable = [
-        application.tenant?.full_name,
-        application.tenant?.email,
-        application.room?.room_name,
-        application.room?.branch?.branch_name,
-        application.duration,
-        application.status,
-      ].filter(Boolean).join(' ').toLowerCase();
-
-      return !keyword || searchable.includes(keyword);
-    });
-  }, [applications, search]);
-
-  const stats = useMemo(() => ({
-    total: applications.length,
-    pending: applications.filter((item) => item.status === 'pending').length,
-    approved: applications.filter((item) => item.status === 'approved').length,
-    rejected: applications.filter((item) => item.status === 'rejected').length,
-  }), [applications]);
-
+function ApplicationRow({ item }: { item: OwnerApplicationMonitorItem }) {
   return (
-    <main style={{ minHeight: '100vh', background: '#f9f9ff', padding: 32, color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 28 }}>
-        <div>
-          <p style={{ margin: '0 0 8px', color: '#006e2f', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            {t('owner.applications.eyebrow')}
-          </p>
-          <h1 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 36px)' }}>{t('owner.applications.title')}</h1>
-          <p style={{ margin: '6px 0 0', color: '#3d4a3d' }}>{t('owner.applications.subtitle')}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder={t('owner.applications.searchPlaceholder')}
-            value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-            style={{ width: 280, maxWidth: '100%', border: 'none', borderRadius: 12, background: '#f0f3ff', padding: '12px 14px', color: '#111c2d', outline: 'none' }}
+    <Link
+      href={`/owner/rental-applications/${item.id}`}
+      className="group grid gap-4 rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-5 transition hover:border-[#bccbb9] hover:bg-[#f0f3ff] lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_180px] lg:items-center"
+    >
+      <div>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <StatusPill
+            label={item.status === 'pending' ? 'Menunggu review' : item.status}
+            tone={item.status === 'pending' ? 'amber' : item.status === 'approved' ? 'green' : item.status === 'cancelled' ? 'slate' : 'red'}
           />
-          <button
-            type="button"
-            onClick={() => void loadApplications()}
-            disabled={isLoading}
-            style={{ border: 'none', borderRadius: 12, background: '#006e2f', color: '#fff', padding: '12px 16px', fontWeight: 800, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.75 : 1 }}
-          >
-            {t('common.refresh')}
-          </button>
+          <PaymentStatusPill status={item.payment_status} />
         </div>
-      </header>
-
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <Stat label={t('owner.applications.total')} value={stats.total} />
-        <Stat label={t('owner.applications.pending')} value={stats.pending} />
-        <Stat label={t('owner.applications.approved')} value={stats.approved} />
-        <Stat label={t('owner.applications.rejected')} value={stats.rejected} />
-      </section>
-
-      <section style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(17,28,45,0.05)', overflow: 'hidden', padding: isLoading || error || filteredApplications.length === 0 ? 20 : 0 }}>
-        {isLoading ? (
-          <LoadingState title={t('common.loading')} description={t('owner.applications.loadDescription')} />
-        ) : error ? (
-          <ErrorState title={t('messages.loadFailed')} description={error} onAction={() => void loadApplications()} />
-        ) : filteredApplications.length === 0 ? (
-          <EmptyState
-            title={applications.length === 0 ? t('empty.noApplications') : t('empty.applicationsNotFound')}
-            description={applications.length === 0 ? t('owner.applications.emptyDescription') : t('owner.applications.notFoundDescription')}
-            actionLabel={t('common.refresh')}
-            onAction={() => void loadApplications()}
-          />
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 860 }}>
-              <thead>
-                <tr style={{ background: '#f0f3ff', height: 54 }}>
-                  {[
-                    t('owner.applications.tenant'),
-                    t('owner.applications.room'),
-                    t('owner.applications.branch'),
-                    t('owner.applications.moveInDate'),
-                    t('owner.applications.duration'),
-                    t('owner.applications.applicationStatus'),
-                    t('owner.applications.paymentStatus'),
-                    t('common.action'),
-                  ].map((heading) => (
-                    <th key={heading} style={{ padding: '0 18px', color: '#3d4a3d', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{heading}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredApplications.map((application) => {
-                  const paymentStyle = paymentStatusStyle(application);
-
-                  return (
-                    <tr key={application.id} style={{ borderTop: '1px solid #f0f3ff' }}>
-                      <td style={{ padding: 18 }}>
-                        <p style={{ margin: 0, fontWeight: 800 }}>{application.tenant?.full_name || '-'}</p>
-                        <p style={{ margin: '3px 0 0', color: '#3d4a3d', fontSize: 12 }}>{application.tenant?.email || '-'}</p>
-                      </td>
-                      <td style={{ padding: 18 }}>{application.room?.room_name || '-'}</td>
-                      <td style={{ padding: 18 }}>{application.room?.branch?.branch_name || '-'}</td>
-                      <td style={{ padding: 18 }}>{formatDate(application.move_in_date, locale)}</td>
-                      <td style={{ padding: 18 }}>{application.duration}</td>
-                      <td style={{ padding: 18 }}><RentalApplicationStatusBadge status={application.status} /></td>
-                      <td style={{ padding: 18 }}>
-                        <span style={{ display: 'inline-flex', borderRadius: 999, background: paymentStyle.background, color: paymentStyle.color, padding: '4px 10px', fontSize: 12, fontWeight: 800 }}>
-                          {paymentStatusLabel(application, t)}
-                        </span>
-                      </td>
-                      <td style={{ padding: 18 }}>
-                        <Link href={`/owner/rental-applications/${application.id}`} style={{ color: '#006e2f', fontWeight: 800, textDecoration: 'none' }}>
-                          {t('common.detail')}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </main>
+        <h3 className="text-xl font-semibold text-[#111c2d]">{item.tenant?.full_name || item.tenant?.email || 'Penyewa'}</h3>
+        <p className="mt-1 text-base text-[#3d4a3d]">{item.room?.room_name || 'Kamar tidak tersedia'} · {item.room?.branch?.branch_name || 'Cabang belum diatur'}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div><p className="text-[#3d4a3d]">Tanggal masuk</p><p className="mt-1 font-semibold">{date(item.move_in_date)}</p></div>
+        <div><p className="text-[#3d4a3d]">Durasi</p><p className="mt-1 font-semibold">{item.duration}</p></div>
+        <div><p className="text-[#3d4a3d]">Diajukan</p><p className="mt-1 font-semibold">{date(item.created_at)}</p></div>
+        <div><p className="text-[#3d4a3d]">Pembayaran</p><p className="mt-1 font-semibold">{applicationPaymentLabel(item)}</p></div>
+      </div>
+      <div className="flex items-center justify-between gap-3 lg:justify-end">
+        <span className="text-sm font-semibold text-[#3d4a3d]">{item.payment_count} transaksi</span>
+        <ArrowRight className="text-[#006e2f] transition group-hover:translate-x-1" size={19} />
+      </div>
+    </Link>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function RenewalRow({ payment }: { payment: OwnerPaymentOverview['payments'][number] }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-      <p style={{ margin: 0, color: '#3d4a3d', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>{label}</p>
-      <p style={{ margin: '8px 0 0', color: '#111c2d', fontFamily: 'Manrope, sans-serif', fontSize: 28, fontWeight: 900 }}>{value}</p>
-    </div>
+    <Link
+      href={`/owner/rental-applications/${payment.rental_application_id}`}
+      className="group grid gap-4 rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-5 transition hover:border-[#bccbb9] hover:bg-[#f0f3ff] lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_180px] lg:items-center"
+    >
+      <div>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <StatusPill label="Perpanjangan" tone="purple" />
+          <PaymentStatusPill status={payment.transaction_status} />
+        </div>
+        <h3 className="text-xl font-semibold">{payment.tenant?.full_name || payment.tenant?.email || 'Penyewa'}</h3>
+        <p className="mt-1 text-base text-[#3d4a3d]">{payment.room?.room_name || '-'} · {payment.room?.branch?.branch_name || '-'}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div><p className="text-[#3d4a3d]">Periode baru</p><p className="mt-1 font-semibold">{date(payment.period_start)} – {date(payment.period_end)}</p></div>
+        <div><p className="text-[#3d4a3d]">Nominal</p><p className="mt-1 font-semibold">{rupiah(payment.gross_amount)}</p></div>
+      </div>
+      <div className="flex items-center justify-between gap-3 lg:justify-end">
+        <span className="truncate text-sm font-semibold text-[#3d4a3d]">{payment.order_id}</span>
+        <ArrowRight className="shrink-0 text-[#006e2f] transition group-hover:translate-x-1" size={19} />
+      </div>
+    </Link>
+  );
+}
+
+export default function Page() {
+  const [data, setData] = useState<OwnerApplicationMonitoring | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [tab, setTab] = useState<Tab>('new');
+  const [search, setSearch] = useState('');
+  const { branches, branchScope, setBranchScope, branchesLoading } = useOwnerBranchScope();
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      setData(await getOwnerApplicationMonitoring(branchScope));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat monitoring pengajuan.');
+    } finally {
+      setLoading(false);
+    }
+  }, [branchScope]);
+
+  useEffect(() => {
+    void Promise.resolve().then(load);
+  }, [load]);
+  useAutoRefresh(load);
+
+  const applicationRows = useMemo(() => {
+    if (!data) return [];
+    const rows = tab === 'new'
+      ? data.new_applications
+      : tab === 'cancelled'
+        ? data.cancelled
+        : tab === 'rejected'
+          ? data.rejected
+          : data.all_applications;
+    const keyword = search.toLowerCase().trim();
+
+    return rows.filter((item) => !keyword || [
+      item.tenant?.full_name,
+      item.tenant?.email,
+      item.room?.room_name,
+      item.room?.branch?.branch_name,
+    ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
+  }, [data, search, tab]);
+
+  const renewalRows = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+    return (data?.renewals || []).filter((payment) => !keyword || [
+      payment.tenant?.full_name,
+      payment.tenant?.email,
+      payment.room?.room_name,
+      payment.order_id,
+    ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
+  }, [data, search]);
+
+  const tabs: Array<{ key: Tab; label: string; count: number }> = [
+    { key: 'new', label: 'Pengajuan Baru', count: data?.new_applications.length || 0 },
+    { key: 'renewal', label: 'Perpanjangan', count: data?.renewals.length || 0 },
+    { key: 'cancelled', label: 'Dibatalkan', count: data?.cancelled.length || 0 },
+    { key: 'rejected', label: 'Ditolak', count: data?.rejected.length || 0 },
+    { key: 'all', label: 'Semua', count: data?.all_applications.length || 0 },
+  ];
+
+  return (
+    <OwnerPage>
+      <OwnerPageHeader
+        eyebrow="Application Lifecycle"
+        title="Pengajuan Sewa"
+        description="Pengajuan awal dan renewal dipantau terpisah dengan status pembayaran yang konsisten."
+        actions={<OwnerButton onClick={() => void load()}><RefreshCw size={17} />Segarkan</OwnerButton>}
+      />
+
+      <BranchScopeControl
+        branches={branches}
+        value={branchScope}
+        onChange={setBranchScope}
+        disabled={loading || branchesLoading}
+        className="mb-8"
+      />
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Menunggu Review" value={data?.stats.pending_review || 0} icon={FileClock} tone="amber" />
+        <MetricCard label="Menunggu Pembayaran" value={data?.stats.awaiting_payment || 0} icon={Clock3} tone="orange" />
+        <MetricCard label="Pembayaran Berhasil" value={data?.stats.payment_success || 0} icon={CheckCircle2} tone="green" />
+        <MetricCard label="Renewal Pending" value={data?.stats.renewal_pending || 0} icon={RotateCw} tone="purple" />
+      </div>
+
+      <OwnerCard>
+        <SectionHeader
+          title="Antrian Pengajuan"
+          description="Pilih kategori untuk meninjau state bisnis yang relevan."
+          action={(
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-3 text-[#6d7b6c]" size={17} />
+              <OwnerInput value={search} onChange={setSearch} placeholder="Cari penyewa, kamar, order ID..." className="w-full pl-10 sm:w-72" />
+            </div>
+          )}
+        />
+
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
+          {tabs.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setTab(item.key)}
+              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold transition ${
+                tab === item.key ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#e7eeff]'
+              }`}
+            >
+              {item.label}
+              <span className={`rounded-full px-2 py-0.5 text-xs ${tab === item.key ? 'bg-white/20' : 'bg-white'}`}>{item.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {loading && !data ? (
+          <LoadingPanel />
+        ) : error && !data ? (
+          <ErrorPanel message={error} onRetry={() => void load()} />
+        ) : tab === 'renewal' ? (
+          renewalRows.length ? (
+            <div className="grid gap-4">{renewalRows.map((payment) => <RenewalRow key={payment.id} payment={payment} />)}</div>
+          ) : <EmptyPanel title="Tidak ada renewal" description="Pembayaran perpanjangan akan muncul di sini." />
+        ) : applicationRows.length ? (
+          <div className="grid gap-4">{applicationRows.map((item) => <ApplicationRow key={item.id} item={item} />)}</div>
+        ) : (
+          <EmptyPanel title="Tidak ada pengajuan" description="Tidak ada data yang sesuai dengan kategori dan pencarian saat ini." />
+        )}
+      </OwnerCard>
+    </OwnerPage>
   );
 }

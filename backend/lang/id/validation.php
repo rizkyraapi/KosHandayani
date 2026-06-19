@@ -216,7 +216,6 @@ return [
         'room_id' => 'kamar',
         'room_name' => 'nama kamar',
         'room_status' => 'status kamar',
-        'room_type' => 'tipe kamar',
         'signature_key' => 'signature key',
         'status' => 'status',
         'status_code' => 'status code',

@@ -1,195 +1,201 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
-import { useLanguage } from '@/contexts/LanguageContext';
+import {
+  AlertTriangle,
+  CalendarDays,
+  Clock3,
+  CreditCard,
+  Eye,
+  RefreshCw,
+  RotateCw,
+  Search,
+  UsersRound,
+} from 'lucide-react';
+import {
+  BranchScopeControl,
+  EmptyPanel,
+  ErrorPanel,
+  LifecyclePill,
+  LoadingPanel,
+  MetricCard,
+  OwnerButton,
+  OwnerCard,
+  OwnerInput,
+  OwnerPage,
+  OwnerPageHeader,
+  OwnerSelect,
+  SectionHeader,
+  StatusPill,
+} from '@/components/owner/OwnerUi';
 import { getOwnerTenants, type OwnerTenantOccupancy } from '@/lib/api';
-import type { Locale } from '@/lib/i18n';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
+import { useOwnerBranchScope } from '@/lib/use-owner-branch-scope';
 
-function formatDate(value?: string | null, locale: Locale = 'id') {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', { dateStyle: 'medium' }).format(new Date(value));
+function date(value?: string | null) {
+  return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value)) : '-';
 }
 
-function formatRupiah(value?: number | null) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
-}
-
-function paymentStatusLabel(status: string | null | undefined, t: (key: string) => string) {
-  if (!status) return t('common.none');
-
-  return t(`status.${status}`);
-}
-
-function paymentStatusStyle(status?: string | null) {
-  if (status === 'paid') {
-    return { bg: '#afefb4', color: '#346e40' };
-  }
-
-  if (status === 'failed') {
-    return { bg: '#ffdad6', color: '#ba1a1a' };
-  }
-
-  return { bg: '#dee8ff', color: '#3d4a3d' };
+function remainingLabel(value?: number | null) {
+  if (value === null || typeof value === 'undefined') return '-';
+  if (value < 0) return `${Math.abs(value)} hari terlambat`;
+  if (value === 0) return 'Berakhir hari ini';
+  return `${value} hari`;
 }
 
 export default function Page() {
-  const { locale, t } = useLanguage();
-  const [occupancies, setOccupancies] = useState<OwnerTenantOccupancy[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [tenants, setTenants] = useState<OwnerTenantOccupancy[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState(() => (
+    typeof window === 'undefined' ? 'all' : new URLSearchParams(window.location.search).get('status') || 'all'
+  ));
+  const { branches, branchScope, setBranchScope, branchesLoading } = useOwnerBranchScope();
 
-  const loadTenants = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      setIsLoading(true);
+      setLoading(true);
       setError('');
-      const data = await getOwnerTenants();
-      setOccupancies(data);
+      setTenants(await getOwnerTenants(branchScope));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t('messages.loadTenantsFailed'));
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat lifecycle tenant.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, [t]);
+  }, [branchScope]);
 
   useEffect(() => {
-    void Promise.resolve().then(loadTenants);
-  }, [loadTenants]);
+    void Promise.resolve().then(load);
+  }, [load]);
+  useAutoRefresh(load);
 
-  useAutoRefresh(loadTenants);
+  const counts = useMemo(() => ({
+    active: tenants.length,
+    h30: tenants.filter((item) => item.lifecycle_status === 'h30').length,
+    h7: tenants.filter((item) => item.lifecycle_status === 'h7').length,
+    critical: tenants.filter((item) => ['h1', 'overdue'].includes(item.lifecycle_status)).length,
+  }), [tenants]);
 
-  const filteredOccupancies = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return occupancies.filter((occupancy) => {
-      const searchable = [
-        occupancy.tenant?.full_name,
-        occupancy.tenant?.email,
-        occupancy.room?.room_name,
-        occupancy.room?.branch?.branch_name,
-        occupancy.payment?.order_id,
-      ].filter(Boolean).join(' ').toLowerCase();
-
-      return !keyword || searchable.includes(keyword);
+  const filtered = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+    return tenants.filter((item) => {
+      const matchesSearch = !keyword || [
+        item.tenant?.full_name,
+        item.tenant?.email,
+        item.room?.room_name,
+        item.room?.branch?.branch_name,
+      ].filter(Boolean).join(' ').toLowerCase().includes(keyword);
+      const matchesStatus = status === 'all' || item.lifecycle_status === status;
+      return matchesSearch && matchesStatus;
     });
-  }, [occupancies, search]);
-
-  const paidCount = occupancies.filter((item) => item.payment_status === 'paid').length;
-  const failedCount = occupancies.filter((item) => item.payment_status === 'failed').length;
-  const totalRevenue = occupancies.reduce((total, item) => {
-    if (item.payment_status !== 'paid') return total;
-    return total + (item.payment?.gross_amount ?? 0);
-  }, 0);
+  }, [search, status, tenants]);
 
   return (
-    <main style={{ minHeight: '100vh', background: '#f9f9ff', padding: 32, color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 28 }}>
-        <div>
-          <p style={{ margin: '0 0 8px', color: '#006e2f', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            {t('owner.applications.eyebrow')}
-          </p>
-          <h1 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 36px)' }}>{t('owner.tenants.title')}</h1>
-          <p style={{ margin: '6px 0 0', color: '#3d4a3d' }}>{t('owner.tenants.subtitle')}</p>
-        </div>
-        <input
-          type="text"
-          placeholder={t('owner.tenants.searchPlaceholder')}
-          value={search}
-          onChange={(event) => setSearch(event.currentTarget.value)}
-          style={{ width: 280, maxWidth: '100%', border: 'none', borderRadius: 12, background: '#f0f3ff', padding: '12px 14px', color: '#111c2d', outline: 'none' }}
+    <OwnerPage>
+      <OwnerPageHeader
+        eyebrow="Tenant Lifecycle"
+        title="Penyewa Aktif"
+        description="Monitoring masa sewa, sisa hari, reminder, serta status perpanjangan seluruh tenant aktif."
+        actions={<OwnerButton onClick={() => void load()}><RefreshCw size={17} />Segarkan</OwnerButton>}
+      />
+
+      <BranchScopeControl
+        branches={branches}
+        value={branchScope}
+        onChange={setBranchScope}
+        disabled={loading || branchesLoading}
+        className="mb-8"
+      />
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Tenant Aktif" value={counts.active} icon={UsersRound} tone="green" />
+        <MetricCard label="H-30" value={counts.h30} icon={Clock3} tone="amber" />
+        <MetricCard label="H-7" value={counts.h7} icon={AlertTriangle} tone="orange" />
+        <MetricCard label="Kritis / Overdue" value={counts.critical} icon={CalendarDays} tone="red" />
+      </div>
+
+      <OwnerCard>
+        <SectionHeader
+          title="Tenant Lifecycle Monitoring"
+          description={`${filtered.length} tenant ditampilkan berdasarkan occupancy aktif.`}
+          action={(
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-3 text-[#6d7b6c]" size={17} />
+                <OwnerInput value={search} onChange={setSearch} placeholder="Cari tenant atau kamar..." className="w-full pl-10 sm:w-64" />
+              </div>
+              <OwnerSelect value={status} onChange={setStatus} ariaLabel="Filter lifecycle tenant">
+                <option value="all">Semua lifecycle</option>
+                <option value="active">Aktif</option>
+                <option value="h30">H-30</option>
+                <option value="h7">H-7</option>
+                <option value="h1">H-1</option>
+                <option value="overdue">Overdue</option>
+              </OwnerSelect>
+            </div>
+          )}
         />
-      </header>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <Stat label={t('owner.tenants.active')} value={occupancies.length} />
-        <Stat label={t('owner.tenants.paidPayments')} value={paidCount} />
-        <Stat label={t('owner.tenants.failedPayments')} value={failedCount} />
-        <Stat label={t('owner.tenants.paidRevenue')} value={formatRupiah(totalRevenue)} />
-      </section>
-
-      <section style={{ background: '#fff', borderRadius: 12, boxShadow: '0 12px 36px rgba(17,28,45,0.05)', overflow: 'hidden', padding: isLoading || error || filteredOccupancies.length === 0 ? 20 : 0 }}>
-        {isLoading ? (
-          <LoadingState title={t('common.loading')} description={t('owner.tenants.subtitle')} />
-        ) : error ? (
-          <ErrorState title={t('messages.loadFailed')} description={error} onAction={() => void loadTenants()} />
-        ) : filteredOccupancies.length === 0 ? (
-          <EmptyState
-            title={occupancies.length === 0 ? t('empty.noTenants') : t('empty.tenantsNotFound')}
-            description={occupancies.length === 0 ? t('owner.tenants.subtitle') : t('owner.applications.notFoundDescription')}
-            actionLabel={t('common.refresh')}
-            onAction={() => void loadTenants()}
-          />
+        {loading && tenants.length === 0 ? (
+          <LoadingPanel />
+        ) : error && tenants.length === 0 ? (
+          <ErrorPanel message={error} onRetry={() => void load()} />
+        ) : filtered.length === 0 ? (
+          <EmptyPanel title="Tenant tidak ditemukan" description="Ubah pencarian atau filter lifecycle." />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: 860 }}>
-              <thead>
-                <tr style={{ background: '#f0f3ff', height: 54 }}>
-                  {[
-                    t('common.tenant'),
-                    t('common.room'),
-                    t('owner.applications.branch'),
-                    t('owner.tenants.startDate'),
-                    t('owner.tenants.endDate'),
-                    t('owner.tenants.paymentStatus'),
-                    t('common.action'),
-                  ].map((heading) => (
-                    <th key={heading} style={{ padding: '0 18px', color: '#3d4a3d', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{heading}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOccupancies.map((occupancy) => {
-                  const statusStyle = paymentStatusStyle(occupancy.payment_status);
+          <div className="grid gap-4">
+            {filtered.map((item) => (
+              <article key={item.id} className="rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-5">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_250px] xl:items-center">
+                  <div>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <LifecyclePill status={item.lifecycle_status} label={item.lifecycle_label} />
+                      <StatusPill
+                        label={`Renewal ${item.renewal_status.label}`}
+                        tone={item.renewal_status.key === 'successful' ? 'green' : item.renewal_status.key === 'failed' ? 'red' : item.renewal_status.key === 'pending' ? 'amber' : 'slate'}
+                      />
+                    </div>
+                    <h3 className="text-2xl font-semibold">{item.tenant?.full_name || item.tenant?.email || 'Penyewa'}</h3>
+                    <p className="mt-1 text-base text-[#3d4a3d]">{item.room?.room_name || '-'} · {item.room?.branch?.branch_name || '-'}</p>
+                    <p className="mt-2 text-sm text-[#3d4a3d]">{item.tenant?.whatsapp || 'WhatsApp belum tersedia'} · {item.tenant?.pekerjaan || 'Pekerjaan belum tersedia'}</p>
+                  </div>
 
-                  return (
-                    <tr key={occupancy.id} style={{ borderTop: '1px solid #f0f3ff' }}>
-                      <td style={{ padding: 18 }}>
-                        <p style={{ margin: 0, fontWeight: 800 }}>{occupancy.tenant?.full_name || '-'}</p>
-                        <p style={{ margin: '3px 0 0', color: '#3d4a3d', fontSize: 12 }}>{occupancy.tenant?.email || '-'}</p>
-                      </td>
-                      <td style={{ padding: 18 }}>{occupancy.room?.room_name || '-'}</td>
-                      <td style={{ padding: 18 }}>{occupancy.room?.branch?.branch_name || '-'}</td>
-                      <td style={{ padding: 18 }}>{formatDate(occupancy.start_date, locale)}</td>
-                      <td style={{ padding: 18 }}>{formatDate(occupancy.end_date, locale)}</td>
-                      <td style={{ padding: 18 }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, background: statusStyle.bg, color: statusStyle.color, padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>
-                          {paymentStatusLabel(occupancy.payment_status, t)}
-                        </span>
-                        {occupancy.payment && (
-                          <p style={{ margin: '6px 0 0', color: '#006e2f', fontSize: 12, fontWeight: 800 }}>
-                            {formatRupiah(occupancy.payment.gross_amount)}
-                          </p>
-                        )}
-                      </td>
-                      <td style={{ padding: 18 }}>
-                        <Link href={`/owner/rental-applications/${occupancy.rental_application_id}`} style={{ color: '#006e2f', fontWeight: 800, textDecoration: 'none' }}>
-                          {t('common.detail')}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  <div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div><p className="text-[#3d4a3d]">Mulai sewa</p><p className="mt-1 text-base font-semibold">{date(item.start_date)}</p></div>
+                      <div><p className="text-[#3d4a3d]">Akhir sewa</p><p className="mt-1 text-base font-semibold">{date(item.end_date)}</p></div>
+                      <div><p className="text-[#3d4a3d]">Sisa hari</p><p className="mt-1 text-base font-semibold">{remainingLabel(item.days_remaining)}</p></div>
+                      <div><p className="text-[#3d4a3d]">Reminder terakhir</p><p className="mt-1 text-base font-semibold">{item.latest_reminder?.reminder_type || '-'}</p></div>
+                    </div>
+                    <div className="mt-5">
+                      <div className="mb-2 flex justify-between text-sm font-semibold">
+                        <span>Progress masa sewa</span>
+                        <span className="text-[#006e2f]">{item.lease_progress}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[#e7eeff]">
+                        <div className={`h-full rounded-full ${item.lifecycle_status === 'overdue' ? 'bg-red-800' : 'bg-[#006e2f]'}`} style={{ width: `${item.lease_progress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <OwnerButton href={`/owner/tenants/${item.rental_application_id}`}>
+                      <Eye size={17} /> Detail tenant
+                    </OwnerButton>
+                    <OwnerButton href={`/owner/payments?tenant=${item.user_id}`} variant="secondary">
+                      <CreditCard size={17} /> Histori pembayaran
+                    </OwnerButton>
+                    <OwnerButton href={`/owner/payments?tenant=${item.user_id}&category=renewal`} variant="ghost">
+                      <RotateCw size={17} /> Histori renewal
+                    </OwnerButton>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         )}
-      </section>
-    </main>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-      <p style={{ margin: 0, color: '#3d4a3d', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>{label}</p>
-      <p style={{ margin: '8px 0 0', color: '#111c2d', fontFamily: 'Manrope, sans-serif', fontSize: 28, fontWeight: 900 }}>{value}</p>
-    </div>
+      </OwnerCard>
+    </OwnerPage>
   );
 }

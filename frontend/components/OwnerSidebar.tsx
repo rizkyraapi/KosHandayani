@@ -11,6 +11,7 @@ import {
   LogOut,
   ReceiptText,
   UsersRound,
+  Menu,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -39,24 +40,26 @@ export default function OwnerSidebar() {
   const { t } = useLanguage();
 
   return (
-    <aside
-      className="owner-sidebar"
-      style={{
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: 256,
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: '#f8fafc',
-        borderRight: '1px solid #e2e8f0',
-        padding: 16,
-        zIndex: 40,
-        overflow: 'hidden',
-      }}
-    >
+    <>
+      <aside
+        className="owner-sidebar"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 256,
+          height: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#f8fafc',
+          borderRight: '1px solid #e2e8f0',
+          padding: 16,
+          zIndex: 40,
+          overflow: 'hidden',
+          fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+        }}
+      >
       <Link
         href="/owner/dashboard"
         aria-label={t('common.ownerDashboard')}
@@ -142,6 +145,42 @@ export default function OwnerSidebar() {
           {t('common.logout')}
         </button>
       </div>
-    </aside>
+      </aside>
+
+      <header className="owner-mobile-header fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:hidden">
+        <Link href="/owner/dashboard" className="flex items-center gap-3">
+          <Image
+            src="/KosHandayani_Logo.png"
+            alt="KosHandayani"
+            width={142}
+            height={48}
+            style={{ width: 142, height: 'auto' }}
+          />
+        </Link>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher compact />
+          <Menu size={21} className="text-[#006e2f]" />
+        </div>
+      </header>
+
+      <nav className="owner-mobile-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-slate-200 bg-white/95 px-1 py-2 backdrop-blur lg:hidden">
+        {ownerNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActivePath(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold ${
+                active ? 'bg-green-50 text-[#006e2f]' : 'text-slate-500'
+              }`}
+            >
+              <Icon size={18} />
+              <span className="max-w-full truncate">{t(item.labelKey)}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }

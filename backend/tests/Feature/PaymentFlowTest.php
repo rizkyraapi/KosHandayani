@@ -402,6 +402,285 @@ class PaymentFlowTest extends TestCase
         ]);
     }
 
+    public function test_tenant_can_create_midtrans_snap_payment_for_lease_renewal(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('createSnapToken')
+            ->once()
+            ->with(Mockery::on(function (array $payload) use ($occupancy, $room): bool {
+                return str_starts_with($payload['transaction_details']['order_id'], 'KH-REN-'.$occupancy->id.'-')
+                    && $payload['transaction_details']['gross_amount'] === 1400000
+                    && $payload['item_details'][0]['id'] === 'RENEWAL-ROOM-'.$room->id
+                    && $payload['item_details'][0]['price'] === 500000
+                    && $payload['item_details'][0]['quantity'] === 3
+                    && $payload['item_details'][1]['id'] === 'RENEWAL-DISC-3M'
+                    && $payload['item_details'][1]['price'] === -100000
+                    && $payload['callbacks']['finish'] === 'http://localhost:3000/tenant/perpanjang-sewa'
+                    && $this->payloadItemTotal($payload['item_details']) === $payload['transaction_details']['gross_amount'];
+            }))
+            ->andReturn('renewal-snap-token');
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $response = $this
+            ->actingAs($tenant)
+            ->withHeader('Origin', 'http://localhost:3000')
+            ->postJson('/api/payments/renewal/create', [
+                'duration_months' => 3,
+            ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('snap_token', 'renewal-snap-token')
+            ->assertJsonPath('payment.payment_category', Payment::CATEGORY_RENEWAL);
+
+        $this->assertDatabaseHas('payments', [
+            'rental_application_id' => $application->id,
+            'room_occupancy_id' => $occupancy->id,
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'subtotal_amount' => 1500000,
+            'discount_amount' => 100000,
+            'duration_months' => 3,
+            'monthly_price' => 500000,
+            'gross_amount' => 1400000,
+            'snap_token' => 'renewal-snap-token',
+            'transaction_status' => 'pending',
+        ]);
+        $renewalPayment = Payment::where('payment_category', Payment::CATEGORY_RENEWAL)->first();
+        $this->assertSame('2026-09-11', $renewalPayment?->period_start?->toDateString());
+        $this->assertSame('2026-12-11', $renewalPayment?->period_end?->toDateString());
+    }
+
+    public function test_tenant_payment_and_application_endpoints_use_payment_category_consistently(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+
+        Payment::create([
+            'rental_application_id' => $application->id,
+            'payment_category' => Payment::CATEGORY_INITIAL_RENT,
+            'order_id' => 'KH-'.$application->id.'-initial-category',
+            'subtotal_amount' => 1500000,
+            'discount_amount' => 100000,
+            'duration_months' => 3,
+            'monthly_price' => 500000,
+            'gross_amount' => 1400000,
+            'transaction_status' => 'settlement',
+            'paid_at' => now(),
+        ]);
+        Payment::create([
+            'rental_application_id' => $application->id,
+            'room_occupancy_id' => $occupancy->id,
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'order_id' => 'KH-REN-'.$occupancy->id.'-category',
+            'subtotal_amount' => 500000,
+            'discount_amount' => 0,
+            'duration_months' => 1,
+            'monthly_price' => 500000,
+            'period_start' => '2026-09-11',
+            'period_end' => '2026-10-11',
+            'gross_amount' => 500000,
+            'transaction_status' => 'settlement',
+            'paid_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($tenant)
+            ->getJson('/api/my-rental-applications')
+            ->assertOk()
+            ->assertJsonPath('data.0.payment.payment_category', Payment::CATEGORY_INITIAL_RENT);
+
+        $this
+            ->actingAs($tenant)
+            ->getJson('/api/my-payments')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['payment_category' => Payment::CATEGORY_INITIAL_RENT])
+            ->assertJsonFragment(['payment_category' => Payment::CATEGORY_RENEWAL]);
+    }
+
+    public function test_tenant_can_load_renewal_context_using_payment_category(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+
+        $this
+            ->actingAs($tenant)
+            ->getJson('/api/payments/renewal-context')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.occupancy.id', $occupancy->id)
+            ->assertJsonPath('data.room.id', $room->id)
+            ->assertJsonPath('data.duration_options.1.duration_months', 3)
+            ->assertJsonPath('data.duration_options.1.gross_amount', 1400000)
+            ->assertJsonPath('data.pending_renewal_payment', null);
+    }
+
+    #[DataProvider('durationDiscountCases')]
+    public function test_renewal_payment_amounts_apply_duration_discount_rules(
+        string $duration,
+        int $durationMonths,
+        int $subtotalAmount,
+        int $discountAmount,
+        int $grossAmount,
+    ): void {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room, $duration);
+        $this->createActiveOccupancy($tenant, $room, $application);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('createSnapToken')
+            ->once()
+            ->with(Mockery::on(function (array $payload) use ($durationMonths, $discountAmount, $grossAmount): bool {
+                $hasExpectedDiscountItem = $discountAmount === 0
+                    ? count($payload['item_details']) === 1
+                    : (
+                        count($payload['item_details']) === 2
+                        && $payload['item_details'][1]['price'] === -$discountAmount
+                    );
+
+                return $payload['transaction_details']['gross_amount'] === $grossAmount
+                    && $payload['item_details'][0]['quantity'] === $durationMonths
+                    && $hasExpectedDiscountItem
+                    && $this->payloadItemTotal($payload['item_details']) === $grossAmount;
+            }))
+            ->andReturn('renewal-snap-'.$durationMonths);
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/renewal/create', [
+                'duration_months' => $durationMonths,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('payments', [
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'subtotal_amount' => $subtotalAmount,
+            'discount_amount' => $discountAmount,
+            'duration_months' => $durationMonths,
+            'gross_amount' => $grossAmount,
+            'transaction_status' => 'pending',
+        ]);
+    }
+
+    public function test_tenant_cannot_create_renewal_when_pending_renewal_payment_exists(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom();
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+
+        Payment::create([
+            'rental_application_id' => $application->id,
+            'room_occupancy_id' => $occupancy->id,
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'order_id' => 'KH-REN-'.$occupancy->id.'-pending',
+            'subtotal_amount' => 1500000,
+            'discount_amount' => 0,
+            'duration_months' => 1,
+            'monthly_price' => 1500000,
+            'gross_amount' => 1500000,
+            'transaction_status' => 'pending',
+            'snap_token' => 'pending-renewal-token',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldNotReceive('createSnapToken');
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/renewal/create', [
+                'duration_months' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Masih ada pembayaran perpanjangan yang menunggu penyelesaian');
+    }
+
+    public function test_midtrans_settlement_for_renewal_extends_active_occupancy_idempotently(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'room_occupancy_id' => $occupancy->id,
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'order_id' => 'KH-REN-'.$occupancy->id.'-settlement',
+            'subtotal_amount' => 1500000,
+            'discount_amount' => 100000,
+            'duration_months' => 3,
+            'monthly_price' => 500000,
+            'period_start' => '2026-09-11',
+            'period_end' => '2026-12-11',
+            'gross_amount' => 1400000,
+            'transaction_status' => 'pending',
+            'snap_token' => 'renewal-token-settlement',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('isValidNotificationSignature')
+            ->twice()
+            ->andReturnTrue();
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $payload = [
+            'order_id' => $payment->order_id,
+            'transaction_status' => 'settlement',
+            'signature_key' => 'valid-signature',
+            'status_code' => '200',
+            'gross_amount' => '1400000.00',
+            'transaction_id' => 'midtrans-renewal-transaction',
+            'payment_type' => 'bank_transfer',
+            'settlement_time' => '2026-09-01 10:15:00',
+        ];
+
+        $this->postJson('/api/payments/notification', $payload)
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->postJson('/api/payments/notification', $payload)
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'transaction_id' => 'midtrans-renewal-transaction',
+            'payment_type' => 'bank_transfer',
+            'transaction_status' => 'settlement',
+        ]);
+        $this->assertNotNull($payment->fresh()->paid_at);
+        $this->assertNotNull($payment->fresh()->settlement_time);
+
+        $this->assertSame('2026-12-11', $occupancy->fresh()?->end_date?->toDateString());
+        $this->assertSame('active', $occupancy->fresh()?->status);
+        $this->assertDatabaseCount('room_occupancies', 1);
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('rooms', [
+            'id' => $room->id,
+            'is_available' => false,
+            'room_status' => 'occupied',
+        ]);
+    }
+
     public static function durationDiscountCases(): array
     {
         return [
@@ -417,13 +696,23 @@ class PaymentFlowTest extends TestCase
         return Room::create([
             'room_name' => 'Kamar Payment',
             'branch' => 'Cabang Utama',
-            'room_type' => 'single',
             'gender_type' => 'mixed',
             'room_status' => 'available',
             'price' => $price,
             'max_guest' => 1,
             'is_available' => true,
         ]);
+    }
+
+    private function createOccupiedRoom(int $price = 1500000): Room
+    {
+        $room = $this->createRoom($price);
+        $room->update([
+            'is_available' => false,
+            'room_status' => 'occupied',
+        ]);
+
+        return $room->fresh();
     }
 
     private function createApprovedApplication(User $tenant, Room $room, string $duration = '3 Bulan'): RentalApplication
@@ -436,6 +725,29 @@ class PaymentFlowTest extends TestCase
             'status' => 'approved',
             'payment_status' => 'unpaid',
             'approved_at' => now(),
+        ]);
+    }
+
+    private function createPaidApplication(User $tenant, Room $room, string $duration = '3 Bulan'): RentalApplication
+    {
+        $application = $this->createApprovedApplication($tenant, $room, $duration);
+        $application->update([
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        return $application->fresh();
+    }
+
+    private function createActiveOccupancy(User $tenant, Room $room, RentalApplication $application): RoomOccupancy
+    {
+        return RoomOccupancy::create([
+            'user_id' => $tenant->id,
+            'room_id' => $room->id,
+            'rental_application_id' => $application->id,
+            'start_date' => '2026-06-10',
+            'end_date' => '2026-09-10',
+            'status' => 'active',
         ]);
     }
 

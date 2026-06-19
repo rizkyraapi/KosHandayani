@@ -77,6 +77,40 @@ class RentalApplicationController extends Controller
         ]);
     }
 
+    public function cancelMyApplication(Request $request, int $id): JsonResponse
+    {
+        if ($response = $this->ensureRole($request, 'tenant')) {
+            return $response;
+        }
+
+        $application = DB::transaction(function () use ($request, $id): RentalApplication {
+            $application = RentalApplication::with(['payment', 'roomOccupancy'])
+                ->where('user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            if ($application->status !== 'pending') {
+                abort(response()->json([
+                    'success' => false,
+                    'message' => 'Pengajuan hanya dapat dibatalkan saat masih menunggu review',
+                    'data' => null,
+                ], 422));
+            }
+
+            $application->update([
+                'status' => 'cancelled',
+            ]);
+
+            return $application->fresh(['user', 'payment', 'roomOccupancy', 'room.branch', 'room.facilities', 'room.images']);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengajuan sewa berhasil dibatalkan',
+            'data' => $this->formatApplication($application, includeTenant: true, includeRoomDetails: true),
+        ]);
+    }
+
     public function ownerIndex(Request $request): JsonResponse
     {
         if ($response = $this->ensureRole($request, 'owner')) {
@@ -101,7 +135,7 @@ class RentalApplicationController extends Controller
             return $response;
         }
 
-        $application = RentalApplication::with(['user', 'payment', 'room.branch', 'room.facilities', 'room.images'])
+        $application = RentalApplication::with(['user', 'payment', 'payments', 'room.branch', 'room.facilities', 'room.images'])
             ->findOrFail($id);
 
         return response()->json([
@@ -136,6 +170,15 @@ class RentalApplicationController extends Controller
 
         $application = DB::transaction(function () use ($id, $validated): RentalApplication {
             $application = RentalApplication::with('room')->lockForUpdate()->findOrFail($id);
+
+            if ($application->status === 'cancelled') {
+                abort(response()->json([
+                    'success' => false,
+                    'message' => 'Pengajuan yang dibatalkan tidak dapat diproses',
+                    'data' => null,
+                ], 422));
+            }
+
             $statusChanged = $application->status !== $validated['status'];
 
             $updates = [
@@ -169,7 +212,7 @@ class RentalApplicationController extends Controller
 
             $application->update($updates);
 
-            return $application->fresh(['user', 'payment', 'room.branch', 'room.facilities', 'room.images']);
+            return $application->fresh(['user', 'payment', 'payments', 'room.branch', 'room.facilities', 'room.images']);
         });
 
         return response()->json([
@@ -226,18 +269,97 @@ class RentalApplicationController extends Controller
             $data['payment'] = $payment ? [
                 'id' => $payment->id,
                 'rental_application_id' => $payment->rental_application_id,
+                'room_occupancy_id' => $payment->room_occupancy_id,
+                'payment_category' => $payment->payment_category,
                 'order_id' => $payment->order_id,
                 'transaction_id' => $payment->transaction_id,
                 'subtotal_amount' => $payment->subtotal_amount,
                 'discount_amount' => $payment->discount_amount,
+                'duration_months' => $payment->duration_months,
+                'monthly_price' => $payment->monthly_price,
+                'period_start' => optional($payment->period_start)->toDateString(),
+                'period_end' => optional($payment->period_end)->toDateString(),
                 'gross_amount' => $payment->gross_amount,
                 'payment_type' => $payment->payment_type,
                 'transaction_status' => $payment->transaction_status,
                 'snap_token' => $payment->snap_token,
                 'paid_at' => optional($payment->paid_at)->toDateTimeString(),
+                'settlement_time' => optional($payment->settlement_time)->toDateTimeString(),
                 'created_at' => $payment->created_at,
                 'updated_at' => $payment->updated_at,
             ] : null;
+        }
+
+        if ($application->relationLoaded('payments')) {
+            $data['payment_history'] = $application->payments
+                ->sortByDesc('created_at')
+                ->map(fn ($payment) => [
+                    'id' => $payment->id,
+                    'payment_category' => $payment->payment_category,
+                    'order_id' => $payment->order_id,
+                    'gross_amount' => $payment->gross_amount,
+                    'transaction_status' => $payment->transaction_status,
+                    'period_start' => optional($payment->period_start)->toDateString(),
+                    'period_end' => optional($payment->period_end)->toDateString(),
+                    'paid_at' => optional($payment->paid_at)->toDateTimeString(),
+                    'created_at' => optional($payment->created_at)->toIso8601String(),
+                ])
+                ->values();
+        }
+
+        if ($includeTenant) {
+            $timeline = collect([
+                [
+                    'key' => 'submitted',
+                    'label' => 'Pengajuan dibuat',
+                    'occurred_at' => optional($application->created_at)->toIso8601String(),
+                    'status' => 'completed',
+                ],
+            ]);
+
+            if ($application->approved_at) {
+                $timeline->push([
+                    'key' => 'approved',
+                    'label' => 'Pengajuan disetujui',
+                    'occurred_at' => optional($application->approved_at)->toIso8601String(),
+                    'status' => 'completed',
+                ]);
+            }
+
+            if (in_array($application->status, ['rejected', 'cancelled'], true)) {
+                $timeline->push([
+                    'key' => $application->status,
+                    'label' => $application->status === 'cancelled' ? 'Pengajuan dibatalkan' : 'Pengajuan ditolak',
+                    'occurred_at' => optional($application->updated_at)->toIso8601String(),
+                    'status' => 'completed',
+                ]);
+            }
+
+            if ($application->paid_at) {
+                $timeline->push([
+                    'key' => 'paid',
+                    'label' => 'Pembayaran awal berhasil',
+                    'occurred_at' => optional($application->paid_at)->toIso8601String(),
+                    'status' => 'completed',
+                ]);
+            }
+
+            if ($application->relationLoaded('payments')) {
+                $application->payments
+                    ->where('payment_category', \App\Models\Payment::CATEGORY_RENEWAL)
+                    ->whereIn('transaction_status', ['settlement', 'capture'])
+                    ->each(fn ($payment) => $timeline->push([
+                        'key' => 'renewal-'.$payment->id,
+                        'label' => 'Perpanjangan berhasil',
+                        'occurred_at' => optional($payment->paid_at ?? $payment->updated_at)->toIso8601String(),
+                        'status' => 'completed',
+                    ]));
+            }
+
+            $data['status_history'] = $timeline
+                ->filter(fn (array $item) => filled($item['occurred_at']))
+                ->sortBy('occurred_at')
+                ->values();
         }
 
         if ($application->relationLoaded('roomOccupancy')) {
@@ -280,7 +402,6 @@ class RentalApplicationController extends Controller
                 'address' => $branch->address,
                 'description' => $branch->description,
             ] : null,
-            'room_type' => $room->room_type,
             'gender_type' => $room->gender_type,
             'price' => $room->price,
             'thumbnail' => $thumbnailUrl,

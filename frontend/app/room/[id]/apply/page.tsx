@@ -107,7 +107,7 @@ export default function Page() {
               {error && <p style={{ margin: '16px 0 0', color: '#93000a', background: '#ffdad6', padding: 12, borderRadius: 8, fontWeight: 700 }}>{error}</p>}
             </aside>
             <section style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-              <RentalApplicationForm room={room} onSuccess={() => router.push('/tenant/rental-applications')} />
+              <RentalApplicationForm room={room} onSuccess={() => router.push('/tenant/rental-applications?created=1')} />
             </section>
           </div>
         ) : null}

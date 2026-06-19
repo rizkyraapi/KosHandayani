@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="72" viewBox="0 0 280 72">
+  <g fill="none" fill-rule="evenodd">
+    <path fill="#006E2F" d="M8 36 36 9l14 13V13h10v19l12 11-7 7-29-27L15 43z"/>
+    <path fill="#13A84E" d="M24 39h24v23H24z"/>
+    <path fill="#FFF" d="M32 45h8v17h-8z"/>
+    <text x="82" y="31" fill="#006E2F" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="700">Kos</text>
+    <text x="82" y="57" fill="#006E2F" font-family="DejaVu Sans, Arial, sans-serif" font-size="25" font-weight="700">Handayani</text>
+  </g>
+</svg>

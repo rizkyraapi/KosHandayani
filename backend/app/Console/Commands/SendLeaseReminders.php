@@ -30,7 +30,7 @@ class SendLeaseReminders extends Command
         $sentCount = 0;
         $skippedCount = 0;
 
-        RoomOccupancy::with(['user', 'room', 'rentalApplication'])
+        RoomOccupancy::with(['user', 'room.branch', 'rentalApplication'])
             ->where('status', 'active')
             ->whereNotNull('end_date')
             ->orderBy('end_date')
@@ -94,18 +94,46 @@ class SendLeaseReminders extends Command
     private function sendReminder(RoomOccupancy $occupancy, string $reminderType, Carbon $today): void
     {
         $user = $occupancy->user;
-        $locale = in_array(app()->getLocale(), ['id', 'en'], true) ? app()->getLocale() : 'id';
+        $locale = 'id';
         $isOverdue = str_starts_with($reminderType, 'OVERDUE');
         $endDate = $occupancy->end_date?->copy()->locale($locale);
-        $daysLeft = $endDate ? max(0, (int) $today->diffInDays($endDate->copy()->startOfDay(), false)) : 0;
-        $subject = __($isOverdue ? 'lease.overdue_subject' : 'lease.upcoming_subject', [], $locale);
-        $body = __($isOverdue ? 'lease.overdue_body' : 'lease.upcoming_body', [
-            'name' => $user?->name ?? 'Tenant',
-            'end_date' => $endDate?->translatedFormat('d F Y') ?? '-',
-            'days_left' => $daysLeft,
-        ], $locale);
+        $daysDiff = $endDate ? (int) $today->diffInDays($endDate->copy()->startOfDay(), false) : 0;
+        $daysLeft = max(0, $daysDiff);
+        $overdueDays = $isOverdue ? abs($daysDiff) : null;
+        $tenantName = $user?->name ?? 'Penyewa';
+        $roomName = $occupancy->room?->room_name ?? 'Kamar';
+        $branchName = $occupancy->room?->branch?->branch_name
+            ?? $occupancy->room?->branch
+            ?? 'Cabang KosHandayani';
+        $formattedEndDate = $endDate?->translatedFormat('d F Y') ?? '-';
+        $subject = $this->resolveReminderSubject($reminderType);
+        $reminderMessage = $this->resolveReminderMessage($reminderType, $daysLeft, $overdueDays);
+        $actionUrl = $this->leaseActionUrl($occupancy);
+        $body = $this->buildPlainTextBody(
+            tenantName: $tenantName,
+            roomName: $roomName,
+            branchName: $branchName,
+            endDate: $formattedEndDate,
+            reminderMessage: $reminderMessage,
+            actionUrl: $actionUrl,
+            daysLeft: $daysLeft,
+            overdueDays: $overdueDays,
+        );
 
-        Mail::to($user->email)->send(new LeaseReminderMail($subject, $body));
+        Mail::to($user->email)->send(new LeaseReminderMail($subject, $body, [
+            'title' => $subject,
+            'preheader' => $reminderMessage,
+            'eyebrow' => $isOverdue ? 'Masa Sewa Berakhir' : 'Pengingat Sewa',
+            'tenantName' => $tenantName,
+            'roomName' => $roomName,
+            'branchName' => $branchName,
+            'endDate' => $formattedEndDate,
+            'daysLeft' => $isOverdue ? null : $daysLeft,
+            'overdueDays' => $overdueDays,
+            'actionUrl' => $actionUrl,
+            'reminderMessage' => $reminderMessage,
+            'tone' => $isOverdue ? 'overdue' : 'upcoming',
+        ]));
 
         LeaseReminder::create([
             'room_occupancy_id' => $occupancy->id,
@@ -129,5 +157,70 @@ class SendLeaseReminders extends Command
         preg_match('/\d+/', $duration, $matches);
 
         return max(1, (int) ($matches[0] ?? 1));
+    }
+
+    private function resolveReminderSubject(string $reminderType): string
+    {
+        if ($reminderType === 'H-0') {
+            return 'Masa Sewa Anda Berakhir Hari Ini';
+        }
+
+        if (str_starts_with($reminderType, 'OVERDUE')) {
+            return 'Masa Sewa Telah Berakhir';
+        }
+
+        return 'Pengingat Masa Sewa Akan Berakhir';
+    }
+
+    private function resolveReminderMessage(string $reminderType, int $daysLeft, ?int $overdueDays): string
+    {
+        if ($reminderType === 'H-0') {
+            return 'masa sewa Anda berakhir hari ini. Silakan lakukan perpanjangan jika ingin tetap menempati kamar.';
+        }
+
+        if ($overdueDays !== null) {
+            return 'masa sewa Anda telah berakhir. Silakan lakukan perpanjangan atau hubungi pengelola.';
+        }
+
+        return "masa sewa Anda akan berakhir dalam {$daysLeft} hari.";
+    }
+
+    private function leaseActionUrl(RoomOccupancy $occupancy): string
+    {
+        return rtrim(config('app.frontend_url'), '/').'/tenant/perpanjang-sewa';
+    }
+
+    private function buildPlainTextBody(
+        string $tenantName,
+        string $roomName,
+        string $branchName,
+        string $endDate,
+        string $reminderMessage,
+        string $actionUrl,
+        int $daysLeft,
+        ?int $overdueDays,
+    ): string {
+        $lines = [
+            "Halo {$tenantName},",
+            '',
+            ucfirst($reminderMessage),
+            '',
+            "Nama kamar: {$roomName}",
+            "Cabang: {$branchName}",
+            "Tanggal berakhir: {$endDate}",
+        ];
+
+        if ($overdueDays !== null) {
+            $lines[] = "Keterlambatan: {$overdueDays} hari";
+        } else {
+            $lines[] = "Sisa waktu: {$daysLeft} hari";
+        }
+
+        $lines[] = '';
+        $lines[] = "Perpanjang sewa: {$actionUrl}";
+        $lines[] = '';
+        $lines[] = 'KosHandayani';
+
+        return implode("\n", $lines);
     }
 }

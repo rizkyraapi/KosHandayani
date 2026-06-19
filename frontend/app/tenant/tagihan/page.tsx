@@ -136,17 +136,11 @@ const globalStyle = `
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const navItems = [
-  { icon: 'home', labelKey: 'common.dashboard', active: false },
+  { icon: 'home', labelKey: 'common.myRoom', active: false },
   { icon: 'door_front', labelKey: 'tenant.billing.myRoom', active: false },
   { icon: 'request_quote', labelKey: 'common.bill', active: true },
   { icon: 'history', labelKey: 'common.history', active: false },
   { icon: 'account_circle', labelKey: 'common.profile', active: false },
-];
-
-const paymentMethods = [
-  { icon: 'account_balance', label: 'Transfer Bank' },
-  { icon: 'smartphone', label: 'E-Wallet' },
-  { icon: 'qr_code_2', label: 'QRIS' },
 ];
 
 function formatRupiah(value?: number | null) {
@@ -346,8 +340,8 @@ function BillSummaryCard({
   const { locale, t } = useLanguage();
   const room = payment?.rental_application?.room;
   const breakdown = getRentalPaymentBreakdown({
-    monthlyPrice: room?.price,
-    duration: payment?.rental_application?.duration,
+    monthlyPrice: payment?.monthly_price ?? room?.price,
+    duration: payment?.duration_months ? `${payment.duration_months} Bulan` : payment?.rental_application?.duration,
     subtotalAmount: payment?.subtotal_amount,
     discountAmount: payment?.discount_amount,
     grossAmount: payment?.gross_amount,
@@ -512,126 +506,6 @@ function BillSummaryCard({
   );
 }
 
-function PaymentMethodSection() {
-  const { t } = useLanguage();
-  const [selected, setSelected] = useState(0);
-
-  return (
-    <section
-      style={{
-        backgroundColor: '#ffffff',
-        borderRadius: '0.75rem',
-        padding: '2rem',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
-      }}
-    >
-      <h3
-        style={{
-          fontSize: '1.125rem',
-          fontWeight: 700,
-          marginBottom: '1.5rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          fontFamily: 'Manrope, sans-serif',
-          color: '#111c2d',
-        }}
-      >
-        <Icon name="account_balance_wallet" style={{ color: '#006e2f' }} />
-        {t('tenant.billing.selectPaymentMethod')}
-      </h3>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: '#3d4a3d',
-              marginBottom: '0.5rem',
-            }}
-          >
-            {t('tenant.billing.paymentOptions')}
-          </label>
-          <div style={{ position: 'relative' }}>
-            <select
-              style={{
-                width: '100%',
-                backgroundColor: '#f0f3ff',
-                border: 'none',
-                borderRadius: '0.5rem',
-                padding: '1rem 3rem 1rem 1.25rem',
-                appearance: 'none',
-                color: '#111c2d',
-                fontWeight: 600,
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '0.95rem',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-              onChange={(e) => setSelected(parseInt(e.target.value))}
-            >
-              <option value={0}>Transfer Bank (BCA, Mandiri, BNI)</option>
-              <option value={1}>E-Wallet (OVO, GoPay, Dana)</option>
-              <option value={2}>QRIS (Scan Barcode)</option>
-            </select>
-            <div
-              style={{
-                position: 'absolute',
-                right: '1.25rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                pointerEvents: 'none',
-              }}
-            >
-              <Icon name="expand_more" />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-          {paymentMethods.map((method, idx) => (
-            <div
-              key={method.label}
-              onClick={() => setSelected(idx)}
-              style={{
-                border: `2px solid ${selected === idx ? '#006e2f' : '#dee8ff'}`,
-                backgroundColor: selected === idx ? 'rgba(0,110,47,0.05)' : '#ffffff',
-                padding: '1rem',
-                borderRadius: '0.5rem',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.5rem',
-                opacity: selected === idx ? 1 : 0.6,
-                transition: 'all 0.15s',
-                cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => {
-                if (selected !== idx) {
-                  (e.currentTarget as HTMLElement).style.opacity = '1';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (selected !== idx) {
-                  (e.currentTarget as HTMLElement).style.opacity = '0.6';
-                }
-              }}
-            >
-              <Icon
-                name={method.icon}
-                style={{ color: selected === idx ? '#006e2f' : '#111c2d' }}
-              />
-              <span style={{ fontSize: '0.625rem', fontWeight: 700 }}>{method.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function ConfirmationSidebar({
   payment,
   isPaying,
@@ -644,8 +518,8 @@ function ConfirmationSidebar({
   const { t } = useLanguage();
   const room = payment?.rental_application?.room;
   const breakdown = getRentalPaymentBreakdown({
-    monthlyPrice: room?.price,
-    duration: payment?.rental_application?.duration,
+    monthlyPrice: payment?.monthly_price ?? room?.price,
+    duration: payment?.duration_months ? `${payment.duration_months} Bulan` : payment?.rental_application?.duration,
     subtotalAmount: payment?.subtotal_amount,
     discountAmount: payment?.discount_amount,
     grossAmount: payment?.gross_amount,
@@ -1092,6 +966,11 @@ export default function Page() {
       let orderId = activePayment.order_id;
 
       if (!snapToken) {
+        if (activePayment.payment_category === 'renewal') {
+          router.push('/tenant/perpanjang-sewa');
+          return;
+        }
+
         const payment = await createPayment(activePayment.rental_application_id);
         snapToken = payment.snap_token;
         orderId = payment.order_id;
@@ -1178,7 +1057,6 @@ export default function Page() {
           {/* Left Column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <BillSummaryCard payment={activePayment} isLoading={isLoadingPayments} error={paymentError} message={paymentMessage} />
-            <PaymentMethodSection />
           </div>
 
           {/* Right Column */}

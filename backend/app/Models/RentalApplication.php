@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RentalApplication extends Model
@@ -46,7 +47,19 @@ class RentalApplication extends Model
 
     public function payment(): HasOne
     {
-        return $this->hasOne(Payment::class);
+        return $this->hasOne(Payment::class)
+            ->where('payment_category', Payment::CATEGORY_INITIAL_RENT);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function renewalPayments(): HasMany
+    {
+        return $this->hasMany(Payment::class)
+            ->where('payment_category', Payment::CATEGORY_RENEWAL);
     }
 
     public function roomOccupancy(): HasOne

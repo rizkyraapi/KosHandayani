@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\EmailVerificationNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +14,10 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private readonly EmailVerificationNotificationService $emailVerificationNotifications,
+    ) {}
+
     // REGISTER TENANT
     public function register(Request $request)
     {
@@ -36,7 +41,7 @@ class AuthController extends Controller
             'profile_completed' => false,
         ]);
 
-        $user->sendEmailVerificationNotification();
+        $this->emailVerificationNotifications->send($user, 'register');
 
         Log::info('Email verification notification sent after registration', [
             'user_id' => $user->id,

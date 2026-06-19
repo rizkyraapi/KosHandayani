@@ -15,7 +15,6 @@ interface RoomCardProps {
   location: string;
   price: string;
   imageUrl: string;
-  roomType?: string;
   genderType?: string;
   status?: 'available' | 'occupied' | 'maintenance' | 'Kosong' | 'Terisi';
   amenities?: Amenity[];
@@ -35,7 +34,6 @@ export default function RoomCard({
   location,
   price,
   imageUrl,
-  roomType,
   genderType,
   status = 'available',
   amenities = defaultAmenities,
@@ -277,23 +275,6 @@ export default function RoomCard({
                 </span>
                 {location}
               </p>
-              {roomType && (
-                <span
-                  style={{
-                    width: 'fit-content',
-                    padding: '3px 8px',
-                    borderRadius: '999px',
-                    backgroundColor: '#e7eeff',
-                    color: '#3d4a3d',
-                    fontSize: '0.68rem',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  {roomType}
-                </span>
-              )}
               {genderType && (
                 <span
                   style={{
@@ -352,9 +333,9 @@ export default function RoomCard({
             borderBottom: '1px solid #f0f3ff',
           }}
         >
-          {amenities.slice(0, 3).map((amenity) => (
+          {amenities.slice(0, 3).map((amenity, index) => (
             <div
-              key={amenity.icon}
+              key={`${amenity.icon}-${amenity.label}-${index}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',

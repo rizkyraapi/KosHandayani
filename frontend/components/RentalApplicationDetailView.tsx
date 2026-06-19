@@ -55,6 +55,7 @@ function paymentStatusLabel(application: RentalApplication, t: TFunction) {
   if (isAwaitingPayment(application)) return t('status.pendingPayment');
   if (application.status === 'approved' && application.payment_status === 'paid') return t('status.paymentSuccessful');
   if (application.payment_status === 'failed') return t('status.paymentFailed');
+  if (application.status === 'cancelled') return t('status.cancelled');
   if (application.status === 'rejected') return t('status.applicationRejected');
 
   return application.payment_status ? t(`status.${application.payment_status}`) : t('common.none');
@@ -88,7 +89,7 @@ function tenantPaymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'rejected' || application.payment_status === 'failed') {
+  if (application.status === 'rejected' || application.status === 'cancelled' || application.payment_status === 'failed') {
     return {
       bg: 'bg-red-50',
       border: 'border-red-100',

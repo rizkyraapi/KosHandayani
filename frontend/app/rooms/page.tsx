@@ -14,13 +14,6 @@ import RoomCard from '../../components/RoomCard';
 import { getBranches, getRooms } from '../../lib/api';
 import type { ApiBranch, ApiRoom } from '../../lib/api';
 
-const roomTypeFilters = [
-  { label: 'Semua', value: 'semua' },
-  { label: 'Single', value: 'single' },
-  { label: 'Double', value: 'double' },
-  { label: 'Suite', value: 'suite' },
-];
-
 type Amenity = { icon: string; label: string };
 
 const fallbackRoomImages = [
@@ -39,7 +32,6 @@ type ListingRoom = {
   branchId: number | null;
   name: string;
   amenities: Amenity[];
-  roomType: 'single' | 'double' | 'suite';
   genderType: 'male' | 'female' | 'mixed';
   roomStatus: 'available' | 'occupied' | 'maintenance';
   price: string;
@@ -91,7 +83,6 @@ function mapRoomToListing(room: ApiRoom, index: number): ListingRoom {
     branchId: room.branch_id,
     name: room.room_name || room.name,
     amenities: getRoomAmenities(room),
-    roomType: room.room_type,
     genderType: room.gender_type,
     roomStatus: room.room_status,
     price: formatRupiah(room.price),
@@ -137,7 +128,6 @@ export default function Page() {
   const [branches, setBranches] = useState<ApiBranch[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [roomsError, setRoomsError] = useState('');
-  const [activeRoomType, setActiveRoomType] = useState('semua');
   const [branch, setBranch] = useState('semua-cabang');
   const [activeGenderType, setActiveGenderType] = useState('semua');
   const [activeRoomStatus, setActiveRoomStatus] = useState('semua');
@@ -195,13 +185,12 @@ export default function Page() {
     const max = priceMax ? Number(priceMax) : null;
     const filtered = allRooms.filter((room) => {
       const matchesBranch = branch === 'semua-cabang' || String(room.branchId) === branch;
-      const matchesRoomType = activeRoomType === 'semua' || room.roomType === activeRoomType;
       const matchesGenderType = activeGenderType === 'semua' || room.genderType === activeGenderType;
       const matchesRoomStatus = activeRoomStatus === 'semua' || room.roomStatus === activeRoomStatus;
       const matchesMinPrice = min === null || room.priceValue >= min;
       const matchesMaxPrice = max === null || room.priceValue <= max;
 
-      return matchesBranch && matchesRoomType && matchesGenderType && matchesRoomStatus && matchesMinPrice && matchesMaxPrice;
+      return matchesBranch && matchesGenderType && matchesRoomStatus && matchesMinPrice && matchesMaxPrice;
     });
 
     return [...filtered].sort((a, b) => {
@@ -215,7 +204,7 @@ export default function Page() {
 
       return a.priceValue - b.priceValue;
     });
-  }, [activeGenderType, activeRoomStatus, activeRoomType, allRooms, branch, priceMax, priceMin, sortBy]);
+  }, [activeGenderType, activeRoomStatus, allRooms, branch, priceMax, priceMin, sortBy]);
   const totalPages = Math.max(1, Math.ceil(filteredRooms.length / roomsPerPage));
   const currentPage = Math.min(activePage, totalPages);
   const visibleRooms = filteredRooms.slice((currentPage - 1) * roomsPerPage, currentPage * roomsPerPage);
@@ -259,26 +248,6 @@ export default function Page() {
                 onChange={(value) => { setBranch(value); setActivePage(1); }}
                 options={branchOptions}
               />
-            </div>
-
-            {/* Room type filter */}
-            <div className="flex flex-col items-start gap-3 w-full">
-              <span className="text-[#3d4a3d] text-sm tracking-[0.7px] leading-5">TIPE KAMAR</span>
-              <div className="flex flex-wrap items-start gap-2 w-full">
-                {roomTypeFilters.map((filter) => (
-                  <button
-                    key={filter.value}
-                    onClick={() => { setActiveRoomType(filter.value); setActivePage(1); }}
-                    className={`px-4 py-2 rounded-full text-sm leading-5 border-0 cursor-pointer transition-colors ${
-                      activeRoomType === filter.value
-                        ? 'bg-green-500 text-[#004b1e] font-normal'
-                        : 'bg-[#f0f3ff] text-[#3d4a3d] font-medium'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="flex flex-col items-start gap-3 w-full">
@@ -343,7 +312,6 @@ export default function Page() {
               </button>
               <button
                 onClick={() => {
-                  setActiveRoomType('semua');
                   setActiveGenderType('semua');
                   setActiveRoomStatus('semua');
                   setBranch('semua-cabang');
@@ -403,7 +371,6 @@ export default function Page() {
                     location={room.branch}
                     price={room.price}
                     imageUrl={room.image}
-                    roomType={room.roomType}
                     genderType={room.genderType}
                     status={room.roomStatus}
                     amenities={room.amenities}

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RoomOccupancy extends Model
 {
@@ -40,5 +41,15 @@ class RoomOccupancy extends Model
     public function rentalApplication(): BelongsTo
     {
         return $this->belongsTo(RentalApplication::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function leaseReminders(): HasMany
+    {
+        return $this->hasMany(LeaseReminder::class);
     }
 }

@@ -5,6 +5,7 @@ const styles: Record<RentalApplicationStatus, { labelKey: string; bg: string; co
   pending: { labelKey: 'status.pending', bg: '#fef3c7', color: '#b45309', dot: '#f59e0b' },
   approved: { labelKey: 'status.approved', bg: '#dcfce7', color: '#15803d', dot: '#22c55e' },
   rejected: { labelKey: 'status.rejected', bg: '#fee2e2', color: '#b91c1c', dot: '#ef4444' },
+  cancelled: { labelKey: 'status.cancelled', bg: '#f1f5f9', color: '#475569', dot: '#94a3b8' },
 };
 
 export default function RentalApplicationStatusBadge({ status }: { status: RentalApplicationStatus }) {

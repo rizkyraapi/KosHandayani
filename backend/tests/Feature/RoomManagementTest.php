@@ -38,7 +38,6 @@ class RoomManagementTest extends TestCase
             ->post('/api/rooms', [
                 'room_name' => 'Kamar A-101',
                 'branch_id' => $branch->id,
-                'room_type' => 'suite',
                 'gender_type' => 'mixed',
                 'room_status' => 'available',
                 'price' => 2500000,
@@ -62,7 +61,6 @@ class RoomManagementTest extends TestCase
 
         $room = Room::with(['facilities', 'images'])->firstOrFail();
 
-        $this->assertSame('suite', $room->room_type);
         $this->assertSame($branch->id, $room->branch_id);
         $this->assertCount(2, $room->facilities);
         $this->assertCount(4, $room->images);
@@ -82,7 +80,6 @@ class RoomManagementTest extends TestCase
             'room_name' => 'Kamar B-201',
             'branch_id' => $branch->id,
             'branch' => $branch->branch_name,
-            'room_type' => 'single',
             'gender_type' => 'female',
             'room_status' => 'available',
             'price' => 1200000,
@@ -114,7 +111,6 @@ class RoomManagementTest extends TestCase
             'room_name' => 'Suite Cendana',
             'branch_id' => $branch->id,
             'branch' => $branch->branch_name,
-            'room_type' => 'suite',
             'gender_type' => 'mixed',
             'room_status' => 'available',
             'description' => 'Kamar luas dengan meja kerja.',
@@ -128,7 +124,6 @@ class RoomManagementTest extends TestCase
             'room_name' => 'Kamar Melati',
             'branch_id' => $branch->id,
             'branch' => $branch->branch_name,
-            'room_type' => 'single',
             'gender_type' => 'female',
             'room_status' => 'available',
             'description' => 'Kamar hemat.',
@@ -167,7 +162,6 @@ class RoomManagementTest extends TestCase
             'room_name' => 'Kamar Lama',
             'branch_id' => $branch->id,
             'branch' => $branch->branch_name,
-            'room_type' => 'single',
             'gender_type' => 'male',
             'room_status' => 'available',
             'price' => 1000000,
@@ -193,7 +187,6 @@ class RoomManagementTest extends TestCase
             ->put('/api/rooms/'.$room->id, [
                 'room_name' => 'Kamar Baru',
                 'branch_id' => $branch->id,
-                'room_type' => 'suite',
                 'gender_type' => 'mixed',
                 'room_status' => 'maintenance',
                 'price' => 1750000,
@@ -206,7 +199,6 @@ class RoomManagementTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.room_name', 'Kamar Baru')
-            ->assertJsonPath('data.room_type', 'suite')
             ->assertJsonPath('data.room_status', 'maintenance')
             ->assertJsonPath('data.price', 1750000)
             ->assertJsonCount(2, 'data.facilities')
@@ -231,7 +223,6 @@ class RoomManagementTest extends TestCase
             'room_name' => 'Kamar Hapus',
             'branch_id' => $branch->id,
             'branch' => $branch->branch_name,
-            'room_type' => 'single',
             'gender_type' => 'female',
             'room_status' => 'available',
             'price' => 900000,

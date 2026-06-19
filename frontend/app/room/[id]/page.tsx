@@ -194,7 +194,6 @@ export default function Page() {
             <header>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                 <span style={{ padding: '6px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{statusLabel(room.room_status)}</span>
-                <span style={{ padding: '6px 10px', borderRadius: 999, background: '#e7eeff', color: '#3d4a3d', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{room.room_type}</span>
                 <span style={{ padding: '6px 10px', borderRadius: 999, background: '#f0f3ff', color: '#3d4a3d', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{room.gender_type}</span>
               </div>
               <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(30px, 4vw, 44px)', lineHeight: 1.12, margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>{room.room_name}</h1>
@@ -271,7 +270,6 @@ export default function Page() {
                   location={related.branch?.branch_name || 'Cabang belum diatur'}
                   price={formatRupiah(related.price)}
                   imageUrl={related.thumbnail || fallbackImageUrl}
-                  roomType={related.room_type}
                   genderType={related.gender_type}
                   status={related.room_status}
                   amenities={related.facilities.slice(0, 3).map((facility) => ({
@@ -316,7 +314,8 @@ export default function Page() {
               room={room}
               onCancel={() => setIsApplyModalOpen(false)}
               onSuccess={() => {
-                setTimeout(() => setIsApplyModalOpen(false), 900);
+                setIsApplyModalOpen(false);
+                router.push('/tenant/rental-applications?created=1');
               }}
             />
           </div>

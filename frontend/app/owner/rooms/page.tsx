@@ -1,769 +1,248 @@
 'use client';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { deleteRoom, getRooms, type ApiRoom } from '@/lib/api';
-import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
-function formatRupiah(price: number) {
+import Image from 'next/image';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  BedDouble,
+  CalendarDays,
+  DoorOpen,
+  Eye,
+  Home,
+  Plus,
+  RefreshCw,
+  Search,
+  UserRound,
+  Wrench,
+} from 'lucide-react';
+import {
+  BranchScopeControl,
+  EmptyPanel,
+  ErrorPanel,
+  LifecyclePill,
+  LoadingPanel,
+  MetricCard,
+  OwnerButton,
+  OwnerCard,
+  OwnerInput,
+  OwnerPage,
+  OwnerPageHeader,
+  OwnerSelect,
+  SectionHeader,
+  StatusPill,
+} from '@/components/owner/OwnerUi';
+import { getOwnerRoomsOverview, type OwnerRoomOverview } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
+import { useOwnerBranchScope } from '@/lib/use-owner-branch-scope';
+
+function rupiah(value: number) {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     maximumFractionDigits: 0,
-  }).format(price);
+  }).format(value);
 }
 
-function statusLabel(status: ApiRoom['room_status'], t: (key: string) => string) {
-  return {
-    available: t('status.available'),
-    occupied: t('status.occupied'),
-    maintenance: t('status.maintenance'),
-  }[status];
+function date(value?: string | null) {
+  return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value)) : '-';
 }
 
-export default function KosHandayaniPage() {
-  const router = useRouter();
-  const { t } = useLanguage();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState('all');
-  const [apiRooms, setApiRooms] = useState<ApiRoom[]>([]);
-  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
-  const [roomsError, setRoomsError] = useState('');
-  const [actionMessage, setActionMessage] = useState('');
-  const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
+export default function Page() {
+  const [rooms, setRooms] = useState<OwnerRoomOverview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const { branches, branchScope, setBranchScope, branchesLoading } = useOwnerBranchScope();
 
-  const loadRooms = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      setIsLoadingRooms(true);
-      setRoomsError('');
-      const data = await getRooms();
-      setApiRooms(data);
-    } catch (error) {
-      setRoomsError(error instanceof Error ? error.message : t('messages.loadRoomsFailed'));
+      setLoading(true);
+      setError('');
+      setRooms(await getOwnerRoomsOverview(branchScope));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Gagal memuat monitoring kamar.');
     } finally {
-      setIsLoadingRooms(false);
+      setLoading(false);
     }
-  }, [t]);
+  }, [branchScope]);
 
   useEffect(() => {
-    void Promise.resolve().then(loadRooms);
-  }, [loadRooms]);
+    void Promise.resolve().then(load);
+  }, [load]);
+  useAutoRefresh(load);
 
-  useAutoRefresh(loadRooms);
-
-  const rooms = useMemo(() => {
-    return apiRooms.map((room) => ({
-      id: room.id,
-      isApiRoom: true,
-      name: room.room_name,
-      floor: `${room.room_type} - ${room.gender_type} - Maks ${room.max_guest} tamu`,
-      branch: room.branch?.branch_name || t('tenant.applications.branchUnset'),
-      branchId: room.branch_id ? String(room.branch_id) : 'unknown',
-      price: formatRupiah(room.price),
-      status: statusLabel(room.room_status, t),
-      statusType: room.room_status,
-    }));
-  }, [apiRooms, t]);
-
-  async function handleDeleteRoom(roomId: number, roomName: string) {
-    const confirmed = window.confirm(t('owner.rooms.deleteConfirmation', { room: roomName }));
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setDeletingRoomId(roomId);
-      setRoomsError('');
-      setActionMessage('');
-      await deleteRoom(roomId);
-      setApiRooms((current) => current.filter((room) => room.id !== roomId));
-      setActionMessage(t('messages.roomDeleted'));
-    } catch (error) {
-      setRoomsError(error instanceof Error ? error.message : t('owner.rooms.deleteFailed'));
-    } finally {
-      setDeletingRoomId(null);
-    }
-  }
-
-  const filteredRooms = useMemo(() => rooms.filter((room) => {
-    const matchesBranch = selectedBranch === 'all' || ('branchId' in room && room.branchId === selectedBranch);
-    const query = searchQuery.trim().toLowerCase();
-    const matchesSearch = !query || room.name.toLowerCase().includes(query) || room.branch.toLowerCase().includes(query);
-
-    return matchesBranch && matchesSearch;
-  }), [rooms, searchQuery, selectedBranch]);
-
-  const branchTabs = useMemo(() => {
-    const branches = new Map<string, string>();
-
-    apiRooms.forEach((room) => {
-      if (room.branch_id && room.branch?.branch_name) {
-        branches.set(String(room.branch_id), room.branch.branch_name);
-      }
-    });
-
-    return Array.from(branches.entries()).map(([id, name]) => ({ id, name }));
-  }, [apiRooms]);
-
-  const stats = useMemo(() => ({
+  const summary = useMemo(() => ({
     total: rooms.length,
-    occupied: rooms.filter((room) => room.statusType === 'occupied').length,
-    available: rooms.filter((room) => room.statusType === 'available').length,
-    maintenance: rooms.filter((room) => room.statusType === 'maintenance').length,
+    occupied: rooms.filter((room) => Boolean(room.occupancy)).length,
+    vacant: rooms.filter((room) => room.room_status === 'available' && !room.occupancy).length,
+    maintenance: rooms.filter((room) => room.room_status === 'maintenance').length,
   }), [rooms]);
-  const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0;
+
+  const filtered = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+
+    return rooms.filter((room) => {
+      const matchesSearch = !keyword || [
+        room.room_name,
+        room.branch?.branch_name,
+        room.occupancy?.tenant?.full_name,
+      ].filter(Boolean).join(' ').toLowerCase().includes(keyword);
+      const lifecycle = room.occupancy?.lifecycle_status;
+      const matchesStatus = status === 'all'
+        || (status === 'occupied' && Boolean(room.occupancy))
+        || (status === 'vacant' && room.room_status === 'available' && !room.occupancy)
+        || (status === 'maintenance' && room.room_status === 'maintenance')
+        || lifecycle === status;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [rooms, search, status]);
 
   return (
-    <div className="light">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+    <OwnerPage>
+      <OwnerPageHeader
+        eyebrow="Inventory & Occupancy"
+        title="Data Kamar"
+        description="Pantau unit, tenant aktif, akhir sewa, occupancy status, dan renewal status dalam satu tampilan."
+        actions={(
+          <>
+            <OwnerButton onClick={() => void load()} variant="secondary">
+              <RefreshCw size={17} />
+              Segarkan
+            </OwnerButton>
+            <OwnerButton href="/owner/rooms/create">
+              <Plus size={17} />
+              Tambah kamar
+            </OwnerButton>
+          </>
+        )}
+      />
 
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
+      <BranchScopeControl
+        branches={branches}
+        value={branchScope}
+        onChange={setBranchScope}
+        disabled={loading || branchesLoading}
+        className="mb-8"
+      />
 
-        html, body {
-          width: 100%;
-          height: 100%;
-        }
-
-        :root {
-          --color-on-error: #ffffff;
-          --color-on-primary-fixed: #002109;
-          --color-on-background: #111c2d;
-          --color-surface-variant: #d8e3fb;
-          --color-inverse-on-surface: #ecf1ff;
-          --color-tertiary: #9e4036;
-          --color-on-surface: #111c2d;
-          --color-outline-variant: #bccbb9;
-          --color-on-error-container: #93000a;
-          --color-surface-container-high: #dee8ff;
-          --color-on-secondary-container: #346e40;
-          --color-secondary-fixed: #b2f2b7;
-          --color-tertiary-fixed-dim: #ffb4a9;
-          --color-tertiary-container: #ff8b7c;
-          --color-outline: #6d7b6c;
-          --color-on-tertiary: #ffffff;
-          --color-error: #ba1a1a;
-          --color-secondary-fixed-dim: #96d59d;
-          --color-on-tertiary-container: #76231b;
-          --color-on-secondary-fixed: #002109;
-          --color-on-primary-container: #004b1e;
-          --color-surface-tint: #006e2f;
-          --color-background: #f9f9ff;
-          --color-secondary-container: #afefb4;
-          --color-secondary: #2f6a3c;
-          --color-primary-container: #22c55e;
-          --color-surface-container-highest: #d8e3fb;
-          --color-surface-bright: #f9f9ff;
-          --color-primary-fixed: #6bff8f;
-          --color-on-surface-variant: #3d4a3d;
-          --color-surface-dim: #cfdaf2;
-          --color-on-tertiary-fixed: #410001;
-          --color-error-container: #ffdad6;
-          --color-tertiary-fixed: #ffdad5;
-          --color-surface-container-lowest: #ffffff;
-          --color-on-primary-fixed-variant: #005321;
-          --color-primary-fixed-dim: #4ae176;
-          --color-surface-container: #e7eeff;
-          --color-primary: #006e2f;
-          --color-inverse-primary: #4ae176;
-          --color-on-secondary: #ffffff;
-          --color-on-tertiary-fixed-variant: #7f2a21;
-          --color-inverse-surface: #263143;
-          --color-surface-container-low: #f0f3ff;
-          --color-surface: #f9f9ff;
-          --color-on-secondary-fixed-variant: #145126;
-          --color-on-primary: #ffffff;
-        }
-
-        body {
-          background-color: var(--color-background);
-          font-family: 'Inter', sans-serif;
-          color: var(--color-on-background);
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-          overflow-x: hidden;
-        }
-
-        .material-symbols-outlined {
-          font-family: 'Material Symbols Outlined';
-          font-weight: normal;
-          font-style: normal;
-          font-size: 24px;
-          display: inline-block;
-          line-height: 1;
-          text-transform: none;
-          letter-spacing: normal;
-          word-wrap: normal;
-          white-space: nowrap;
-          direction: ltr;
-          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-
-        ::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-          background: #bccbb9;
-          border-radius: 10px;
-        }
-
-        .glass-card {
-          background: rgba(255, 255, 255, 0.8);
-          backdrop-filter: blur(24px);
-        }
-
-        .gradient-primary {
-          background: linear-gradient(135deg, #006e2f 0%, #22c55e 100%);
-        }
-
-        .text-headline {
-          font-family: 'Manrope', sans-serif;
-        }
-
-        .text-body {
-          font-family: 'Inter', sans-serif;
-        }
-
-        .text-label {
-          font-family: 'Inter', sans-serif;
-        }
-
-        @media (max-width: 768px) {
-          body {
-            padding: 0;
-          }
-        }
-
-        .rooms-page-shell {
-          min-height: 100vh;
-          background: #f9f9ff;
-        }
-
-        .rooms-main {
-          width: 100%;
-          min-height: 100vh;
-          padding: 40px;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .rooms-main-inner {
-          width: 100%;
-          max-width: 1440px;
-          margin: 0 auto;
-          position: relative;
-          z-index: 1;
-        }
-
-        .rooms-header {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 24px;
-          margin-bottom: 32px;
-        }
-
-        .rooms-eyebrow {
-          display: block;
-          margin-bottom: 8px;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: rgba(61, 74, 61, 0.66);
-        }
-
-        .rooms-title {
-          font-family: 'Manrope', sans-serif;
-          font-size: 44px;
-          line-height: 1.05;
-          font-weight: 900;
-          color: #111c2d;
-          letter-spacing: 0;
-        }
-
-        .rooms-subtitle {
-          margin-top: 8px;
-          color: #3d4a3d;
-          font-size: 16px;
-          line-height: 1.5;
-        }
-
-        .rooms-add-button {
-          min-height: 48px;
-          padding: 0 22px;
-          border: 0;
-          border-radius: 12px;
-          color: white;
-          font-size: 15px;
-          font-weight: 800;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          box-shadow: 0 14px 28px rgba(0, 110, 47, 0.18);
-          white-space: nowrap;
-          cursor: pointer;
-        }
-
-        .rooms-stats-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 24px;
-          margin-bottom: 32px;
-        }
-
-        .rooms-stat-card {
-          min-height: 148px;
-          background: white;
-          padding: 24px;
-          border-radius: 16px;
-          border: 1px solid rgba(188, 203, 185, 0.18);
-          box-shadow: 0 12px 32px rgba(17, 28, 45, 0.05);
-        }
-
-        .rooms-stat-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          margin-bottom: 18px;
-        }
-
-        .rooms-stat-icon {
-          width: 48px;
-          height: 48px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 14px;
-        }
-
-        .rooms-stat-badge {
-          padding: 6px 10px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 800;
-          white-space: nowrap;
-        }
-
-        .rooms-stat-label {
-          color: #3d4a3d;
-          font-size: 14px;
-          font-weight: 600;
-          margin-bottom: 4px;
-        }
-
-        .rooms-stat-value {
-          font-family: 'Manrope', sans-serif;
-          color: #111c2d;
-          font-size: 36px;
-          line-height: 1;
-          font-weight: 900;
-        }
-
-        .rooms-table-card {
-          background: white;
-          border-radius: 16px;
-          border: 1px solid rgba(188, 203, 185, 0.18);
-          box-shadow: 0 12px 32px rgba(17, 28, 45, 0.05);
-          overflow: hidden;
-        }
-
-        .rooms-filter {
-          padding: 24px 32px;
-          border-bottom: 1px solid rgba(188, 203, 185, 0.14);
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-        }
-
-        .rooms-tabs {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .rooms-tab {
-          border: 0;
-          border-radius: 999px;
-          padding: 9px 18px;
-          font-size: 14px;
-          font-weight: 800;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-
-        .rooms-search {
-          position: relative;
-          max-width: 480px;
-        }
-
-        .rooms-search-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: rgba(61, 74, 61, 0.62);
-        }
-
-        .rooms-search-input {
-          width: 100%;
-          height: 44px;
-          padding: 0 16px 0 44px;
-          background: #f0f3ff;
-          border: 0;
-          border-radius: 12px;
-          color: #111c2d;
-          font-size: 14px;
-          outline: none;
-        }
-
-        .rooms-table-wrap {
-          overflow-x: auto;
-        }
-
-        .rooms-table {
-          width: 100%;
-          min-width: 940px;
-          border-collapse: collapse;
-          text-align: left;
-        }
-
-        .rooms-table th {
-          padding: 18px 28px;
-          background: rgba(240, 243, 255, 0.7);
-          color: #3d4a3d;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          border-bottom: 1px solid rgba(188, 203, 185, 0.16);
-          white-space: nowrap;
-        }
-
-        .rooms-table td {
-          padding: 20px 28px;
-          border-bottom: 1px solid rgba(188, 203, 185, 0.12);
-          vertical-align: middle;
-        }
-
-        .rooms-name-cell {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          min-width: 260px;
-        }
-
-        .rooms-room-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: #f1f5f9;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .rooms-room-name {
-          color: #111c2d;
-          font-size: 17px;
-          font-weight: 800;
-          line-height: 1.25;
-        }
-
-        .rooms-room-floor {
-          color: #3d4a3d;
-          font-size: 13px;
-          margin-top: 4px;
-        }
-
-        .rooms-pagination {
-          padding: 20px 32px;
-          background: rgba(240, 243, 255, 0.25);
-          border-top: 1px solid rgba(188, 203, 185, 0.14);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-        }
-
-        .rooms-footer {
-          margin-top: 40px;
-          padding: 28px 0;
-          border-top: 1px solid #e2e8f0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 14px;
-          text-align: center;
-        }
-
-        @media (max-width: 1023px) {
-          .rooms-main {
-            padding: 24px;
-          }
-
-          .rooms-header {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .rooms-stats-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .rooms-main {
-            padding: 18px;
-          }
-
-          .rooms-title {
-            font-size: 34px;
-          }
-
-          .rooms-filter,
-          .rooms-pagination {
-            padding: 18px;
-          }
-
-          .rooms-pagination {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-        }
-      `}</style>
-
-      <div className="rooms-page-shell">
-        {/* Main Content */}
-        <main className="rooms-main">
-          {/* Background Shapes */}
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#006e2f]/5 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute top-1/2 -left-24 w-64 h-64 bg-[#2f6a3c]/5 rounded-full blur-2xl pointer-events-none"></div>
-
-          <div className="rooms-main-inner">
-
-          {/* Header Section */}
-          <header className="rooms-header">
-            <div>
-              <nav>
-                <span className="rooms-eyebrow">{t('owner.applications.eyebrow')}</span>
-              </nav>
-              <h2 className="rooms-title">{t('owner.rooms.title')}</h2>
-              <p className="rooms-subtitle">{t('owner.rooms.subtitle')}</p>
-            </div>
-            <Link href="/owner/rooms/create" className="rooms-add-button gradient-primary" style={{ textDecoration: 'none' }}>
-              <span className="material-symbols-outlined text-xl">add</span>
-              <span className="hidden sm:inline">{t('owner.rooms.addNew')}</span>
-              <span className="sm:hidden">{t('owner.rooms.addShort')}</span>
-            </Link>
-          </header>
-
-          {/* Stats Grid */}
-          <section className="rooms-stats-grid">
-            <div className="rooms-stat-card">
-              <div className="rooms-stat-top">
-                <span className="material-symbols-outlined rooms-stat-icon text-[#006e2f] bg-[#006e2f]/10">door_open</span>
-                <span className="rooms-stat-badge text-[#006e2f] bg-[#006e2f]/10">{stats.maintenance} {t('status.maintenance')}</span>
-              </div>
-              <p className="rooms-stat-label">{t('owner.rooms.totalUnits')}</p>
-              <h3 className="rooms-stat-value">{stats.total}</h3>
-            </div>
-            <div className="rooms-stat-card">
-              <div className="rooms-stat-top">
-                <span className="material-symbols-outlined rooms-stat-icon text-[#2f6a3c] bg-[#2f6a3c]/10">check_circle</span>
-                <span className="rooms-stat-badge text-[#2f6a3c] bg-[#2f6a3c]/10">{occupancyRate}% {t('owner.rooms.occupancy')}</span>
-              </div>
-              <p className="rooms-stat-label">{t('status.occupied')}</p>
-              <h3 className="rooms-stat-value">{stats.occupied}</h3>
-            </div>
-            <div className="rooms-stat-card">
-              <div className="rooms-stat-top">
-                <span className="material-symbols-outlined rooms-stat-icon text-[#9e4036] bg-[#9e4036]/10">error</span>
-                <span className="rooms-stat-badge text-[#9e4036] bg-[#9e4036]/10">{t('status.available')}</span>
-              </div>
-              <p className="rooms-stat-label">{t('status.available')}</p>
-              <h3 className="rooms-stat-value">{stats.available}</h3>
-            </div>
-          </section>
-
-          {/* Table Section */}
-          <div className="rooms-table-card">
-            {/* Filter Bar */}
-            <div className="rooms-filter">
-              {actionMessage && (
-                <p style={{ margin: 0, padding: '10px 12px', borderRadius: 8, background: '#e7f8eb', color: '#006e2f', fontSize: 13, fontWeight: 800 }}>
-                  {actionMessage}
-                </p>
-              )}
-              <div className="rooms-tabs">
-                <button
-                  onClick={() => setSelectedBranch('all')}
-                  className={`rooms-tab ${selectedBranch === 'all' ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
-                >
-                  {t('owner.payments.allBranches')}
-                </button>
-                {branchTabs.map((branch) => (
-                  <button
-                    key={branch.id}
-                    onClick={() => setSelectedBranch(branch.id)}
-                    className={`rooms-tab ${selectedBranch === branch.id ? 'bg-[#006e2f] text-white' : 'bg-[#f0f3ff] text-[#3d4a3d] hover:bg-[#dee8ff]'}`}
-                  >
-                    {branch.name}
-                  </button>
-                ))}
-              </div>
-              <div className="rooms-search">
-                <span className="material-symbols-outlined rooms-search-icon">search</span>
-                <input
-                  type="text"
-                  placeholder={t('owner.rooms.searchPlaceholder')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="rooms-search-input"
-                />
-              </div>
-            </div>
-
-            {/* Table */}
-            {isLoadingRooms ? (
-              <div className="rooms-table-wrap p-5">
-                <LoadingState title={t('owner.rooms.loadingTitle')} description={t('owner.rooms.loadingDescription')} />
-              </div>
-            ) : roomsError ? (
-              <div className="rooms-table-wrap p-5">
-                <ErrorState title={t('messages.loadFailed')} description={roomsError} onAction={() => void loadRooms()} />
-              </div>
-            ) : filteredRooms.length === 0 ? (
-              <div className="rooms-table-wrap p-5">
-                <EmptyState
-                  title={rooms.length === 0 ? t('empty.noRooms') : t('empty.roomsNotFound')}
-                  description={rooms.length === 0 ? t('owner.rooms.emptyDescription') : t('owner.rooms.notFoundDescription')}
-                  actionLabel={t('common.refresh')}
-                  onAction={() => void loadRooms()}
-                />
-              </div>
-            ) : (
-              <div className="rooms-table-wrap">
-                <table className="rooms-table">
-                  <thead>
-                    <tr>
-                      <th>{t('owner.rooms.roomName')}</th>
-                      <th>{t('owner.applications.branch')}</th>
-                      <th>{t('owner.rooms.monthlyPrice')}</th>
-                      <th>{t('common.status')}</th>
-                      <th style={{ textAlign: 'right' }}>{t('common.action')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRooms.map((room) => (
-                    <tr key={room.id} className="hover:bg-[#f0f3ff]/30 transition-colors group">
-                      <td>
-                        <div className="rooms-name-cell">
-                          <div className="rooms-room-icon">
-                            <span className="material-symbols-outlined text-[#3d4a3d]/40 text-lg">meeting_room</span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="rooms-room-name">{room.name}</p>
-                            <p className="rooms-room-floor">{room.floor}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="text-sm font-medium text-[#111c2d]">{room.branch}</span>
-                      </td>
-                      <td>
-                        <span className="text-sm font-bold text-[#006e2f]">{room.price}</span>
-                      </td>
-                      <td>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                          room.statusType === 'occupied' ? 'bg-[#afefb4] text-[#346e40]' :
-                          room.statusType === 'available' ? 'bg-[#ff8b7c] text-[#76231b]' :
-                          'bg-[#e7eeff] text-[#3d4a3d]/60'
-                        }`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{
-                            backgroundColor: room.statusType === 'occupied' ? '#2f6a3c' :
-                              room.statusType === 'available' ? '#9e4036' :
-                              '#6d7b6c'
-                          }}></span>
-                          {room.status}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            className="p-2 text-[#006e2f] hover:bg-[#006e2f]/10 rounded-lg transition-colors"
-                            title={t('common.edit')}
-                            disabled={!('isApiRoom' in room)}
-                            onClick={() => router.push(`/owner/rooms/create?edit=${room.id}`)}
-                          >
-                            <span className="material-symbols-outlined text-lg">edit</span>
-                          </button>
-                          <button
-                            className="p-2 text-[#ba1a1a] hover:bg-[#ba1a1a]/10 rounded-lg transition-colors disabled:opacity-40"
-                            title={t('common.delete')}
-                            disabled={!('isApiRoom' in room) || deletingRoomId === room.id}
-                            onClick={() => handleDeleteRoom(room.id, room.name)}
-                          >
-                            <span className="material-symbols-outlined text-lg">delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {!isLoadingRooms && !roomsError && filteredRooms.length > 0 && (
-              <div className="rooms-pagination">
-                <p className="text-xs text-[#3d4a3d] font-medium">
-                  {t('common.showing', { count: filteredRooms.length, total: rooms.length, item: t('common.rooms') })}
-                </p>
-                <div className="flex items-center gap-1">
-                  <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
-                    <span className="material-symbols-outlined text-lg">chevron_left</span>
-                  </button>
-                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#006e2f] text-white text-xs font-bold">1</button>
-                  <button className="p-2 rounded-lg hover:bg-[#dee8ff] transition-colors disabled:opacity-30" disabled>
-                    <span className="material-symbols-outlined text-lg">chevron_right</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <footer className="rooms-footer">
-            <p className="text-xs text-slate-500">© 2024 KosHandayani. Digital Concierge Property Management.</p>
-            <div className="flex flex-wrap gap-4 md:gap-6 justify-center">
-              <a href="#" className="text-slate-400 hover:text-[#006e2f] transition-colors text-xs">Tentang Kami</a>
-              <a href="#" className="text-slate-400 hover:text-[#006e2f] transition-colors text-xs">Syarat &amp; Ketentuan</a>
-              <a href="#" className="text-slate-400 hover:text-[#006e2f] transition-colors text-xs">Kebijakan Privasi</a>
-            </div>
-          </footer>
-          </div>
-        </main>
-
-        {/* Mobile FAB */}
-        <button className="md:hidden fixed bottom-6 right-6 z-50 w-14 h-14 gradient-primary text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform">
-          <span className="material-symbols-outlined text-2xl">add</span>
-        </button>
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Total Unit" value={summary.total} icon={BedDouble} tone="blue" />
+        <MetricCard label="Unit Terisi" value={summary.occupied} icon={Home} tone="green" />
+        <MetricCard label="Unit Kosong" value={summary.vacant} icon={DoorOpen} tone="amber" />
+        <MetricCard label="Maintenance" value={summary.maintenance} icon={Wrench} tone="red" />
       </div>
-    </div>
+
+      <OwnerCard>
+        <SectionHeader
+          title="Monitoring Unit"
+          description={`${filtered.length} dari ${rooms.length} unit ditampilkan.`}
+          action={(
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-3 text-[#6d7b6c]" size={17} />
+                <OwnerInput value={search} onChange={setSearch} placeholder="Cari kamar atau tenant..." className="w-full pl-10 sm:w-64" />
+              </div>
+              <OwnerSelect value={status} onChange={setStatus} ariaLabel="Filter status kamar">
+                <option value="all">Semua status</option>
+                <option value="occupied">Terisi</option>
+                <option value="vacant">Kosong</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="h30">H-30</option>
+                <option value="h7">H-7</option>
+                <option value="h1">H-1</option>
+                <option value="overdue">Overdue</option>
+              </OwnerSelect>
+            </div>
+          )}
+        />
+
+        {loading && rooms.length === 0 ? (
+          <LoadingPanel />
+        ) : error && rooms.length === 0 ? (
+          <ErrorPanel message={error} onRetry={() => void load()} />
+        ) : filtered.length === 0 ? (
+          <EmptyPanel title="Kamar tidak ditemukan" description="Ubah kata kunci atau filter status untuk melihat unit lainnya." />
+        ) : (
+          <div className="grid gap-4">
+            {filtered.map((room) => {
+              const occupancy = room.occupancy;
+
+              return (
+                <article key={room.id} className="overflow-hidden rounded-2xl border border-[#e7eeff] bg-[#f9f9ff]">
+                  <div className="grid lg:grid-cols-[180px_minmax(0,1fr)_240px]">
+                    <div className="relative min-h-44 bg-[#e7eeff]">
+                      {room.thumbnail ? (
+                        <Image src={room.thumbnail} alt={room.room_name} fill unoptimized className="object-cover" />
+                      ) : (
+                        <div className="flex h-full min-h-44 items-center justify-center text-[#006e2f]"><BedDouble size={36} /></div>
+                      )}
+                    </div>
+
+                    <div className="p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold uppercase tracking-[0.1em] text-[#006e2f]">
+                            {room.branch?.branch_name || 'Cabang belum diatur'}
+                          </p>
+                          <h3 className="mt-2 text-2xl font-semibold text-[#111c2d]">{room.room_name}</h3>
+                          <p className="mt-1 text-base font-semibold text-[#3d4a3d]">{rupiah(room.price)} / bulan</p>
+                        </div>
+                        <StatusPill
+                          label={room.room_status === 'maintenance' ? 'Maintenance' : occupancy ? 'Terisi' : 'Kosong'}
+                          tone={room.room_status === 'maintenance' ? 'red' : occupancy ? 'green' : 'amber'}
+                        />
+                      </div>
+
+                      <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div>
+                          <p className="text-sm text-[#3d4a3d]">Tenant aktif</p>
+                          <p className="mt-1 text-base font-semibold">{occupancy?.tenant?.full_name || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-[#3d4a3d]">Akhir sewa</p>
+                          <p className="mt-1 text-base font-semibold">{date(occupancy?.end_date)}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-[#3d4a3d]">Occupancy</p>
+                          <div className="mt-1"><LifecyclePill status={occupancy?.lifecycle_status} label={occupancy?.lifecycle_label || 'Kosong'} /></div>
+                        </div>
+                        <div>
+                          <p className="text-sm text-[#3d4a3d]">Renewal</p>
+                          <div className="mt-1">
+                            <StatusPill
+                              label={occupancy?.renewal_status.label || 'Belum Ada'}
+                              tone={occupancy?.renewal_status.key === 'successful' ? 'green' : occupancy?.renewal_status.key === 'failed' ? 'red' : occupancy?.renewal_status.key === 'pending' ? 'amber' : 'slate'}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-center gap-3 border-t border-[#e7eeff] p-5 lg:border-l lg:border-t-0">
+                      <OwnerButton href={`/room/${room.id}`} variant="secondary">
+                        <Eye size={17} />
+                        Detail kamar
+                      </OwnerButton>
+                      {occupancy ? (
+                        <OwnerButton href={`/owner/tenants/${occupancy.rental_application_id}`}>
+                          <UserRound size={17} />
+                          Lihat tenant
+                        </OwnerButton>
+                      ) : (
+                        <OwnerButton href="/owner/rental-applications" variant="ghost">
+                          <CalendarDays size={17} />
+                          Lihat pengajuan
+                        </OwnerButton>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </OwnerCard>
+    </OwnerPage>
   );
 }

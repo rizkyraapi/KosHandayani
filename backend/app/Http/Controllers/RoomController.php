@@ -23,7 +23,6 @@ class RoomController extends Controller
                 $query->where(function ($query) use ($searchTerm) {
                     $query
                         ->where('room_name', 'like', $searchTerm)
-                        ->orWhere('room_type', 'like', $searchTerm)
                         ->orWhere('gender_type', 'like', $searchTerm)
                         ->orWhere('room_status', 'like', $searchTerm)
                         ->orWhere('description', 'like', $searchTerm)
@@ -42,7 +41,6 @@ class RoomController extends Controller
                 });
             })
             ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
-            ->when($request->filled('room_type'), fn ($query) => $query->where('room_type', $request->input('room_type')))
             ->when($request->filled('gender_type'), fn ($query) => $query->where('gender_type', $request->input('gender_type')))
             ->when($request->filled('room_status'), fn ($query) => $query->where('room_status', $request->input('room_status')))
             ->when($request->filled('price_min'), fn ($query) => $query->where('price', '>=', $request->integer('price_min')))
@@ -66,7 +64,6 @@ class RoomController extends Controller
         $validated = $request->validate([
             'room_name' => ['required', 'string', 'max:255'],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'room_type' => ['required', Rule::in(['single', 'double', 'suite'])],
             'gender_type' => ['required', Rule::in(['male', 'female', 'mixed'])],
             'room_status' => ['required', Rule::in(['available', 'occupied', 'maintenance'])],
             'price' => ['required', 'integer', 'min:0'],
@@ -84,7 +81,6 @@ class RoomController extends Controller
             $roomData = [
                 'room_name' => $validated['room_name'],
                 'branch_id' => $validated['branch_id'],
-                'room_type' => $validated['room_type'],
                 'gender_type' => $validated['gender_type'],
                 'price' => $validated['price'],
                 'room_status' => $validated['room_status'],
@@ -137,7 +133,6 @@ class RoomController extends Controller
         $validated = $request->validate([
             'room_name' => ['required', 'string', 'max:255'],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'room_type' => ['required', Rule::in(['single', 'double', 'suite'])],
             'gender_type' => ['required', Rule::in(['male', 'female', 'mixed'])],
             'room_status' => ['required', Rule::in(['available', 'occupied', 'maintenance'])],
             'price' => ['required', 'integer', 'min:0'],
@@ -195,7 +190,6 @@ class RoomController extends Controller
             $roomData = [
                 'room_name' => $validated['room_name'],
                 'branch_id' => $validated['branch_id'],
-                'room_type' => $validated['room_type'],
                 'gender_type' => $validated['gender_type'],
                 'price' => $validated['price'],
                 'room_status' => $validated['room_status'],
@@ -299,7 +293,6 @@ class RoomController extends Controller
                 'address' => $branch->address,
                 'description' => $branch->description,
             ] : null,
-            'room_type' => $room->room_type ?? 'single',
             'gender_type' => $room->gender_type ?? 'mixed',
             'price' => $room->price,
             'description' => $room->description,

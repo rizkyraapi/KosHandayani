@@ -17,11 +17,9 @@ export default function OwnerLayout({
           padding-left: 256px;
         }
 
-        .owner-page-shell aside,
         .owner-page-shell nav.sidebar-desktop,
         .owner-page-shell .sidenav,
         .owner-page-shell .sidebar,
-        .owner-page-shell .bottom-nav-mobile,
         .owner-page-shell .mobile-topbar {
           display: none !important;
         }
@@ -45,6 +43,8 @@ export default function OwnerLayout({
 
           .owner-page-shell {
             padding-left: 0 !important;
+            padding-top: 72px;
+            padding-bottom: 76px;
           }
         }
       `}</style>
