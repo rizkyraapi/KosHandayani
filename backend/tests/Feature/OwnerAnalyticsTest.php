@@ -495,6 +495,7 @@ class OwnerAnalyticsTest extends TestCase
             '/api/owner/application-monitoring',
             '/api/owner/payments',
             '/api/owner/tenants',
+            '/api/owner/expenses',
             '/api/owner/reports',
             '/api/owner/reports/export-pdf',
         ] as $endpoint) {

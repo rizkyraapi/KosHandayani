@@ -18,6 +18,7 @@ import {
   RefreshCw,
   TrendingUp,
   UsersRound,
+  WalletCards,
   XCircle,
 } from 'lucide-react';
 import {
@@ -89,13 +90,17 @@ export default function Page() {
   }, [load]);
 
   useAutoRefresh(load);
+  const maxFinancialValue = Math.max(
+    1,
+    ...(data?.monthly_financial_trend.flatMap((item) => [item.revenue, item.expense]) || [1]),
+  );
 
   return (
     <OwnerPage>
       <OwnerPageHeader
         eyebrow="Owner Dashboard"
         title="Pusat Monitoring Bisnis"
-        description="Pantau okupansi, pendapatan, lifecycle tenant, renewal, dan aktivitas operasional berdasarkan state bisnis aktual."
+        description="Pantau okupansi, pendapatan, pengeluaran, laba bersih, lifecycle tenant, renewal, dan aktivitas operasional."
         actions={(
           <>
             <OwnerButton href="/owner/reports" variant="secondary">
@@ -125,6 +130,49 @@ export default function Page() {
       ) : data ? (
         <div className="space-y-8">
           {error && <ErrorPanel message={error} onRetry={() => void load()} />}
+
+          <section>
+            <SectionHeader title="Kinerja Keuangan Bulan Ini" description="Laba bersih dihitung dari revenue sukses dikurangi pengeluaran tercatat." />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <MetricCard label="Pendapatan" value={rupiahCompact(data.financial.revenue)} icon={CircleDollarSign} tone="green" />
+              <MetricCard label="Pengeluaran" value={rupiahCompact(data.financial.expense)} icon={WalletCards} tone="red" href="/owner/expenses" />
+              <MetricCard
+                label="Laba Bersih"
+                value={rupiahCompact(data.financial.net_profit)}
+                icon={TrendingUp}
+                tone={data.financial.net_profit >= 0 ? 'blue' : 'red'}
+              />
+            </div>
+          </section>
+
+          <OwnerCard>
+            <SectionHeader title="Revenue vs Expense" description={`Perbandingan bulanan tahun ${new Date(data.generated_at).getFullYear()}.`} />
+            <div className="overflow-x-auto">
+              <div className="flex min-w-[760px] items-end gap-3 border-b border-[#d8e3fb] px-2 pt-8">
+                {data.monthly_financial_trend.map((item) => (
+                  <div key={item.month} className="flex min-w-0 flex-1 flex-col items-center">
+                    <div className="flex h-56 w-full items-end justify-center gap-1">
+                      <div
+                        title={`Revenue ${rupiah(item.revenue)}`}
+                        className="w-5 rounded-t-md bg-[#006e2f]"
+                        style={{ height: `${item.revenue > 0 ? Math.max(2, (item.revenue / maxFinancialValue) * 100) : 0}%` }}
+                      />
+                      <div
+                        title={`Expense ${rupiah(item.expense)}`}
+                        className="w-5 rounded-t-md bg-red-500"
+                        style={{ height: `${item.expense > 0 ? Math.max(2, (item.expense / maxFinancialValue) * 100) : 0}%` }}
+                      />
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-[#3d4a3d]">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-5 text-sm">
+              <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-[#006e2f]" />Revenue</span>
+              <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-red-500" />Expense</span>
+            </div>
+          </OwnerCard>
 
           <section>
             <SectionHeader title="Statistik Utama" description="Okupansi dihitung dari room occupancy aktif, bukan sekadar flag kamar." />
@@ -206,7 +254,7 @@ export default function Page() {
           </div>
 
           <OwnerCard>
-            <SectionHeader title="Statistik Cabang" description="Unit, okupansi, revenue, dan tenant aktif per cabang." />
+            <SectionHeader title="Statistik Cabang" description="Unit, okupansi, revenue, expense, laba bersih, dan tenant aktif per cabang." />
             <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {data.branches.map((branch) => (
                 <div key={branch.id} className="rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-5">
@@ -223,6 +271,8 @@ export default function Page() {
                     <div><p className="text-[#3d4a3d]">Jumlah kamar</p><p className="mt-1 text-lg font-bold">{branch.room_count}</p></div>
                     <div><p className="text-[#3d4a3d]">Kamar terisi</p><p className="mt-1 text-lg font-bold">{branch.occupied_units}</p></div>
                     <div><p className="text-[#3d4a3d]">Revenue</p><p className="mt-1 text-lg font-bold">{rupiah(branch.revenue)}</p></div>
+                    <div><p className="text-[#3d4a3d]">Expense</p><p className="mt-1 text-lg font-bold text-red-700">{rupiah(branch.expense)}</p></div>
+                    <div><p className="text-[#3d4a3d]">Laba bersih</p><p className="mt-1 text-lg font-bold">{rupiah(branch.net_profit)}</p></div>
                     <div><p className="text-[#3d4a3d]">Tenant aktif</p><p className="mt-1 text-lg font-bold">{branch.active_tenants}</p></div>
                   </div>
                   <div className="mt-5">

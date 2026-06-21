@@ -18,4 +18,9 @@ class Branch extends Model
     {
         return $this->hasMany(Room::class);
     }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class);
+    }
 }

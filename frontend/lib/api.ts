@@ -504,7 +504,75 @@ export type OwnerBranchStatistic = {
   occupied_units: number;
   occupancy_rate: number;
   revenue: number;
+  expense: number;
+  net_profit: number;
   active_tenants: number;
+};
+
+export type ExpenseCategory =
+  | 'Perawatan'
+  | 'Utilitas'
+  | 'Internet'
+  | 'Kebersihan'
+  | 'Keamanan'
+  | 'Perlengkapan'
+  | 'Pajak'
+  | 'Lainnya';
+
+export type OwnerExpense = {
+  id: number;
+  branch_id: number;
+  branch?: Pick<ApiBranch, 'id' | 'branch_name'> | null;
+  category: ExpenseCategory;
+  description?: string | null;
+  amount: number;
+  receipt_path?: string | null;
+  receipt_url?: string | null;
+  expense_date: string;
+  created_by: number;
+  creator?: { id: number; name: string } | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type ExpenseCategorySummary = {
+  category: string;
+  amount: number;
+  transactions: number;
+  percentage: number;
+};
+
+export type ExpenseBranchSummary = {
+  id: number;
+  branch_name: string;
+  amount: number;
+  transactions: number;
+};
+
+export type OwnerExpenseOverview = {
+  filters: {
+    branch_id?: number | null;
+    year: number;
+    month?: number | null;
+    category?: string | null;
+    years: number[];
+    categories: ExpenseCategory[];
+    branches: Array<Pick<ApiBranch, 'id' | 'branch_name'>>;
+  };
+  stats: {
+    total_expense: number;
+    transaction_count: number;
+    largest_category?: { category: string; amount: number } | null;
+    average_expense: number;
+  };
+  expense_by_category: ExpenseCategorySummary[];
+  expense_by_branch: ExpenseBranchSummary[];
+  monthly_expense_trend: Array<{
+    month: number;
+    label: string;
+    expense: number;
+  }>;
+  expenses: OwnerExpense[];
 };
 
 export type OwnerDashboardStats = {
@@ -521,6 +589,24 @@ export type OwnerDashboardStats = {
     renewal: number;
     initial: number;
   };
+  expense: {
+    this_month: number;
+    transactions: number;
+    largest_category?: { category: string; amount: number } | null;
+    average: number;
+  };
+  financial: {
+    revenue: number;
+    expense: number;
+    net_profit: number;
+  };
+  monthly_financial_trend: Array<{
+    month: number;
+    label: string;
+    revenue: number;
+    expense: number;
+    net_profit: number;
+  }>;
   tenants: {
     active: number;
     h30: number;
@@ -652,6 +738,8 @@ export type OwnerReport = {
     total_revenue: number;
     initial_revenue: number;
     renewal_revenue: number;
+    total_expense: number;
+    net_profit: number;
     occupancy_rate: number;
     active_tenants: number;
     renewal_rate: number;
@@ -661,6 +749,8 @@ export type OwnerReport = {
     id: number;
     branch_name: string;
     revenue: number;
+    expense: number;
+    net_profit: number;
     rooms: number;
     occupied_units: number;
     occupancy_rate: number;
@@ -669,12 +759,17 @@ export type OwnerReport = {
     month: number;
     label: string;
     revenue: number;
+    expense: number;
+    net_profit: number;
     initial_revenue: number;
     renewal_revenue: number;
     occupied_units: number;
     occupancy_rate: number;
   }>;
   recent_transactions: OwnerPaymentOverview['payments'];
+  expense_by_category: ExpenseCategorySummary[];
+  expense_by_branch: ExpenseBranchSummary[];
+  recent_expenses: OwnerExpense[];
 };
 
 export type OwnerBranchScope = 'all' | number | string;
@@ -721,6 +816,45 @@ export async function getOwnerTenants(branchId: OwnerBranchScope = 'all'): Promi
   });
 
   return unwrapData(data, 'Data penyewa aktif tidak ditemukan.');
+}
+
+export type OwnerExpenseFilters = {
+  year?: number | string;
+  month?: number | string;
+  branch_id?: number | string;
+  category?: string;
+};
+
+export async function getOwnerExpenses(filters?: OwnerExpenseFilters): Promise<OwnerExpenseOverview> {
+  const { data } = await apiClient.get<ApiEnvelope<OwnerExpenseOverview>>('/owner/expenses', { params: filters });
+
+  return unwrapData(data, 'Data pengeluaran owner tidak ditemukan.');
+}
+
+export type CreateExpensePayload = {
+  branch_id: number;
+  category: ExpenseCategory;
+  description?: string;
+  amount: number;
+  expense_date: string;
+  receipt?: File | null;
+};
+
+export async function createOwnerExpense(payload: CreateExpensePayload): Promise<OwnerExpense> {
+  const formData = new FormData();
+  formData.append('branch_id', String(payload.branch_id));
+  formData.append('category', payload.category);
+  formData.append('description', payload.description || '');
+  formData.append('amount', String(payload.amount));
+  formData.append('expense_date', payload.expense_date);
+
+  if (payload.receipt) {
+    formData.append('receipt', payload.receipt);
+  }
+
+  const { data } = await apiClient.post<ApiEnvelope<OwnerExpense>>('/owner/expenses', formData);
+
+  return unwrapData(data, 'Pengeluaran gagal disimpan.');
 }
 
 export type OwnerReportFilters = {

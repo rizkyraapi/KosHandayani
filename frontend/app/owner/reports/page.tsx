@@ -10,6 +10,8 @@ import {
   RotateCw,
   TrendingUp,
   UsersRound,
+  WalletCards,
+  Tags,
 } from 'lucide-react';
 import {
   BranchScopeControl,
@@ -108,8 +110,8 @@ export default function Page() {
     }
   }, [branchScope, month, year]);
 
-  const maxRevenue = useMemo(
-    () => Math.max(1, ...(report?.monthly_trend.map((item) => item.revenue) || [1])),
+  const maxFinancialValue = useMemo(
+    () => Math.max(1, ...(report?.monthly_trend.flatMap((item) => [item.revenue, item.expense]) || [1])),
     [report],
   );
 
@@ -118,7 +120,7 @@ export default function Page() {
       <OwnerPageHeader
         eyebrow="Financial Intelligence"
         title="Laporan Keuangan"
-        description="Laporan real-time dari payments, room occupancies, dan rental applications."
+        description="Laporan real-time pendapatan, pengeluaran, laba bersih, occupancy, dan renewal."
         actions={(
           <div className="flex flex-wrap gap-3">
             <OwnerSelect value={month} onChange={setMonth} ariaLabel="Filter bulan">
@@ -150,8 +152,10 @@ export default function Page() {
         <ErrorPanel message={error} onRetry={() => void load()} />
       ) : report ? (
         <div className="space-y-8">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <MetricCard label="Total Revenue" value={rupiahCompact(report.summary.total_revenue)} icon={CircleDollarSign} tone="green" />
+            <MetricCard label="Total Pengeluaran" value={rupiahCompact(report.summary.total_expense)} icon={WalletCards} tone="red" />
+            <MetricCard label="Laba Bersih" value={rupiahCompact(report.summary.net_profit)} icon={TrendingUp} tone={report.summary.net_profit >= 0 ? 'blue' : 'red'} />
             <MetricCard label="Revenue Initial" value={rupiahCompact(report.summary.initial_revenue)} icon={TrendingUp} tone="blue" />
             <MetricCard label="Revenue Renewal" value={rupiahCompact(report.summary.renewal_revenue)} icon={RotateCw} tone="purple" />
             <MetricCard label="Average / Room" value={rupiahCompact(report.summary.average_revenue_per_room)} icon={Building2} tone="amber" />
@@ -164,7 +168,7 @@ export default function Page() {
           </div>
 
           <OwnerCard>
-            <SectionHeader title="Monthly Revenue Trend" description="Initial rent dan renewal per bulan dalam tahun terpilih." />
+            <SectionHeader title="Monthly Financial Trend" description="Initial rent, renewal, dan pengeluaran per bulan dalam tahun terpilih." />
             <div className="overflow-x-auto">
               <div className="flex min-w-[760px] items-end gap-3 border-b border-[#d8e3fb] px-2 pt-8">
                 {report.monthly_trend.map((item) => (
@@ -173,12 +177,17 @@ export default function Page() {
                       <div
                         title={`Initial ${rupiah(item.initial_revenue)}`}
                         className="w-5 rounded-t-md bg-[#006e2f]"
-                        style={{ height: `${Math.max(2, (item.initial_revenue / maxRevenue) * 100)}%` }}
+                        style={{ height: `${item.initial_revenue > 0 ? Math.max(2, (item.initial_revenue / maxFinancialValue) * 100) : 0}%` }}
                       />
                       <div
                         title={`Renewal ${rupiah(item.renewal_revenue)}`}
                         className="w-5 rounded-t-md bg-[#8b5cf6]"
-                        style={{ height: `${Math.max(2, (item.renewal_revenue / maxRevenue) * 100)}%` }}
+                        style={{ height: `${item.renewal_revenue > 0 ? Math.max(2, (item.renewal_revenue / maxFinancialValue) * 100) : 0}%` }}
+                      />
+                      <div
+                        title={`Expense ${rupiah(item.expense)}`}
+                        className="w-5 rounded-t-md bg-red-500"
+                        style={{ height: `${item.expense > 0 ? Math.max(2, (item.expense / maxFinancialValue) * 100) : 0}%` }}
                       />
                     </div>
                     <p className="mt-3 text-sm font-semibold text-[#3d4a3d]">{item.label}</p>
@@ -190,6 +199,7 @@ export default function Page() {
             <div className="mt-4 flex flex-wrap gap-5 text-sm">
               <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-[#006e2f]" />Initial rent</span>
               <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-[#8b5cf6]" />Renewal</span>
+              <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-red-500" />Expense</span>
               <span className="text-[#3d4a3d]">Persentase di bawah bulan = occupancy rate</span>
             </div>
           </OwnerCard>
@@ -208,7 +218,11 @@ export default function Page() {
                           <p className="text-lg font-semibold">{item.branch_name}</p>
                           <p className="mt-1 text-sm text-[#3d4a3d]">{item.occupied_units}/{item.rooms} unit terisi</p>
                         </div>
-                        <p className="text-lg font-bold text-[#006e2f]">{rupiah(item.revenue)}</p>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-[#006e2f]">{rupiah(item.revenue)}</p>
+                          <p className="mt-1 text-sm font-semibold text-red-700">Expense {rupiah(item.expense)}</p>
+                          <p className="mt-1 text-sm font-bold">Laba {rupiah(item.net_profit)}</p>
+                        </div>
                       </div>
                       <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#e7eeff]">
                         <div className="h-full bg-[#006e2f]" style={{ width: `${item.occupancy_rate}%` }} />
@@ -236,6 +250,47 @@ export default function Page() {
             </OwnerCard>
           </div>
 
+          <div className="grid gap-8 xl:grid-cols-2">
+            <OwnerCard>
+              <SectionHeader title="Pengeluaran per Kategori" description="Komposisi biaya pada periode laporan." />
+              {report.expense_by_category.length === 0 ? (
+                <EmptyPanel title="Belum ada pengeluaran" description="Tidak ada pengeluaran pada filter periode ini." />
+              ) : (
+                <div className="grid gap-3">
+                  {report.expense_by_category.map((item) => (
+                    <div key={item.category} className="rounded-xl border border-[#e7eeff] bg-[#f9f9ff] p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <Tags size={18} className="text-[#006e2f]" />
+                          <div>
+                            <p className="font-semibold">{item.category}</p>
+                            <p className="mt-1 text-sm text-[#3d4a3d]">{item.transactions} transaksi · {item.percentage}%</p>
+                          </div>
+                        </div>
+                        <p className="font-bold text-red-700">{rupiah(item.amount)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </OwnerCard>
+
+            <OwnerCard>
+              <SectionHeader title="Pengeluaran per Cabang" description="Total biaya operasional berdasarkan lokasi." />
+              <div className="grid gap-3">
+                {report.expense_by_branch.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#e7eeff] bg-[#f9f9ff] p-4">
+                    <div>
+                      <p className="font-semibold">{item.branch_name}</p>
+                      <p className="mt-1 text-sm text-[#3d4a3d]">{item.transactions} transaksi</p>
+                    </div>
+                    <p className="font-bold text-red-700">{rupiah(item.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            </OwnerCard>
+          </div>
+
           <OwnerCard>
             <SectionHeader title="Transaksi Terbaru" description="Transaksi sukses pada periode laporan." />
             {report.recent_transactions.length === 0 ? (
@@ -253,6 +308,26 @@ export default function Page() {
                     </div>
                     <p className="text-sm font-semibold text-[#3d4a3d]">{date(payment.paid_at || payment.created_at)}</p>
                     <p className="text-right text-lg font-bold text-[#006e2f]">{rupiah(payment.gross_amount)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </OwnerCard>
+
+          <OwnerCard>
+            <SectionHeader title="Pengeluaran Terbaru" description="Pengeluaran pada periode dan cabang yang dipilih." />
+            {report.recent_expenses.length === 0 ? (
+              <EmptyPanel title="Belum ada pengeluaran" description="Tidak ada pengeluaran pada filter periode ini." />
+            ) : (
+              <div className="grid gap-3">
+                {report.recent_expenses.map((expense) => (
+                  <div key={expense.id} className="grid gap-3 rounded-xl border border-[#e7eeff] bg-[#f9f9ff] p-4 md:grid-cols-[minmax(0,1fr)_160px_160px] md:items-center">
+                    <div>
+                      <StatusPill label={expense.category} tone="blue" />
+                      <p className="mt-2 text-base font-semibold">{expense.description || 'Tanpa deskripsi'} · {expense.branch?.branch_name || '-'}</p>
+                    </div>
+                    <p className="text-sm font-semibold text-[#3d4a3d]">{date(expense.expense_date)}</p>
+                    <p className="text-right text-lg font-bold text-red-700">{rupiah(expense.amount)}</p>
                   </div>
                 ))}
               </div>

@@ -11,6 +11,7 @@ import {
   LogOut,
   ReceiptText,
   UsersRound,
+  WalletCards,
   Menu,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +24,7 @@ const ownerNavItems = [
   { labelKey: 'common.rentalApplications', href: '/owner/rental-applications', icon: ClipboardList },
   { labelKey: 'common.activeTenants', href: '/owner/tenants', icon: UsersRound },
   { labelKey: 'common.payments', href: '/owner/payments', icon: ReceiptText },
+  { labelKey: 'common.expenses', href: '/owner/expenses', icon: WalletCards },
   { labelKey: 'common.reports', href: '/owner/reports', icon: BarChart3 },
 ];
 
@@ -163,7 +165,7 @@ export default function OwnerSidebar() {
         </div>
       </header>
 
-      <nav className="owner-mobile-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-6 border-t border-slate-200 bg-white/95 px-1 py-2 backdrop-blur lg:hidden">
+      <nav className="owner-mobile-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-7 border-t border-slate-200 bg-white/95 px-1 py-2 backdrop-blur lg:hidden">
         {ownerNavItems.map((item) => {
           const Icon = item.icon;
           const active = isActivePath(pathname, item.href);

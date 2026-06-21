@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\Expense;
 use App\Models\LeaseReminder;
 use App\Models\Payment;
 use App\Models\RentalApplication;
@@ -32,10 +33,19 @@ class OwnerAnalyticsService
             ->with(['user', 'room.branch'])
             ->latest()
             ->get();
+        $expenses = $this->expensesQuery($branchId)
+            ->with(['branch', 'creator'])
+            ->get();
 
         $successfulPayments = $payments->whereIn('transaction_status', self::SUCCESS_STATUSES);
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
+        $monthExpenses = $expenses->filter(
+            fn (Expense $expense) => $expense->expense_date?->betweenIncluded($monthStart, $monthEnd),
+        );
+        $monthRevenue = (int) $successfulPayments
+            ->filter(fn (Payment $payment) => $this->paymentDate($payment)?->betweenIncluded($monthStart, $monthEnd))
+            ->sum('gross_amount');
         $occupiedRoomIds = $occupancies->pluck('room_id')->filter()->unique();
         $vacantUnits = $rooms
             ->where('room_status', 'available')
@@ -53,9 +63,7 @@ class OwnerAnalyticsService
                 'occupancy_rate' => $this->percentage($occupiedRoomIds->count(), $rooms->count()),
             ],
             'revenue' => [
-                'this_month' => (int) $successfulPayments
-                    ->filter(fn (Payment $payment) => $this->paymentDate($payment)?->betweenIncluded($monthStart, $monthEnd))
-                    ->sum('gross_amount'),
+                'this_month' => $monthRevenue,
                 'total' => (int) $successfulPayments->sum('gross_amount'),
                 'renewal' => (int) $successfulPayments
                     ->where('payment_category', Payment::CATEGORY_RENEWAL)
@@ -64,6 +72,24 @@ class OwnerAnalyticsService
                     ->where('payment_category', Payment::CATEGORY_INITIAL_RENT)
                     ->sum('gross_amount'),
             ],
+            'expense' => [
+                'this_month' => $this->totalExpense($monthExpenses),
+                'transactions' => $monthExpenses->count(),
+                'largest_category' => $this->largestExpenseCategory($monthExpenses),
+                'average' => $monthExpenses->count() > 0
+                    ? (int) round($this->totalExpense($monthExpenses) / $monthExpenses->count())
+                    : 0,
+            ],
+            'financial' => [
+                'revenue' => $monthRevenue,
+                'expense' => $this->totalExpense($monthExpenses),
+                'net_profit' => $monthRevenue - $this->totalExpense($monthExpenses),
+            ],
+            'monthly_financial_trend' => $this->monthlyFinancialTrend(
+                year: (int) now()->year,
+                payments: $successfulPayments,
+                expenses: $expenses,
+            ),
             'tenants' => [
                 'active' => $occupancies->pluck('user_id')->filter()->unique()->count(),
                 ...$lifecycleCounts,
@@ -81,9 +107,56 @@ class OwnerAnalyticsService
                     ->count(),
             ],
             'activities' => $this->activities($applications, $payments, $branchId),
-            'branches' => $this->branchStatistics($rooms, $occupancies, $successfulPayments, $branchId),
+            'branches' => $this->branchStatistics($rooms, $occupancies, $successfulPayments, $expenses, $branchId),
             'attention' => $this->attentionItems($occupancies, $payments),
             'generated_at' => now()->toIso8601String(),
+        ];
+    }
+
+    public function expenses(
+        ?int $branchId,
+        int $year,
+        ?int $month = null,
+        ?string $category = null,
+    ): array {
+        $expenses = $this->expensesQuery($branchId)
+            ->with(['branch', 'creator'])
+            ->whereYear('expense_date', $year)
+            ->when($month, fn (Builder $query) => $query->whereMonth('expense_date', $month))
+            ->when($category, fn (Builder $query) => $query->where('category', $category))
+            ->orderByDesc('expense_date')
+            ->orderByDesc('id')
+            ->get();
+        $totalExpense = $this->totalExpense($expenses);
+
+        return [
+            'filters' => [
+                'branch_id' => $branchId,
+                'year' => $year,
+                'month' => $month,
+                'category' => $category,
+                'years' => $this->availableYears(),
+                'categories' => Expense::CATEGORIES,
+                'branches' => Branch::orderBy('branch_name')->get(['id', 'branch_name']),
+            ],
+            'stats' => [
+                'total_expense' => $totalExpense,
+                'transaction_count' => $expenses->count(),
+                'largest_category' => $this->largestExpenseCategory($expenses),
+                'average_expense' => $expenses->count() > 0
+                    ? (int) round($totalExpense / $expenses->count())
+                    : 0,
+            ],
+            'expense_by_category' => $this->expenseByCategory($expenses),
+            'expense_by_branch' => $this->expenseByBranch($expenses, $branchId),
+            'monthly_expense_trend' => $this->monthlyExpenseTrend(
+                $this->expensesQuery($branchId)
+                    ->whereYear('expense_date', $year)
+                    ->when($category, fn (Builder $query) => $query->where('category', $category))
+                    ->get(),
+                $year,
+            ),
+            'expenses' => $expenses->map(fn (Expense $expense) => $this->formatExpense($expense))->values()->all(),
         ];
     }
 
@@ -242,6 +315,17 @@ class OwnerAnalyticsService
         $payments = $this->paymentsQuery($branchId)
             ->with(['rentalApplication.user', 'rentalApplication.room.branch', 'roomOccupancy'])
             ->get();
+        $expenses = $this->expensesQuery($branchId)
+            ->with(['branch', 'creator'])
+            ->whereYear('expense_date', $year)
+            ->when($month, fn (Builder $query) => $query->whereMonth('expense_date', $month))
+            ->orderByDesc('expense_date')
+            ->orderByDesc('id')
+            ->get();
+        $yearExpenses = $this->expensesQuery($branchId)
+            ->with('branch')
+            ->whereYear('expense_date', $year)
+            ->get();
         $periodStart = $month
             ? Carbon::create($year, $month, 1)->startOfMonth()
             : Carbon::create($year, 1, 1)->startOfYear();
@@ -269,18 +353,25 @@ class OwnerAnalyticsService
                 fn (Builder $roomQuery) => $roomQuery->where('branch_id', $branchId),
             ))
             ->get();
-        $monthlyTrend = collect(range(1, 12))->map(function (int $trendMonth) use ($payments, $year, $branchId, $rooms): array {
+        $monthlyTrend = collect(range(1, 12))->map(function (int $trendMonth) use ($payments, $yearExpenses, $year, $branchId, $rooms): array {
             $monthStart = Carbon::create($year, $trendMonth, 1)->startOfMonth();
             $monthEnd = $monthStart->copy()->endOfMonth();
             $monthPayments = $payments
                 ->whereIn('transaction_status', self::SUCCESS_STATUSES)
                 ->filter(fn (Payment $payment) => $this->paymentDate($payment)?->betweenIncluded($monthStart, $monthEnd));
+            $monthExpenses = $yearExpenses->filter(
+                fn (Expense $expense) => $expense->expense_date?->betweenIncluded($monthStart, $monthEnd),
+            );
             $occupiedUnits = $this->occupanciesInPeriod($monthStart, $monthEnd, $branchId);
+            $revenue = (int) $monthPayments->sum('gross_amount');
+            $expense = $this->totalExpense($monthExpenses);
 
             return [
                 'month' => $trendMonth,
                 'label' => $monthStart->translatedFormat('M'),
-                'revenue' => (int) $monthPayments->sum('gross_amount'),
+                'revenue' => $revenue,
+                'expense' => $expense,
+                'net_profit' => $revenue - $expense,
                 'initial_revenue' => (int) $monthPayments
                     ->where('payment_category', Payment::CATEGORY_INITIAL_RENT)
                     ->sum('gross_amount'),
@@ -296,10 +387,13 @@ class OwnerAnalyticsService
             ->when($branchId, fn (Builder $query) => $query->whereKey($branchId))
             ->withCount('rooms')
             ->get()
-            ->map(function (Branch $branch) use ($successful, $periodOccupancies): array {
+            ->map(function (Branch $branch) use ($successful, $periodOccupancies, $expenses): array {
                 $revenue = $successful
                     ->filter(fn (Payment $payment) => $payment->rentalApplication?->room?->branch_id === $branch->id)
                     ->sum('gross_amount');
+                $expense = $expenses
+                    ->where('branch_id', $branch->id)
+                    ->sum('amount');
                 $occupied = $periodOccupancies
                     ->filter(fn (RoomOccupancy $occupancy) => $occupancy->room?->branch_id === $branch->id)
                     ->pluck('room_id')
@@ -310,6 +404,8 @@ class OwnerAnalyticsService
                     'id' => $branch->id,
                     'branch_name' => $branch->branch_name,
                     'revenue' => (int) $revenue,
+                    'expense' => (int) $expense,
+                    'net_profit' => (int) $revenue - (int) $expense,
                     'rooms' => $branch->rooms_count,
                     'occupied_units' => $occupied,
                     'occupancy_rate' => $this->percentage($occupied, $branch->rooms_count),
@@ -320,6 +416,9 @@ class OwnerAnalyticsService
         $successfulRenewals = $renewalPayments->whereIn('transaction_status', self::SUCCESS_STATUSES)->count();
         $occupiedUnits = $periodOccupancies->pluck('room_id')->unique()->count();
         $totalRevenue = (int) $successful->sum('gross_amount');
+        $totalExpense = $this->totalExpense($expenses);
+        $expenseByCategory = $this->expenseByCategory($expenses);
+        $expenseByBranch = $this->expenseByBranch($expenses, $branchId);
         $periodLabel = $month
             ? Carbon::create($year, $month, 1)->locale('id')->translatedFormat('F Y')
             : 'Tahun '.$year;
@@ -343,6 +442,8 @@ class OwnerAnalyticsService
                 'renewal_revenue' => (int) $successful
                     ->where('payment_category', Payment::CATEGORY_RENEWAL)
                     ->sum('gross_amount'),
+                'total_expense' => $totalExpense,
+                'net_profit' => $totalRevenue - $totalExpense,
                 'occupancy_rate' => $this->percentage(
                     $occupiedUnits,
                     $rooms->count(),
@@ -354,11 +455,18 @@ class OwnerAnalyticsService
                     : 0,
             ],
             'revenue_per_branch' => $branchRevenue->all(),
+            'expense_by_category' => $expenseByCategory,
+            'expense_by_branch' => $expenseByBranch,
             'monthly_trend' => $monthlyTrend->all(),
             'recent_transactions' => $successful
                 ->sortByDesc(fn (Payment $payment) => $this->paymentDate($payment)?->timestamp ?? 0)
                 ->take(10)
                 ->map(fn (Payment $payment) => $this->formatPayment($payment))
+                ->values()
+                ->all(),
+            'recent_expenses' => $expenses
+                ->take(10)
+                ->map(fn (Expense $expense) => $this->formatExpense($expense))
                 ->values()
                 ->all(),
             'export' => [
@@ -369,9 +477,15 @@ class OwnerAnalyticsService
                 ],
                 'financial_summary' => [
                     'total_income' => $totalRevenue,
-                    'total_expenses' => 0,
-                    'net_balance' => $totalRevenue,
+                    'total_expenses' => $totalExpense,
+                    'net_balance' => $totalRevenue - $totalExpense,
                 ],
+                'expense_by_category' => $expenseByCategory,
+                'expense_by_branch' => $expenseByBranch,
+                'expenses' => $expenses
+                    ->map(fn (Expense $expense) => $this->formatExportExpense($expense))
+                    ->values()
+                    ->all(),
                 'property_summary' => [
                     'total_rooms' => $rooms->count(),
                     'occupied_rooms' => $occupiedUnits,
@@ -429,6 +543,14 @@ class OwnerAnalyticsService
             'room',
             fn (Builder $roomQuery) => $roomQuery->where('branch_id', $branchId),
         ));
+    }
+
+    private function expensesQuery(?int $branchId): Builder
+    {
+        return Expense::query()->when(
+            $branchId,
+            fn (Builder $query) => $query->where('branch_id', $branchId),
+        );
     }
 
     private function lifecycleCounts(Collection $occupancies): array
@@ -593,6 +715,43 @@ class OwnerAnalyticsService
         ];
     }
 
+    public function formatExpense(Expense $expense): array
+    {
+        return [
+            'id' => $expense->id,
+            'branch_id' => $expense->branch_id,
+            'branch' => $expense->branch ? [
+                'id' => $expense->branch->id,
+                'branch_name' => $expense->branch->branch_name,
+            ] : null,
+            'category' => $expense->category,
+            'description' => $expense->description,
+            'amount' => (int) $expense->amount,
+            'receipt_path' => $expense->receipt_path,
+            'receipt_url' => $expense->receipt_path ? url('storage/'.$expense->receipt_path) : null,
+            'expense_date' => optional($expense->expense_date)->toDateString(),
+            'created_by' => $expense->created_by,
+            'creator' => $expense->creator ? [
+                'id' => $expense->creator->id,
+                'name' => $expense->creator->name,
+            ] : null,
+            'created_at' => optional($expense->created_at)->toIso8601String(),
+            'updated_at' => optional($expense->updated_at)->toIso8601String(),
+        ];
+    }
+
+    private function formatExportExpense(Expense $expense): array
+    {
+        return [
+            'date' => optional($expense->expense_date)->locale('id')->translatedFormat('d M Y'),
+            'branch_name' => $expense->branch?->branch_name ?? '-',
+            'category' => $expense->category,
+            'description' => $expense->description ?: '-',
+            'amount' => (int) $expense->amount,
+            'receipt' => $expense->receipt_path ? 'Ada' : '-',
+        ];
+    }
+
     private function formatRoomReference(?Room $room): ?array
     {
         if (! $room) {
@@ -627,16 +786,21 @@ class OwnerAnalyticsService
         Collection $rooms,
         Collection $occupancies,
         Collection $payments,
+        Collection $expenses,
         ?int $branchId = null,
     ): array {
         return Branch::query()
             ->when($branchId, fn (Builder $query) => $query->whereKey($branchId))
             ->orderBy('branch_name')
             ->get()
-            ->map(function (Branch $branch) use ($rooms, $occupancies, $payments): array {
+            ->map(function (Branch $branch) use ($rooms, $occupancies, $payments, $expenses): array {
                 $branchRooms = $rooms->where('branch_id', $branch->id);
                 $branchOccupancies = $occupancies->filter(fn (RoomOccupancy $occupancy) => $occupancy->room?->branch_id === $branch->id);
                 $occupiedUnits = $branchOccupancies->pluck('room_id')->unique()->count();
+                $revenue = (int) $payments
+                    ->filter(fn (Payment $payment) => $payment->rentalApplication?->room?->branch_id === $branch->id)
+                    ->sum('gross_amount');
+                $expense = (int) $expenses->where('branch_id', $branch->id)->sum('amount');
 
                 return [
                     'id' => $branch->id,
@@ -644,9 +808,9 @@ class OwnerAnalyticsService
                     'room_count' => $branchRooms->count(),
                     'occupied_units' => $occupiedUnits,
                     'occupancy_rate' => $this->percentage($occupiedUnits, $branchRooms->count()),
-                    'revenue' => (int) $payments
-                        ->filter(fn (Payment $payment) => $payment->rentalApplication?->room?->branch_id === $branch->id)
-                        ->sum('gross_amount'),
+                    'revenue' => $revenue,
+                    'expense' => $expense,
+                    'net_profit' => $revenue - $expense,
                     'active_tenants' => $branchOccupancies->pluck('user_id')->unique()->count(),
                 ];
             })
@@ -792,6 +956,104 @@ class OwnerAnalyticsService
             ]);
     }
 
+    private function totalExpense(Collection $expenses): int
+    {
+        return (int) $expenses->sum('amount');
+    }
+
+    private function expenseByCategory(Collection $expenses): array
+    {
+        $total = $this->totalExpense($expenses);
+
+        return $expenses
+            ->groupBy('category')
+            ->map(function (Collection $items, string $category) use ($total): array {
+                $amount = $this->totalExpense($items);
+
+                return [
+                    'category' => $category,
+                    'amount' => $amount,
+                    'transactions' => $items->count(),
+                    'percentage' => $total > 0 ? round(($amount / $total) * 100, 1) : 0.0,
+                ];
+            })
+            ->sortByDesc('amount')
+            ->values()
+            ->all();
+    }
+
+    private function expenseByBranch(Collection $expenses, ?int $branchId): array
+    {
+        return Branch::query()
+            ->when($branchId, fn (Builder $query) => $query->whereKey($branchId))
+            ->orderBy('branch_name')
+            ->get()
+            ->map(function (Branch $branch) use ($expenses): array {
+                $branchExpenses = $expenses->where('branch_id', $branch->id);
+
+                return [
+                    'id' => $branch->id,
+                    'branch_name' => $branch->branch_name,
+                    'amount' => $this->totalExpense($branchExpenses),
+                    'transactions' => $branchExpenses->count(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function largestExpenseCategory(Collection $expenses): ?array
+    {
+        $largest = collect($this->expenseByCategory($expenses))->first();
+
+        return $largest ? [
+            'category' => $largest['category'],
+            'amount' => $largest['amount'],
+        ] : null;
+    }
+
+    private function monthlyExpenseTrend(Collection $expenses, int $year): array
+    {
+        return collect(range(1, 12))
+            ->map(function (int $month) use ($expenses, $year): array {
+                $monthExpenses = $expenses->filter(
+                    fn (Expense $expense) => $expense->expense_date?->year === $year
+                        && $expense->expense_date?->month === $month,
+                );
+
+                return [
+                    'month' => $month,
+                    'label' => Carbon::create($year, $month, 1)->translatedFormat('M'),
+                    'expense' => $this->totalExpense($monthExpenses),
+                ];
+            })
+            ->all();
+    }
+
+    private function monthlyFinancialTrend(int $year, Collection $payments, Collection $expenses): array
+    {
+        return collect(range(1, 12))
+            ->map(function (int $month) use ($year, $payments, $expenses): array {
+                $start = Carbon::create($year, $month, 1)->startOfMonth();
+                $end = $start->copy()->endOfMonth();
+                $revenue = (int) $payments
+                    ->filter(fn (Payment $payment) => $this->paymentDate($payment)?->betweenIncluded($start, $end))
+                    ->sum('gross_amount');
+                $expense = $this->totalExpense(
+                    $expenses->filter(fn (Expense $item) => $item->expense_date?->betweenIncluded($start, $end)),
+                );
+
+                return [
+                    'month' => $month,
+                    'label' => $start->translatedFormat('M'),
+                    'revenue' => $revenue,
+                    'expense' => $expense,
+                    'net_profit' => $revenue - $expense,
+                ];
+            })
+            ->all();
+    }
+
     private function occupanciesInPeriod(Carbon $start, Carbon $end, ?int $branchId): int
     {
         return RoomOccupancy::query()
@@ -809,16 +1071,23 @@ class OwnerAnalyticsService
 
     private function availableYears(): array
     {
-        $years = Payment::query()
+        $paymentYears = Payment::query()
             ->get(['paid_at', 'settlement_time', 'created_at'])
             ->map(fn (Payment $payment) => $this->paymentDate($payment)?->year)
-            ->filter()
+            ->filter();
+        $expenseYears = Expense::query()
+            ->pluck('expense_date')
+            ->map(fn (mixed $date) => $date ? Carbon::parse($date)->year : null)
+            ->filter();
+        $years = collect($paymentYears->all())
+            ->concat($expenseYears)
+            ->push((int) now()->year)
             ->unique()
             ->sortDesc()
             ->values()
             ->all();
 
-        return $years ?: [(int) now()->year];
+        return $years;
     }
 
     private function paymentDate(Payment $payment): ?Carbon

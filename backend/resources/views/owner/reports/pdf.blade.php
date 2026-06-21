@@ -95,6 +95,10 @@
             page-break-before: always;
         }
 
+        .expense-detail-section {
+            page-break-before: always;
+        }
+
         .section-title {
             margin: 0 0 8px;
             padding-left: 8px;
@@ -302,7 +306,7 @@
                     <div class="summary-value dark">{{ $rupiah($export['financial_summary']['total_expenses']) }}</div>
                 </td>
                 <td>
-                    <div class="card-label">Saldo Bersih</div>
+                    <div class="card-label">Laba Bersih</div>
                     <div class="summary-value">{{ $rupiah($export['financial_summary']['net_balance']) }}</div>
                 </td>
             </tr>
@@ -310,7 +314,35 @@
     </section>
 
     <section class="section">
-        <h2 class="section-title">2. STATISTIK PROPERTI</h2>
+        <h2 class="section-title">2. RINGKASAN PENGELUARAN</h2>
+        @if (count($export['expense_by_category']) === 0)
+            <div class="empty">Tidak ada pengeluaran pada periode dan cabang yang dipilih.</div>
+        @else
+            <table class="payment-list">
+                @foreach ($export['expense_by_category'] as $category)
+                    <tr>
+                        <td>{{ $category['category'] }} ({{ $category['transactions'] }} transaksi)</td>
+                        <td class="payment-count">{{ $rupiah($category['amount']) }}</td>
+                    </tr>
+                @endforeach
+            </table>
+        @endif
+    </section>
+
+    <section class="section">
+        <h2 class="section-title">3. PENGELUARAN PER CABANG</h2>
+        <table class="payment-list">
+            @foreach ($export['expense_by_branch'] as $branch)
+                <tr>
+                    <td>{{ $branch['branch_name'] }} ({{ $branch['transactions'] }} transaksi)</td>
+                    <td class="payment-count">{{ $rupiah($branch['amount']) }}</td>
+                </tr>
+            @endforeach
+        </table>
+    </section>
+
+    <section class="section">
+        <h2 class="section-title">4. STATISTIK PROPERTI</h2>
         <table class="summary-table">
             <tr>
                 <td>
@@ -338,7 +370,7 @@
     </section>
 
     <section class="section payment-section">
-        <h2 class="section-title">3. RINGKASAN PEMBAYARAN</h2>
+        <h2 class="section-title">5. RINGKASAN PEMBAYARAN</h2>
         <table class="payment-list">
             <tr>
                 <td>Pembayaran Awal</td>
@@ -364,7 +396,7 @@
     </section>
 
     <section class="section transactions">
-        <h2 class="section-title">4. DETAIL TRANSAKSI</h2>
+        <h2 class="section-title">6. DETAIL TRANSAKSI</h2>
 
         @if (count($export['transactions']) === 0)
             <div class="empty">Tidak ada transaksi pada periode dan cabang yang dipilih.</div>
@@ -396,6 +428,39 @@
                             <td>{{ $transaction['payment_type'] }}</td>
                             <td class="amount">{{ $rupiah($transaction['amount']) }}</td>
                             <td class="status {{ $statusClass }}">{{ $transaction['status'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </section>
+
+    <section class="section expense-detail-section">
+        <h2 class="section-title">7. DETAIL PENGELUARAN</h2>
+
+        @if (count($export['expenses']) === 0)
+            <div class="empty">Tidak ada pengeluaran pada periode dan cabang yang dipilih.</div>
+        @else
+            <table class="transaction-table">
+                <thead>
+                    <tr>
+                        <th style="width: 12%;">Tanggal</th>
+                        <th style="width: 17%;">Cabang</th>
+                        <th style="width: 16%;">Kategori</th>
+                        <th style="width: 31%;">Deskripsi</th>
+                        <th style="width: 17%; text-align: right;">Nominal</th>
+                        <th style="width: 7%;">Bukti</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($export['expenses'] as $expense)
+                        <tr>
+                            <td>{{ $expense['date'] }}</td>
+                            <td>{{ $expense['branch_name'] }}</td>
+                            <td>{{ $expense['category'] }}</td>
+                            <td>{{ $expense['description'] }}</td>
+                            <td class="amount">{{ $rupiah($expense['amount']) }}</td>
+                            <td>{{ $expense['receipt'] }}</td>
                         </tr>
                     @endforeach
                 </tbody>

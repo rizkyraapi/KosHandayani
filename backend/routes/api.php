@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\EmailPreviewController;
+use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\OwnerDataController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProfileController;
@@ -95,6 +96,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/owner/application-monitoring', [OwnerDataController::class, 'applications']);
     Route::get('/owner/payments', [OwnerDataController::class, 'payments']);
     Route::get('/owner/tenants', [OwnerDataController::class, 'tenants']);
+    Route::get('/owner/expenses', [ExpenseController::class, 'index']);
+    Route::post('/owner/expenses', [ExpenseController::class, 'store']);
     Route::get('/owner/reports', [OwnerDataController::class, 'reports']);
     Route::get('/owner/reports/export-pdf', [OwnerDataController::class, 'exportReportPdf']);
 
