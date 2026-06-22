@@ -36,6 +36,33 @@ export interface ApiBranch {
   description?: string | null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function finiteNumber(value: unknown, fallback = 0) {
+  const normalized = typeof value === 'number' ? value : Number(value);
+
+  return Number.isFinite(normalized) ? normalized : fallback;
+}
+
+function normalizeBranch(value: unknown): ApiBranch | null {
+  if (!isRecord(value)) return null;
+
+  const id = finiteNumber(value.id);
+  if (id <= 0) return null;
+
+  return {
+    id,
+    branch_name: typeof value.branch_name === 'string' && value.branch_name.trim()
+      ? value.branch_name
+      : `Cabang ${id}`,
+    city: typeof value.city === 'string' ? value.city : null,
+    address: typeof value.address === 'string' ? value.address : null,
+    description: typeof value.description === 'string' ? value.description : null,
+  };
+}
+
 export type RoomFilters = Partial<{
   search: string;
   branch_id: number | string;
@@ -60,9 +87,11 @@ export async function getRoomById(id: number | string): Promise<ApiRoom> {
 }
 
 export async function getBranches(): Promise<ApiBranch[]> {
-  const { data } = await apiClient.get<ApiBranch[]>('/branches');
+  const { data } = await apiClient.get<unknown>('/branches');
 
-  return data;
+  return Array.isArray(data)
+    ? data.map(normalizeBranch).filter((branch): branch is ApiBranch => branch !== null)
+    : [];
 }
 
 export type CreateRoomPayload = {
@@ -519,6 +548,17 @@ export type ExpenseCategory =
   | 'Pajak'
   | 'Lainnya';
 
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  'Perawatan',
+  'Utilitas',
+  'Internet',
+  'Kebersihan',
+  'Keamanan',
+  'Perlengkapan',
+  'Pajak',
+  'Lainnya',
+];
+
 export type OwnerExpense = {
   id: number;
   branch_id: number;
@@ -574,6 +614,143 @@ export type OwnerExpenseOverview = {
   }>;
   expenses: OwnerExpense[];
 };
+
+function isExpenseCategory(value: unknown): value is ExpenseCategory {
+  return typeof value === 'string' && EXPENSE_CATEGORIES.includes(value as ExpenseCategory);
+}
+
+function normalizeOwnerExpense(value: unknown): OwnerExpense | null {
+  if (!isRecord(value)) return null;
+
+  const id = finiteNumber(value.id);
+  const branchId = finiteNumber(value.branch_id);
+  if (id <= 0 || branchId <= 0) return null;
+
+  const branch = normalizeBranch(value.branch);
+  const creator = isRecord(value.creator) && finiteNumber(value.creator.id) > 0
+    ? {
+        id: finiteNumber(value.creator.id),
+        name: typeof value.creator.name === 'string' ? value.creator.name : 'Owner',
+      }
+    : null;
+
+  return {
+    id,
+    branch_id: branchId,
+    branch,
+    category: isExpenseCategory(value.category) ? value.category : 'Lainnya',
+    description: typeof value.description === 'string' ? value.description : null,
+    amount: Math.max(0, finiteNumber(value.amount)),
+    receipt_path: typeof value.receipt_path === 'string' ? value.receipt_path : null,
+    receipt_url: typeof value.receipt_url === 'string' ? value.receipt_url : null,
+    expense_date: typeof value.expense_date === 'string' ? value.expense_date : '',
+    created_by: finiteNumber(value.created_by),
+    creator,
+    created_at: typeof value.created_at === 'string' ? value.created_at : null,
+    updated_at: typeof value.updated_at === 'string' ? value.updated_at : null,
+  };
+}
+
+export function createEmptyOwnerExpenseOverview(filters: OwnerExpenseFilters = {}): OwnerExpenseOverview {
+  const currentYear = new Date().getFullYear();
+
+  return {
+    filters: {
+      branch_id: filters.branch_id && filters.branch_id !== 'all' ? finiteNumber(filters.branch_id) : null,
+      year: finiteNumber(filters.year, currentYear),
+      month: filters.month ? finiteNumber(filters.month) : null,
+      category: filters.category || null,
+      years: [finiteNumber(filters.year, currentYear)],
+      categories: [...EXPENSE_CATEGORIES],
+      branches: [],
+    },
+    stats: {
+      total_expense: 0,
+      transaction_count: 0,
+      largest_category: null,
+      average_expense: 0,
+    },
+    expense_by_category: [],
+    expense_by_branch: [],
+    monthly_expense_trend: [],
+    expenses: [],
+  };
+}
+
+function normalizeOwnerExpenseOverview(
+  value: unknown,
+  filters: OwnerExpenseFilters = {},
+): OwnerExpenseOverview {
+  const fallback = createEmptyOwnerExpenseOverview(filters);
+  if (!isRecord(value)) return fallback;
+
+  const rawFilters = isRecord(value.filters) ? value.filters : {};
+  const rawStats = isRecord(value.stats) ? value.stats : {};
+  const categories = Array.isArray(rawFilters.categories)
+    ? rawFilters.categories.filter(isExpenseCategory)
+    : [];
+  const years = Array.isArray(rawFilters.years)
+    ? rawFilters.years.map((year) => finiteNumber(year)).filter((year) => year > 0)
+    : [];
+  const largestCategory = isRecord(rawStats.largest_category)
+    ? {
+        category: typeof rawStats.largest_category.category === 'string'
+          ? rawStats.largest_category.category
+          : 'Tidak diketahui',
+        amount: Math.max(0, finiteNumber(rawStats.largest_category.amount)),
+      }
+    : null;
+
+  return {
+    filters: {
+      branch_id: rawFilters.branch_id ? finiteNumber(rawFilters.branch_id) : null,
+      year: finiteNumber(rawFilters.year, fallback.filters.year),
+      month: rawFilters.month ? finiteNumber(rawFilters.month) : null,
+      category: typeof rawFilters.category === 'string' ? rawFilters.category : null,
+      years: years.length ? years : fallback.filters.years,
+      categories: categories.length ? categories : fallback.filters.categories,
+      branches: Array.isArray(rawFilters.branches)
+        ? rawFilters.branches
+            .map(normalizeBranch)
+            .filter((branch): branch is ApiBranch => branch !== null)
+        : [],
+    },
+    stats: {
+      total_expense: Math.max(0, finiteNumber(rawStats.total_expense)),
+      transaction_count: Math.max(0, finiteNumber(rawStats.transaction_count)),
+      largest_category: largestCategory,
+      average_expense: Math.max(0, finiteNumber(rawStats.average_expense)),
+    },
+    expense_by_category: Array.isArray(value.expense_by_category)
+      ? value.expense_by_category.filter(isRecord).map((item) => ({
+          category: typeof item.category === 'string' ? item.category : 'Tidak diketahui',
+          amount: Math.max(0, finiteNumber(item.amount)),
+          transactions: Math.max(0, finiteNumber(item.transactions)),
+          percentage: Math.max(0, finiteNumber(item.percentage)),
+        }))
+      : [],
+    expense_by_branch: Array.isArray(value.expense_by_branch)
+      ? value.expense_by_branch.filter(isRecord).map((item) => ({
+          id: finiteNumber(item.id),
+          branch_name: typeof item.branch_name === 'string' ? item.branch_name : 'Cabang tidak diketahui',
+          amount: Math.max(0, finiteNumber(item.amount)),
+          transactions: Math.max(0, finiteNumber(item.transactions)),
+        }))
+      : [],
+    monthly_expense_trend: Array.isArray(value.monthly_expense_trend)
+      ? value.monthly_expense_trend.filter(isRecord).map((item) => ({
+          month: finiteNumber(item.month),
+          label: typeof item.label === 'string' ? item.label : '-',
+          expense: Math.max(0, finiteNumber(item.expense)),
+        }))
+      : [],
+    expenses: Array.isArray(value.expenses)
+      ? value.expenses
+          .map(normalizeOwnerExpense)
+          .filter((expense): expense is OwnerExpense => expense !== null)
+      : [],
+  };
+}
 
 export type OwnerDashboardStats = {
   units: {
@@ -826,9 +1003,12 @@ export type OwnerExpenseFilters = {
 };
 
 export async function getOwnerExpenses(filters?: OwnerExpenseFilters): Promise<OwnerExpenseOverview> {
-  const { data } = await apiClient.get<ApiEnvelope<OwnerExpenseOverview>>('/owner/expenses', { params: filters });
+  const { data } = await apiClient.get<ApiEnvelope<unknown>>('/owner/expenses', { params: filters });
 
-  return unwrapData(data, 'Data pengeluaran owner tidak ditemukan.');
+  return normalizeOwnerExpenseOverview(
+    unwrapData(data, 'Data pengeluaran owner tidak ditemukan.'),
+    filters,
+  );
 }
 
 export type CreateExpensePayload = {
@@ -840,7 +1020,11 @@ export type CreateExpensePayload = {
   receipt?: File | null;
 };
 
-export async function createOwnerExpense(payload: CreateExpensePayload): Promise<OwnerExpense> {
+function expensePayloadFormData(payload: CreateExpensePayload): FormData {
+  if (!Number.isSafeInteger(payload.amount) || payload.amount <= 0) {
+    throw new Error('Nominal pengeluaran harus berupa bilangan bulat lebih dari 0.');
+  }
+
   const formData = new FormData();
   formData.append('branch_id', String(payload.branch_id));
   formData.append('category', payload.category);
@@ -852,9 +1036,53 @@ export async function createOwnerExpense(payload: CreateExpensePayload): Promise
     formData.append('receipt', payload.receipt);
   }
 
-  const { data } = await apiClient.post<ApiEnvelope<OwnerExpense>>('/owner/expenses', formData);
+  return formData;
+}
 
-  return unwrapData(data, 'Pengeluaran gagal disimpan.');
+export async function createOwnerExpense(payload: CreateExpensePayload): Promise<OwnerExpense> {
+  const { data } = await apiClient.post<ApiEnvelope<unknown>>(
+    '/owner/expenses',
+    expensePayloadFormData(payload),
+  );
+  const expense = normalizeOwnerExpense(unwrapData(data, 'Pengeluaran gagal disimpan.'));
+
+  if (!expense) {
+    throw new Error('Respons pengeluaran tidak valid.');
+  }
+
+  return expense;
+}
+
+export async function getOwnerExpense(id: number | string): Promise<OwnerExpense> {
+  const { data } = await apiClient.get<ApiEnvelope<unknown>>(`/owner/expenses/${id}`);
+  const expense = normalizeOwnerExpense(unwrapData(data, 'Detail pengeluaran tidak ditemukan.'));
+
+  if (!expense) {
+    throw new Error('Respons detail pengeluaran tidak valid.');
+  }
+
+  return expense;
+}
+
+export async function updateOwnerExpense(
+  id: number | string,
+  payload: CreateExpensePayload,
+): Promise<OwnerExpense> {
+  const formData = expensePayloadFormData(payload);
+  formData.append('_method', 'PUT');
+
+  const { data } = await apiClient.post<ApiEnvelope<unknown>>(`/owner/expenses/${id}`, formData);
+  const expense = normalizeOwnerExpense(unwrapData(data, 'Pengeluaran gagal diperbarui.'));
+
+  if (!expense) {
+    throw new Error('Respons pengeluaran yang diperbarui tidak valid.');
+  }
+
+  return expense;
+}
+
+export async function deleteOwnerExpense(id: number | string): Promise<void> {
+  await apiClient.delete(`/owner/expenses/${id}`);
 }
 
 export type OwnerReportFilters = {

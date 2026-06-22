@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Services\OwnerAnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ExpenseController extends Controller
@@ -61,14 +62,7 @@ class ExpenseController extends Controller
             return $response;
         }
 
-        $validated = $request->validate([
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'category' => ['required', Rule::in(Expense::CATEGORIES)],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'amount' => ['required', 'integer', 'gt:0'],
-            'expense_date' => ['required', 'date'],
-            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
-        ]);
+        $validated = $request->validate($this->expenseRules());
 
         $expense = Expense::create([
             'branch_id' => $validated['branch_id'],
@@ -85,6 +79,78 @@ class ExpenseController extends Controller
             'message' => 'Pengeluaran berhasil ditambahkan.',
             'data' => $this->analytics->formatExpense($expense->load(['branch', 'creator'])),
         ], 201);
+    }
+
+    public function show(Request $request, Expense $expense): JsonResponse
+    {
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->analytics->formatExpense($expense->load(['branch', 'creator'])),
+        ]);
+    }
+
+    public function update(Request $request, Expense $expense): JsonResponse
+    {
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        $validated = $request->validate($this->expenseRules());
+        $previousReceiptPath = $expense->receipt_path;
+        $nextReceiptPath = $request->file('receipt')?->store('expenses/receipts', 'public');
+
+        $expense->update([
+            'branch_id' => $validated['branch_id'],
+            'category' => $validated['category'],
+            'description' => $validated['description'] ?? null,
+            'amount' => $validated['amount'],
+            'receipt_path' => $nextReceiptPath ?? $previousReceiptPath,
+            'expense_date' => $validated['expense_date'],
+        ]);
+
+        if ($nextReceiptPath && $previousReceiptPath && $previousReceiptPath !== $nextReceiptPath) {
+            Storage::disk('public')->delete($previousReceiptPath);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengeluaran berhasil diperbarui.',
+            'data' => $this->analytics->formatExpense($expense->refresh()->load(['branch', 'creator'])),
+        ]);
+    }
+
+    public function destroy(Request $request, Expense $expense): JsonResponse
+    {
+        if ($response = $this->ensureOwner($request)) {
+            return $response;
+        }
+
+        $expense->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pengeluaran berhasil dihapus.',
+            'data' => null,
+        ]);
+    }
+
+    /**
+     * @return array<string, array<int, mixed>>
+     */
+    private function expenseRules(): array
+    {
+        return [
+            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'category' => ['required', Rule::in(Expense::CATEGORIES)],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'amount' => ['required', 'integer', 'gt:0'],
+            'expense_date' => ['required', 'date'],
+            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+        ];
     }
 
     private function ensureOwner(Request $request): ?JsonResponse

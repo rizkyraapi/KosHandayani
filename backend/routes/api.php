@@ -98,6 +98,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/owner/tenants', [OwnerDataController::class, 'tenants']);
     Route::get('/owner/expenses', [ExpenseController::class, 'index']);
     Route::post('/owner/expenses', [ExpenseController::class, 'store']);
+    Route::get('/owner/expenses/{expense}', [ExpenseController::class, 'show'])->whereNumber('expense');
+    Route::put('/owner/expenses/{expense}', [ExpenseController::class, 'update'])->whereNumber('expense');
+    Route::delete('/owner/expenses/{expense}', [ExpenseController::class, 'destroy'])->whereNumber('expense');
     Route::get('/owner/reports', [OwnerDataController::class, 'reports']);
     Route::get('/owner/reports/export-pdf', [OwnerDataController::class, 'exportReportPdf']);
 

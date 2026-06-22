@@ -238,8 +238,11 @@ export function OwnerInput({
 }) {
   return (
     <input
-      value={value}
-      onChange={(event) => onChange(event.currentTarget.value)}
+      value={value ?? ''}
+      onChange={(event) => {
+        const nextValue = event.currentTarget?.value ?? '';
+        onChange(nextValue);
+      }}
       placeholder={placeholder}
       className={`h-11 rounded-xl border border-[#d8e3fb] bg-white px-4 text-sm text-[#111c2d] outline-none transition placeholder:text-[#6d7b6c] focus:border-[#006e2f] focus:ring-2 focus:ring-green-100 ${className}`}
     />
@@ -260,8 +263,11 @@ export function OwnerSelect({
   return (
     <select
       aria-label={ariaLabel}
-      value={value}
-      onChange={(event) => onChange(event.currentTarget.value)}
+      value={value ?? ''}
+      onChange={(event) => {
+        const nextValue = event.currentTarget?.value ?? '';
+        onChange(nextValue);
+      }}
       className="h-11 rounded-xl border border-[#d8e3fb] bg-white px-4 text-sm font-semibold text-[#111c2d] outline-none focus:border-[#006e2f] focus:ring-2 focus:ring-green-100"
     >
       {children}
@@ -282,11 +288,15 @@ export function BranchScopeControl({
   disabled?: boolean;
   className?: string;
 }) {
+  const safeBranches = Array.isArray(branches)
+    ? branches.filter((branch) => branch && Number.isFinite(Number(branch.id)))
+    : [];
+  const safeValue = value || 'all';
   const options = [
     { value: 'all', label: 'Semua Cabang' },
-    ...branches.map((branch) => ({
+    ...safeBranches.map((branch) => ({
       value: String(branch.id),
-      label: branch.branch_name,
+      label: branch.branch_name || `Cabang ${branch.id}`,
     })),
   ];
 
@@ -299,7 +309,7 @@ export function BranchScopeControl({
         className="flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-[#d8e3fb] bg-[#f0f3ff] p-1"
       >
         {options.map((option) => {
-          const selected = value === option.value;
+          const selected = safeValue === option.value;
 
           return (
             <button
