@@ -257,9 +257,7 @@ export type RentalApplication = {
   approved_at?: string | null;
   paid_at?: string | null;
   owner_notes?: string | null;
-  ktp_file?: string | null;
   ktp_file_url?: string | null;
-  kk_file?: string | null;
   kk_file_url?: string | null;
   created_at: string;
   updated_at?: string;
@@ -566,10 +564,9 @@ export type OwnerExpense = {
   category: ExpenseCategory;
   description?: string | null;
   amount: number;
-  receipt_path?: string | null;
   receipt_url?: string | null;
   expense_date: string;
-  created_by: number;
+  created_by: number | null;
   creator?: { id: number; name: string } | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -641,10 +638,11 @@ function normalizeOwnerExpense(value: unknown): OwnerExpense | null {
     category: isExpenseCategory(value.category) ? value.category : 'Lainnya',
     description: typeof value.description === 'string' ? value.description : null,
     amount: Math.max(0, finiteNumber(value.amount)),
-    receipt_path: typeof value.receipt_path === 'string' ? value.receipt_path : null,
     receipt_url: typeof value.receipt_url === 'string' ? value.receipt_url : null,
     expense_date: typeof value.expense_date === 'string' ? value.expense_date : '',
-    created_by: finiteNumber(value.created_by),
+    created_by: value.created_by === null || typeof value.created_by === 'undefined'
+      ? null
+      : finiteNumber(value.created_by),
     creator,
     created_at: typeof value.created_at === 'string' ? value.created_at : null,
     updated_at: typeof value.updated_at === 'string' ? value.updated_at : null,

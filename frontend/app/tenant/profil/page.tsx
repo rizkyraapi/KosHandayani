@@ -1,6 +1,6 @@
 'use client';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { changePassword, getProfile, resendEmailVerification, updateProfile, type ChangePasswordPayload, type ProfilePayload } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,16 +39,6 @@ function useGlobalStyles() {
           --color-on-primary-fixed-variant: #005321;
           --color-secondary: #2f6a3c;
           --color-on-secondary: #ffffff;
-              {
-                [
-                  { label: 'Bergabung Sejak', value: 'Jan 2023' },
-                ].map((row) => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-                    <div style={{ color: '#64748b' }}>{row.label}</div>
-                    <div style={{ fontWeight: 700 }}>{row.value}</div>
-                  </div>
-                ))
-              }
           --color-on-tertiary-container: #76231b;
           --color-tertiary-fixed: #ffdad5;
           --color-tertiary-fixed-dim: #ffb4a9;
@@ -306,6 +296,8 @@ function SideNav() {
 function ProfileIdentityCard({
   fullName,
   email,
+  userId,
+  createdAt,
   isComplete,
   isEmailVerified,
   photoUrl,
@@ -317,6 +309,8 @@ function ProfileIdentityCard({
 }: {
   fullName: string;
   email: string;
+  userId: number | null;
+  createdAt?: string | null;
   isComplete: boolean;
   isEmailVerified: boolean;
   photoUrl: string;
@@ -328,6 +322,9 @@ function ProfileIdentityCard({
 }) {
   const { t } = useLanguage();
   const defaultPhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'Tenant')}&background=006e2f&color=ffffff&size=256&bold=true`;
+  const joinedAt = createdAt
+    ? new Intl.DateTimeFormat('id-ID', { month: 'short', year: 'numeric' }).format(new Date(createdAt))
+    : '-';
 
   return (
     <div
@@ -490,8 +487,8 @@ function ProfileIdentityCard({
         }}
       >
         {[
-          { label: 'ID Pengguna', value: '#KSH-9921' },
-          { label: 'Bergabung Sejak', value: 'Jan 2023' },
+          { label: 'ID Pengguna', value: userId ? `#KSH-${userId}` : '-' },
+          { label: 'Bergabung Sejak', value: joinedAt },
         ].map((row) => (
           <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
             <span style={{ color: C.onSurfaceVariant }}>{row.label}</span>
@@ -1178,7 +1175,7 @@ function SecondaryCard({
 
 export default function Page() {
   useGlobalStyles();
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { t } = useLanguage();
   const [form, setForm] = useState<ProfilePayload & { email: string }>({
     full_name: '',
@@ -1208,7 +1205,7 @@ export default function Page() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const isComplete = Boolean(form.whatsapp && form.pekerjaan && form.address);
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setError('');
       setIsFetching(true);
@@ -1229,11 +1226,11 @@ export default function Page() {
     } finally {
       setIsFetching(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    Promise.resolve().then(loadProfile);
-  }, []);
+    void Promise.resolve().then(loadProfile);
+  }, [loadProfile]);
 
   useEffect(() => {
     return () => {
@@ -1406,6 +1403,8 @@ export default function Page() {
             <ProfileIdentityCard
               fullName={form.full_name}
               email={form.email}
+              userId={user?.id ?? null}
+              createdAt={user?.created_at}
               isComplete={isComplete}
               isEmailVerified={isEmailVerified}
               photoUrl={photoPreviewUrl}

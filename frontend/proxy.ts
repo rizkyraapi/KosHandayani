@@ -14,7 +14,7 @@ const protectedRoutes: Array<{ prefix: string; role: UserRole }> = [
 
 const guestRoutes = ['/login', '/register'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const roleCookie = request.cookies.get(AUTH_ROLE_COOKIE)?.value;
   const tokenCookie = request.cookies.get(AUTH_TOKEN_COOKIE)?.value;

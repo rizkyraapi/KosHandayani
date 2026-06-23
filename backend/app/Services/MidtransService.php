@@ -25,7 +25,7 @@ class MidtransService
 
     public function isValidNotificationSignature(array $payload): bool
     {
-        if (app()->environment('local')) {
+        if (app()->environment('testing')) {
             return true;
         }
 

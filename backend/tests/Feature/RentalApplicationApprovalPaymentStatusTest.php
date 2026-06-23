@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Payment;
 use App\Models\RentalApplication;
 use App\Models\Room;
 use App\Models\User;
@@ -113,6 +114,63 @@ class RentalApplicationApprovalPaymentStatusTest extends TestCase
             'id' => $application->id,
             'status' => 'pending',
             'payment_status' => 'pending',
+        ]);
+    }
+
+    public function test_owner_cannot_approve_multiple_active_applications_for_same_room(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner']);
+        $firstApplication = $this->createRentalApplication();
+        $secondTenant = User::factory()->create(['role' => 'tenant']);
+        $secondApplication = RentalApplication::create([
+            'user_id' => $secondTenant->id,
+            'room_id' => $firstApplication->room_id,
+            'move_in_date' => '2026-07-01',
+            'duration' => '3 Bulan',
+            'status' => 'pending',
+            'payment_status' => 'pending',
+        ]);
+
+        $this->actingAs($owner)
+            ->putJson('/api/owner/rental-applications/'.$firstApplication->id, [
+                'status' => 'approved',
+            ])
+            ->assertOk();
+
+        $this->actingAs($owner)
+            ->putJson('/api/owner/rental-applications/'.$secondApplication->id, [
+                'status' => 'approved',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Kamar sudah dialokasikan ke pengajuan lain');
+    }
+
+    public function test_owner_cannot_reject_application_with_pending_payment(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner']);
+        $application = $this->createRentalApplication([
+            'status' => 'approved',
+            'payment_status' => 'unpaid',
+            'approved_at' => now(),
+        ]);
+        Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'KH-'.$application->id.'-pending-owner-decision',
+            'gross_amount' => 1500000,
+            'transaction_status' => 'pending',
+        ]);
+
+        $this->actingAs($owner)
+            ->putJson('/api/owner/rental-applications/'.$application->id, [
+                'status' => 'rejected',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Pengajuan dengan pembayaran aktif atau lunas tidak dapat ditolak');
+
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'status' => 'approved',
+            'payment_status' => 'unpaid',
         ]);
     }
 

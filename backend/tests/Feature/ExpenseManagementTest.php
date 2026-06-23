@@ -53,7 +53,7 @@ class ExpenseManagementTest extends TestCase
 
     public function test_owner_can_create_and_filter_expenses_with_optional_receipt(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $response = $this
             ->actingAs($this->owner)
@@ -74,7 +74,10 @@ class ExpenseManagementTest extends TestCase
             ->assertJsonPath('data.creator.id', $this->owner->id);
 
         $expense = Expense::firstOrFail();
-        Storage::disk('public')->assertExists($expense->receipt_path);
+        Storage::disk('local')->assertExists($expense->receipt_path);
+        $receiptUrl = $response->json('data.receipt_url');
+        $this->assertIsString($receiptUrl);
+        $this->get($receiptUrl)->assertOk();
 
         Expense::create([
             'branch_id' => $this->secondBranch->id,
@@ -134,7 +137,7 @@ class ExpenseManagementTest extends TestCase
 
     public function test_owner_can_view_update_and_soft_delete_expense_without_leaking_it_to_analytics_or_pdf(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
 
         $createResponse = $this
             ->actingAs($this->owner)
@@ -180,8 +183,8 @@ class ExpenseManagementTest extends TestCase
 
         $expense->refresh();
         $this->assertNotSame($oldReceiptPath, $expense->receipt_path);
-        Storage::disk('public')->assertMissing($oldReceiptPath);
-        Storage::disk('public')->assertExists($expense->receipt_path);
+        Storage::disk('local')->assertMissing($oldReceiptPath);
+        Storage::disk('local')->assertExists($expense->receipt_path);
 
         $activeExpense = Expense::create([
             'branch_id' => $this->secondBranch->id,

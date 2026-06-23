@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreRentalApplicationRequest;
+use App\Models\Payment;
 use App\Models\RentalApplication;
 use App\Models\Room;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class RentalApplicationController extends Controller
 {
@@ -18,21 +22,31 @@ class RentalApplicationController extends Controller
     {
         $validated = $request->validated();
 
-        Storage::disk('public')->makeDirectory('rental_documents');
+        Storage::disk('local')->makeDirectory('rental_documents');
 
-        $ktpPath = $request->file('ktp_file')->store('rental_documents', 'public');
-        $kkPath = $request->file('kk_file')->store('rental_documents', 'public');
+        $storedPaths = [];
 
-        $application = RentalApplication::create([
-            'user_id' => $request->user()->id,
-            'room_id' => $validated['room_id'],
-            'move_in_date' => $validated['move_in_date'],
-            'duration' => $validated['duration'],
-            'ktp_file' => $ktpPath,
-            'kk_file' => $kkPath,
-            'status' => 'pending',
-            'payment_status' => 'pending',
-        ])->load(['user', 'payment', 'roomOccupancy', 'room.branch', 'room.facilities', 'room.images']);
+        try {
+            $storedPaths['ktp'] = $request->file('ktp_file')->store('rental_documents', 'local');
+            $storedPaths['kk'] = $request->file('kk_file')->store('rental_documents', 'local');
+
+            $application = DB::transaction(fn (): RentalApplication => RentalApplication::create([
+                'user_id' => $request->user()->id,
+                'room_id' => $validated['room_id'],
+                'move_in_date' => $validated['move_in_date'],
+                'duration' => $validated['duration'],
+                'ktp_file' => $storedPaths['ktp'],
+                'kk_file' => $storedPaths['kk'],
+                'status' => 'pending',
+                'payment_status' => 'pending',
+            ]));
+        } catch (Throwable $exception) {
+            Storage::disk('local')->delete(array_values($storedPaths));
+
+            throw $exception;
+        }
+
+        $application->load(['user', 'payment', 'roomOccupancy', 'room.branch', 'room.facilities', 'room.images']);
 
         return response()->json([
             'success' => true,
@@ -169,7 +183,11 @@ class RentalApplicationController extends Controller
         $validated = $validator->validated();
 
         $application = DB::transaction(function () use ($id, $validated): RentalApplication {
-            $application = RentalApplication::with('room')->lockForUpdate()->findOrFail($id);
+            $application = RentalApplication::lockForUpdate()->findOrFail($id);
+            $room = $application->room_id
+                ? Room::query()->lockForUpdate()->find($application->room_id)
+                : null;
+            $application->setRelation('room', $room);
 
             if ($application->status === 'cancelled') {
                 abort(response()->json([
@@ -186,13 +204,43 @@ class RentalApplicationController extends Controller
             ];
 
             if ($statusChanged) {
+                $hasCommittedPayment = $application->payment_status === 'paid'
+                    || $application->payments()
+                        ->where('payment_category', Payment::CATEGORY_INITIAL_RENT)
+                        ->whereIn('transaction_status', ['pending', 'settlement', 'capture'])
+                        ->exists();
+
+                if ($validated['status'] === 'rejected' && $hasCommittedPayment) {
+                    abort(response()->json([
+                        'success' => false,
+                        'message' => 'Pengajuan dengan pembayaran aktif atau lunas tidak dapat ditolak',
+                        'data' => null,
+                    ], 422));
+                }
+
                 if (
                     $validated['status'] === 'approved'
-                    && (! $application->room || ! $application->room->is_available || $application->room->room_status !== 'available')
+                    && (! $room || ! $room->is_available || $room->room_status !== 'available')
                 ) {
                     abort(response()->json([
                         'success' => false,
                         'message' => 'Kamar sudah tidak tersedia untuk disetujui',
+                        'data' => null,
+                    ], 422));
+                }
+
+                if (
+                    $validated['status'] === 'approved'
+                    && RentalApplication::query()
+                        ->where('room_id', $application->room_id)
+                        ->whereKeyNot($application->id)
+                        ->where('status', 'approved')
+                        ->whereIn('payment_status', ['pending', 'unpaid', 'paid'])
+                        ->exists()
+                ) {
+                    abort(response()->json([
+                        'success' => false,
+                        'message' => 'Kamar sudah dialokasikan ke pengajuan lain',
                         'data' => null,
                     ], 422));
                 }
@@ -221,6 +269,22 @@ class RentalApplicationController extends Controller
                 ? 'Pengajuan sewa berhasil disetujui'
                 : 'Pengajuan sewa berhasil ditolak',
             'data' => $this->formatApplication($application, includeTenant: true, includeRoomDetails: true),
+        ]);
+    }
+
+    public function document(int $application, string $type): StreamedResponse
+    {
+        $rentalApplication = RentalApplication::findOrFail($application);
+        $path = $type === 'ktp'
+            ? $rentalApplication->ktp_file
+            : $rentalApplication->kk_file;
+
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path, basename($path), [
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -253,10 +317,8 @@ class RentalApplicationController extends Controller
             'payment_status' => $application->payment_status,
             'approved_at' => $application->approved_at,
             'paid_at' => $application->paid_at,
-            'ktp_file' => $application->ktp_file,
-            'ktp_file_url' => $this->publicFileUrl($application->ktp_file),
-            'kk_file' => $application->kk_file,
-            'kk_file_url' => $this->publicFileUrl($application->kk_file),
+            'ktp_file_url' => $this->privateDocumentUrl($application, 'ktp'),
+            'kk_file_url' => $this->privateDocumentUrl($application, 'kk'),
             'created_at' => $application->created_at,
             'updated_at' => $application->updated_at,
             'room' => $application->room
@@ -346,7 +408,7 @@ class RentalApplicationController extends Controller
 
             if ($application->relationLoaded('payments')) {
                 $application->payments
-                    ->where('payment_category', \App\Models\Payment::CATEGORY_RENEWAL)
+                    ->where('payment_category', Payment::CATEGORY_RENEWAL)
                     ->whereIn('transaction_status', ['settlement', 'capture'])
                     ->each(fn ($payment) => $timeline->push([
                         'key' => 'renewal-'.$payment->id,
@@ -436,5 +498,23 @@ class RentalApplicationController extends Controller
         }
 
         return url('storage/'.$path);
+    }
+
+    private function privateDocumentUrl(RentalApplication $application, string $type): ?string
+    {
+        $path = $type === 'ktp' ? $application->ktp_file : $application->kk_file;
+
+        if (! $path || ! Storage::disk('local')->exists($path)) {
+            return null;
+        }
+
+        return URL::temporarySignedRoute(
+            'rental-documents.show',
+            now()->addMinutes(5),
+            [
+                'application' => $application->id,
+                'type' => $type,
+            ],
+        );
     }
 }

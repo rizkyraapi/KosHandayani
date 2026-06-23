@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Payment;
 use App\Models\RentalApplication;
+use App\Models\Room;
 use App\Models\RoomOccupancy;
 use App\Services\MidtransService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -14,8 +15,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class PaymentController extends Controller
@@ -49,6 +50,10 @@ class PaymentController extends Controller
                     ->where('user_id', $request->user()->id)
                     ->lockForUpdate()
                     ->findOrFail($validator->validated()['rental_application_id']);
+                $room = $application->room_id
+                    ? Room::query()->lockForUpdate()->find($application->room_id)
+                    : null;
+                $application->setRelation('room', $room);
 
                 if ($application->status !== 'approved') {
                     abort(response()->json([
@@ -64,17 +69,31 @@ class PaymentController extends Controller
                     ], 422));
                 }
 
-                if (! $application->room) {
+                if (! $room) {
                     abort(response()->json([
                         'success' => false,
                         'message' => 'Kamar untuk pengajuan sewa tidak ditemukan',
                     ], 422));
                 }
 
-                if (! $application->room->is_available || $application->room->room_status !== 'available') {
+                if (! $room->is_available || $room->room_status !== 'available') {
                     abort(response()->json([
                         'success' => false,
                         'message' => 'Kamar sudah tidak tersedia untuk dibayar',
+                    ], 422));
+                }
+
+                $conflictingPaymentExists = Payment::query()
+                    ->where('payment_category', Payment::CATEGORY_INITIAL_RENT)
+                    ->whereIn('transaction_status', ['pending', 'settlement', 'capture'])
+                    ->where('rental_application_id', '!=', $application->id)
+                    ->whereHas('rentalApplication', fn ($query) => $query->where('room_id', $room->id))
+                    ->exists();
+
+                if ($conflictingPaymentExists) {
+                    abort(response()->json([
+                        'success' => false,
+                        'message' => 'Kamar sedang diproses oleh pembayaran pengajuan lain',
                     ], 422));
                 }
 
@@ -283,7 +302,17 @@ class PaymentController extends Controller
 
     public function notification(Request $request): JsonResponse
     {
-        Log::info('Midtrans notification received', $request->all());
+        Log::info('Midtrans notification received', $request->only([
+            'order_id',
+            'transaction_id',
+            'transaction_status',
+            'status_code',
+            'gross_amount',
+            'payment_type',
+            'fraud_status',
+            'settlement_time',
+            'transaction_time',
+        ]));
 
         $validator = Validator::make($request->all(), [
             'order_id' => ['required', 'string'],
@@ -302,6 +331,7 @@ class PaymentController extends Controller
             'payment_type' => ['nullable', 'string'],
             'settlement_time' => ['nullable', 'string'],
             'transaction_time' => ['nullable', 'string'],
+            'fraud_status' => ['nullable', 'string'],
         ]);
 
         if ($validator->fails()) {
@@ -331,6 +361,8 @@ class PaymentController extends Controller
                 'success' => false,
                 'message' => 'Pembayaran tidak ditemukan',
             ], 404);
+        } catch (HttpResponseException $exception) {
+            return $exception->getResponse();
         }
 
         return response()->json([
@@ -356,7 +388,11 @@ class PaymentController extends Controller
         $orderId = $validator->validated()['order_id'];
 
         try {
-            $statusPayload = $this->midtrans->getTransactionStatus($orderId);
+            $ownedPayment = Payment::query()
+                ->where('order_id', $orderId)
+                ->whereHas('rentalApplication', fn ($query) => $query->where('user_id', $request->user()->id))
+                ->firstOrFail();
+            $statusPayload = $this->midtrans->getTransactionStatus($ownedPayment->order_id);
             $payment = DB::transaction(function () use ($request, $orderId, $statusPayload): Payment {
                 $payment = Payment::with(['rentalApplication.room', 'roomOccupancy'])
                     ->where('order_id', $orderId)
@@ -371,6 +407,8 @@ class PaymentController extends Controller
                 'success' => false,
                 'message' => 'Pembayaran tidak ditemukan',
             ], 404);
+        } catch (HttpResponseException $exception) {
+            return $exception->getResponse();
         } catch (Throwable $exception) {
             report($exception);
 
@@ -482,15 +520,22 @@ class PaymentController extends Controller
 
     private function updatePaymentFromMidtransStatus(Payment $payment, array $payload): Payment
     {
-        $status = (string) ($payload['transaction_status'] ?? $payment->transaction_status);
+        $status = $this->effectiveTransactionStatus($payload, (string) $payment->transaction_status);
         $grossAmount = $payload['gross_amount'] ?? $payment->gross_amount;
+
+        $this->assertMatchingGrossAmount($payment, $grossAmount);
+
+        if ($this->isSuccessfulStatus((string) $payment->transaction_status) && ! $this->isSuccessfulStatus($status)) {
+            return $payment->fresh(['rentalApplication.room.branch', 'roomOccupancy']);
+        }
+
+        if ($this->isSuccessfulStatus($status)) {
+            $this->assertSuccessfulPaymentCanBeApplied($payment);
+        }
 
         $payment->update([
             'transaction_id' => $payload['transaction_id'] ?? $payment->transaction_id,
             'payment_type' => $payload['payment_type'] ?? $payment->payment_type,
-            'gross_amount' => is_numeric($grossAmount)
-                ? (int) round((float) $grossAmount)
-                : $payment->gross_amount,
             'transaction_status' => $status,
             'paid_at' => $this->isSuccessfulStatus($status)
                 ? ($payment->paid_at ?? now())
@@ -696,7 +741,7 @@ class PaymentController extends Controller
 
     private function generateOrderId(RentalApplication $application): string
     {
-        return sprintf('KH-%s-%s', $application->id, now()->timestamp);
+        return sprintf('KH-%s-%s-%s', $application->id, now()->timestamp, Str::upper(Str::random(6)));
     }
 
     private function generateRenewalOrderId(RoomOccupancy $occupancy): string
@@ -721,23 +766,102 @@ class PaymentController extends Controller
 
     private function resolveFrontendOrigin(Request $request): ?string
     {
-        $origin = $request->headers->get('Origin');
+        $configuredOrigin = rtrim((string) (config('app.frontend_url') ?: env('FRONTEND_URL')), '/');
 
-        if (! $origin && $request->headers->get('Referer')) {
-            $referer = parse_url($request->headers->get('Referer'));
-            if (isset($referer['scheme'], $referer['host'])) {
-                $origin = $referer['scheme'].'://'.$referer['host'].(isset($referer['port']) ? ':'.$referer['port'] : '');
-            }
-        }
-
-        $configuredOrigin = config('app.frontend_url') ?: env('FRONTEND_URL');
-        $origin ??= $configuredOrigin;
-
-        if (! $origin || str_contains($origin, 'example.com')) {
+        if (! $configuredOrigin || str_contains($configuredOrigin, 'example.com')) {
             return null;
         }
 
-        return rtrim($origin, '/');
+        return $configuredOrigin;
+    }
+
+    private function effectiveTransactionStatus(array $payload, string $fallback): string
+    {
+        $status = (string) ($payload['transaction_status'] ?? $fallback);
+
+        if ($status !== 'capture') {
+            return $status;
+        }
+
+        return match (strtolower((string) ($payload['fraud_status'] ?? ''))) {
+            'accept' => 'capture',
+            'deny' => 'deny',
+            default => 'pending',
+        };
+    }
+
+    private function assertMatchingGrossAmount(Payment $payment, mixed $grossAmount): void
+    {
+        if (! is_numeric($grossAmount) || abs((float) $grossAmount - (float) $payment->gross_amount) > 0.01) {
+            Log::warning('Midtrans gross amount mismatch', [
+                'payment_id' => $payment->id,
+                'order_id' => $payment->order_id,
+                'expected_amount' => $payment->gross_amount,
+                'received_amount' => $grossAmount,
+            ]);
+
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Nominal pembayaran tidak sesuai dengan tagihan',
+            ], 422));
+        }
+    }
+
+    private function assertSuccessfulPaymentCanBeApplied(Payment $payment): void
+    {
+        if ($payment->payment_category === Payment::CATEGORY_RENEWAL) {
+            return;
+        }
+
+        $application = $payment->rentalApplication;
+
+        if (! $application?->room_id) {
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Kamar untuk pembayaran tidak ditemukan',
+            ], 422));
+        }
+
+        if ($application->status !== 'approved') {
+            Log::critical('Successful Midtrans transaction belongs to a non-approved application', [
+                'payment_id' => $payment->id,
+                'rental_application_id' => $application->id,
+                'application_status' => $application->status,
+            ]);
+
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Pembayaran memerlukan rekonsiliasi manual karena pengajuan tidak aktif',
+            ], 409));
+        }
+
+        $room = Room::query()->lockForUpdate()->find($application->room_id);
+
+        if (! $room) {
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Kamar untuk pembayaran tidak ditemukan',
+            ], 422));
+        }
+
+        $hasConflictingOccupancy = RoomOccupancy::query()
+            ->where('room_id', $room->id)
+            ->where('status', 'active')
+            ->where('rental_application_id', '!=', $application->id)
+            ->exists();
+
+        if ($hasConflictingOccupancy) {
+            Log::critical('Paid transaction conflicts with an existing active occupancy', [
+                'payment_id' => $payment->id,
+                'rental_application_id' => $application->id,
+                'room_id' => $room->id,
+            ]);
+
+            abort(response()->json([
+                'success' => false,
+                'message' => 'Pembayaran memerlukan rekonsiliasi manual karena kamar sudah ditempati',
+            ], 409));
+        }
     }
 
     private function isSuccessfulStatus(string $status): bool

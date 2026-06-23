@@ -27,6 +27,7 @@ import {
   type RenewalDurationOption,
 } from '@/lib/api';
 import type { Locale } from '@/lib/i18n';
+import { getAuthErrorMessage } from '@/lib/auth';
 import { payWithMidtransSnap } from '@/lib/midtrans';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 
@@ -107,14 +108,14 @@ export default function Page() {
       setSelectedDuration(data.duration_options[0]?.duration_months ?? 3);
     } catch (loadError) {
       setContext(null);
-      setError(loadError instanceof Error ? loadError.message : t('messages.loadFailed'));
+      setError(getAuthErrorMessage(loadError, t('messages.loadFailed')));
     } finally {
       setIsLoading(false);
     }
   }, [t]);
 
   useEffect(() => {
-    void loadContext();
+    void Promise.resolve().then(loadContext);
   }, [loadContext]);
 
   const options = context?.duration_options?.length ? context.duration_options : DEFAULT_OPTIONS;

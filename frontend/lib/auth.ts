@@ -23,6 +23,7 @@ export type AuthUser = {
   email_verified_at?: string | null;
   profile_photo?: string | null;
   profile_photo_url?: string | null;
+  created_at?: string | null;
 };
 
 export type LoginCredentials = {
@@ -55,6 +56,7 @@ type ApiUser = {
   email_verified_at?: string | null;
   profile_photo?: string | null;
   profile_photo_url?: string | null;
+  created_at?: string | null;
 };
 
 type AuthResponse = {
@@ -102,6 +104,7 @@ function normalizeUser(user?: ApiUser): AuthUser {
     email_verified_at: user.email_verified_at ?? null,
     profile_photo: user.profile_photo ?? null,
     profile_photo_url: user.profile_photo_url ?? null,
+    created_at: user.created_at ?? null,
   };
 }
 
@@ -117,6 +120,7 @@ function persistSession(user: AuthUser, remember = false, token?: string) {
   const options: Cookies.CookieAttributes = {
     path: '/',
     sameSite: 'lax',
+    secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
     expires: remember ? REMEMBER_SESSION_DAYS : idleMinutesToCookieDays(SESSION_IDLE_MINUTES),
   };
 
@@ -126,6 +130,7 @@ function persistSession(user: AuthUser, remember = false, token?: string) {
       path: '/',
       expires: 30,
       sameSite: 'lax',
+      secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
     });
   } else {
     Cookies.remove(AUTH_REMEMBER_COOKIE, { path: '/' });

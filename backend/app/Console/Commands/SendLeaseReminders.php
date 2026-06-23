@@ -10,6 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class SendLeaseReminders extends Command
 {
@@ -29,33 +30,48 @@ class SendLeaseReminders extends Command
         $today = Carbon::today();
         $sentCount = 0;
         $skippedCount = 0;
+        $failedCount = 0;
 
         RoomOccupancy::with(['user', 'room.branch', 'rentalApplication'])
             ->where('status', 'active')
             ->whereNotNull('end_date')
             ->orderBy('end_date')
-            ->chunkById(100, function ($occupancies) use ($today, &$sentCount, &$skippedCount): void {
+            ->chunkById(100, function ($occupancies) use ($today, &$sentCount, &$skippedCount, &$failedCount): void {
                 foreach ($occupancies as $occupancy) {
                     $reminderType = $this->determineReminderType($occupancy, $today);
 
                     if (! $reminderType) {
                         $skippedCount++;
+
                         continue;
                     }
 
                     if ($this->alreadySent($occupancy->id, $reminderType)) {
                         $skippedCount++;
+
                         continue;
                     }
 
-                    $this->sendReminder($occupancy, $reminderType, $today);
-                    $sentCount++;
+                    try {
+                        $this->sendReminder($occupancy, $reminderType, $today);
+                        $sentCount++;
+                    } catch (Throwable $exception) {
+                        $failedCount++;
+
+                        Log::error('Lease reminder email failed', [
+                            'room_occupancy_id' => $occupancy->id,
+                            'user_id' => $occupancy->user_id,
+                            'reminder_type' => $reminderType,
+                            'exception_class' => $exception::class,
+                            'message' => $exception->getMessage(),
+                        ]);
+                    }
                 }
             });
 
-        $this->info("Lease reminders sent: {$sentCount}. Skipped: {$skippedCount}.");
+        $this->info("Lease reminders sent: {$sentCount}. Skipped: {$skippedCount}. Failed: {$failedCount}.");
 
-        return self::SUCCESS;
+        return $failedCount > 0 ? self::FAILURE : self::SUCCESS;
     }
 
     private function determineReminderType(RoomOccupancy $occupancy, Carbon $today): ?string

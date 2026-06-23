@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\RentalApplication;
 use App\Models\Room;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -244,5 +245,55 @@ class RoomManagementTest extends TestCase
 
         $this->assertDatabaseMissing('rooms', ['id' => $room->id]);
         Storage::disk('public')->assertMissing('rooms/delete-me.png');
+    }
+
+    public function test_tenant_cannot_mutate_rooms(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = Room::create([
+            'room_name' => 'Kamar Aman',
+            'branch' => 'Cabang Utama',
+            'gender_type' => 'mixed',
+            'room_status' => 'available',
+            'price' => 900000,
+            'max_guest' => 1,
+            'is_available' => true,
+        ]);
+
+        $this->actingAs($tenant)->postJson('/api/rooms', [])->assertForbidden();
+        $this->actingAs($tenant)->putJson('/api/rooms/'.$room->id, [])->assertForbidden();
+        $this->actingAs($tenant)->deleteJson('/api/rooms/'.$room->id)->assertForbidden();
+    }
+
+    public function test_room_with_rental_history_cannot_be_deleted(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner']);
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = Room::create([
+            'room_name' => 'Kamar Bersejarah',
+            'branch' => 'Cabang Utama',
+            'gender_type' => 'mixed',
+            'room_status' => 'available',
+            'price' => 900000,
+            'max_guest' => 1,
+            'is_available' => true,
+        ]);
+        RentalApplication::create([
+            'user_id' => $tenant->id,
+            'room_id' => $room->id,
+            'move_in_date' => '2026-07-01',
+            'duration' => '1 Bulan',
+            'status' => 'rejected',
+            'payment_status' => 'pending',
+        ]);
+
+        $this
+            ->actingAs($owner)
+            ->deleteJson('/api/rooms/'.$room->id)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Kamar yang sudah memiliki riwayat sewa tidak dapat dihapus.');
+
+        $this->assertDatabaseHas('rooms', ['id' => $room->id]);
+        $this->assertDatabaseHas('rental_applications', ['room_id' => $room->id]);
     }
 }

@@ -344,6 +344,163 @@ class PaymentFlowTest extends TestCase
         ]);
     }
 
+    public function test_midtrans_notification_rejects_mismatched_gross_amount(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom();
+        $application = $this->createApprovedApplication($tenant, $room);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'KH-'.$application->id.'-amount-check',
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
+            'transaction_status' => 'pending',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('isValidNotificationSignature')->once()->andReturnTrue();
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->postJson('/api/payments/notification', [
+                'order_id' => $payment->order_id,
+                'transaction_status' => 'settlement',
+                'signature_key' => 'valid-signature',
+                'status_code' => '200',
+                'gross_amount' => '1.00',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Nominal pembayaran tidak sesuai dengan tagihan');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'gross_amount' => 4400000,
+            'transaction_status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'payment_status' => 'unpaid',
+        ]);
+        $this->assertDatabaseCount('room_occupancies', 0);
+    }
+
+    public function test_settlement_for_non_approved_application_requires_manual_reconciliation(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom();
+        $application = $this->createApprovedApplication($tenant, $room);
+        $application->update(['status' => 'rejected', 'payment_status' => 'pending']);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'KH-'.$application->id.'-legacy-rejected',
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
+            'transaction_status' => 'pending',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('isValidNotificationSignature')->once()->andReturnTrue();
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->postJson('/api/payments/notification', [
+                'order_id' => $payment->order_id,
+                'transaction_status' => 'settlement',
+                'signature_key' => 'valid-signature',
+                'status_code' => '200',
+                'gross_amount' => '4400000.00',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Pembayaran memerlukan rekonsiliasi manual karena pengajuan tidak aktif');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'transaction_status' => 'pending',
+        ]);
+        $this->assertDatabaseCount('room_occupancies', 0);
+    }
+
+    public function test_successful_payment_cannot_regress_from_delayed_failed_notification(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom();
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'room_occupancy_id' => $occupancy->id,
+            'order_id' => 'KH-'.$application->id.'-settled',
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
+            'transaction_status' => 'settlement',
+            'paid_at' => now(),
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('isValidNotificationSignature')->once()->andReturnTrue();
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->postJson('/api/payments/notification', [
+                'order_id' => $payment->order_id,
+                'transaction_status' => 'expire',
+                'signature_key' => 'valid-signature',
+                'status_code' => '407',
+                'gross_amount' => '4400000.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('payment.transaction_status', 'settlement');
+
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'transaction_status' => 'settlement',
+        ]);
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'payment_status' => 'paid',
+        ]);
+    }
+
+    public function test_capture_with_challenge_fraud_status_remains_pending(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createRoom();
+        $application = $this->createApprovedApplication($tenant, $room);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'KH-'.$application->id.'-capture-challenge',
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
+            'transaction_status' => 'pending',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldReceive('isValidNotificationSignature')->once()->andReturnTrue();
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->postJson('/api/payments/notification', [
+                'order_id' => $payment->order_id,
+                'transaction_status' => 'capture',
+                'fraud_status' => 'challenge',
+                'signature_key' => 'valid-signature',
+                'status_code' => '200',
+                'gross_amount' => '4400000.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('payment.transaction_status', 'pending');
+
+        $this->assertDatabaseCount('room_occupancies', 0);
+        $this->assertDatabaseHas('rental_applications', [
+            'id' => $application->id,
+            'payment_status' => 'unpaid',
+        ]);
+    }
+
     public function test_tenant_can_sync_successful_payment_status_after_snap_callback(): void
     {
         $tenant = User::factory()->create(['role' => 'tenant']);
@@ -400,6 +557,33 @@ class PaymentFlowTest extends TestCase
             'is_available' => false,
             'room_status' => 'occupied',
         ]);
+    }
+
+    public function test_tenant_cannot_sync_another_tenants_order(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $otherTenant = User::factory()->create(['role' => 'tenant']);
+        $application = $this->createApprovedApplication($otherTenant, $this->createRoom());
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'order_id' => 'KH-'.$application->id.'-private-sync',
+            'subtotal_amount' => 4500000,
+            'discount_amount' => 100000,
+            'gross_amount' => 4400000,
+            'transaction_status' => 'pending',
+        ]);
+
+        $midtrans = Mockery::mock(MidtransService::class);
+        $midtrans->shouldNotReceive('getTransactionStatus');
+        $this->app->instance(MidtransService::class, $midtrans);
+
+        $this
+            ->actingAs($tenant)
+            ->postJson('/api/payments/sync-status', [
+                'order_id' => $payment->order_id,
+            ])
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Pembayaran tidak ditemukan');
     }
 
     public function test_tenant_can_create_midtrans_snap_payment_for_lease_renewal(): void

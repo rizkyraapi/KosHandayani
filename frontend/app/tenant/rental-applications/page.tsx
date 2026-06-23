@@ -214,8 +214,10 @@ export default function Page() {
 
     if (params.get('created') !== '1') return;
 
-    setMessage(t('messages.applicationSubmitted'));
-    router.replace('/tenant/rental-applications', { scroll: false });
+    void Promise.resolve().then(() => {
+      setMessage(t('messages.applicationSubmitted'));
+      router.replace('/tenant/rental-applications', { scroll: false });
+    });
   }, [router, t]);
 
   useAutoRefresh(refreshApplications);

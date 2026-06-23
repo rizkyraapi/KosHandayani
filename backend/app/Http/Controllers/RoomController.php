@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Room;
 use Illuminate\Http\Request;
@@ -184,7 +183,7 @@ class RoomController extends Controller
             ], 422);
         }
 
-        $room = DB::transaction(function () use ($request, $validated, $room, $existingImageIds, $newImages): Room {
+        $room = DB::transaction(function () use ($validated, $room, $existingImageIds, $newImages): Room {
             $branch = Branch::findOrFail($validated['branch_id']);
 
             $roomData = [
@@ -247,6 +246,15 @@ class RoomController extends Controller
 
     public function destroy(Room $room)
     {
+        if ($room->roomOccupancies()->exists() || $room->rentalApplications()->exists()) {
+            return response()->json([
+                'message' => 'Kamar yang sudah memiliki riwayat sewa tidak dapat dihapus.',
+                'errors' => [
+                    'room' => ['Ubah status kamar menjadi maintenance untuk menonaktifkannya tanpa menghapus riwayat.'],
+                ],
+            ], 422);
+        }
+
         DB::transaction(function () use ($room): void {
             foreach ($room->images as $image) {
                 Storage::disk('public')->delete($image->image_url);

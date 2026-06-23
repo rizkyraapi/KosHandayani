@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 class OwnerAnalyticsService
 {
@@ -342,18 +344,23 @@ class OwnerAnalyticsService
         $periodPayments = $payments->filter(fn (Payment $payment) => $this->paymentDate($payment)?->betweenIncluded($periodStart, $periodEnd));
         $renewalPayments = $periodPayments->where('payment_category', Payment::CATEGORY_RENEWAL);
         $rooms = $this->roomsQuery($branchId)->get();
-        $periodOccupancies = RoomOccupancy::query()
+        $yearStart = Carbon::create($year, 1, 1)->startOfYear();
+        $yearEnd = $yearStart->copy()->endOfYear();
+        $yearOccupancies = RoomOccupancy::query()
             ->with('room')
-            ->whereDate('start_date', '<=', $periodEnd)
-            ->where(function (Builder $query) use ($periodStart): void {
-                $query->whereNull('end_date')->orWhereDate('end_date', '>=', $periodStart);
+            ->whereDate('start_date', '<=', $yearEnd)
+            ->where(function (Builder $query) use ($yearStart): void {
+                $query->whereNull('end_date')->orWhereDate('end_date', '>=', $yearStart);
             })
             ->when($branchId, fn (Builder $query) => $query->whereHas(
                 'room',
                 fn (Builder $roomQuery) => $roomQuery->where('branch_id', $branchId),
             ))
             ->get();
-        $monthlyTrend = collect(range(1, 12))->map(function (int $trendMonth) use ($payments, $yearExpenses, $year, $branchId, $rooms): array {
+        $periodOccupancies = $yearOccupancies->filter(
+            fn (RoomOccupancy $occupancy): bool => $this->occupancyOverlapsPeriod($occupancy, $periodStart, $periodEnd),
+        );
+        $monthlyTrend = collect(range(1, 12))->map(function (int $trendMonth) use ($payments, $yearExpenses, $year, $rooms, $yearOccupancies): array {
             $monthStart = Carbon::create($year, $trendMonth, 1)->startOfMonth();
             $monthEnd = $monthStart->copy()->endOfMonth();
             $monthPayments = $payments
@@ -362,7 +369,11 @@ class OwnerAnalyticsService
             $monthExpenses = $yearExpenses->filter(
                 fn (Expense $expense) => $expense->expense_date?->betweenIncluded($monthStart, $monthEnd),
             );
-            $occupiedUnits = $this->occupanciesInPeriod($monthStart, $monthEnd, $branchId);
+            $occupiedUnits = $yearOccupancies
+                ->filter(fn (RoomOccupancy $occupancy): bool => $this->occupancyOverlapsPeriod($occupancy, $monthStart, $monthEnd))
+                ->pluck('room_id')
+                ->unique()
+                ->count();
             $revenue = (int) $monthPayments->sum('gross_amount');
             $expense = $this->totalExpense($monthExpenses);
 
@@ -616,6 +627,11 @@ class OwnerAnalyticsService
 
     private function formatOccupancy(RoomOccupancy $occupancy, bool $includeHistory): array
     {
+        if ($occupancy->relationLoaded('rentalApplication') && $occupancy->rentalApplication) {
+            $occupancy->rentalApplication->setRelation('user', $occupancy->user);
+            $occupancy->rentalApplication->setRelation('room', $occupancy->room);
+        }
+
         $occupancyPayments = $occupancy->relationLoaded('payments') ? $occupancy->payments : collect();
         $applicationPayments = $occupancy->relationLoaded('rentalApplication')
             && $occupancy->rentalApplication?->relationLoaded('payments')
@@ -626,6 +642,13 @@ class OwnerAnalyticsService
             ->unique('id')
             ->sortByDesc('created_at')
             ->values();
+        $payments->each(function (Payment $payment) use ($occupancy): void {
+            if ($occupancy->rentalApplication) {
+                $payment->setRelation('rentalApplication', $occupancy->rentalApplication);
+            }
+
+            $payment->setRelation('roomOccupancy', $occupancy);
+        });
         $lifecycle = $this->lifecycleStatus($occupancy->end_date);
         $start = $occupancy->start_date ? Carbon::parse($occupancy->start_date) : null;
         $end = $occupancy->end_date ? Carbon::parse($occupancy->end_date) : null;
@@ -727,8 +750,7 @@ class OwnerAnalyticsService
             'category' => $expense->category,
             'description' => $expense->description,
             'amount' => (int) $expense->amount,
-            'receipt_path' => $expense->receipt_path,
-            'receipt_url' => $expense->receipt_path ? url('storage/'.$expense->receipt_path) : null,
+            'receipt_url' => $this->privateReceiptUrl($expense),
             'expense_date' => optional($expense->expense_date)->toDateString(),
             'created_by' => $expense->created_by,
             'creator' => $expense->creator ? [
@@ -750,6 +772,19 @@ class OwnerAnalyticsService
             'amount' => (int) $expense->amount,
             'receipt' => $expense->receipt_path ? 'Ada' : '-',
         ];
+    }
+
+    private function privateReceiptUrl(Expense $expense): ?string
+    {
+        if (! $expense->receipt_path || ! Storage::disk('local')->exists($expense->receipt_path)) {
+            return null;
+        }
+
+        return URL::temporarySignedRoute(
+            'expense-receipts.show',
+            now()->addMinutes(5),
+            ['expense' => $expense->id],
+        );
     }
 
     private function formatRoomReference(?Room $room): ?array
@@ -1054,19 +1089,14 @@ class OwnerAnalyticsService
             ->all();
     }
 
-    private function occupanciesInPeriod(Carbon $start, Carbon $end, ?int $branchId): int
+    private function occupancyOverlapsPeriod(RoomOccupancy $occupancy, Carbon $start, Carbon $end): bool
     {
-        return RoomOccupancy::query()
-            ->whereDate('start_date', '<=', $end)
-            ->where(function (Builder $query) use ($start): void {
-                $query->whereNull('end_date')->orWhereDate('end_date', '>=', $start);
-            })
-            ->when($branchId, fn (Builder $query) => $query->whereHas(
-                'room',
-                fn (Builder $roomQuery) => $roomQuery->where('branch_id', $branchId),
-            ))
-            ->distinct('room_id')
-            ->count('room_id');
+        $occupancyStart = $occupancy->start_date ? Carbon::parse($occupancy->start_date)->startOfDay() : null;
+        $occupancyEnd = $occupancy->end_date ? Carbon::parse($occupancy->end_date)->endOfDay() : null;
+
+        return $occupancyStart !== null
+            && $occupancyStart->lessThanOrEqualTo($end)
+            && ($occupancyEnd === null || $occupancyEnd->greaterThanOrEqualTo($start));
     }
 
     private function availableYears(): array

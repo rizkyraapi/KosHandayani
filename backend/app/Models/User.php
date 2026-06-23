@@ -83,6 +83,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'profile_photo_url' => $this->profile_photo
                 ? url('storage/'.$this->profile_photo)
                 : null,
+            'created_at' => optional($this->created_at)->toIso8601String(),
         ];
     }
 

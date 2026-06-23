@@ -26,10 +26,16 @@ class EmailVerificationController extends Controller
             try {
                 $this->emailVerificationNotifications->send($user, 'resend');
             } catch (Throwable $exception) {
+                Log::error('Email verification resend failed', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'exception_class' => $exception::class,
+                ]);
+
                 return response()->json([
                     'success' => false,
-                    'message' => $exception->getMessage(),
-                ], 500);
+                    'message' => 'Email verifikasi belum dapat dikirim. Silakan coba lagi beberapa saat.',
+                ], 503);
             }
 
             Log::info('Email verification link resent', [

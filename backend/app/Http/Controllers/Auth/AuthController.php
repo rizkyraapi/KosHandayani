@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -41,18 +42,36 @@ class AuthController extends Controller
             'profile_completed' => false,
         ]);
 
-        $this->emailVerificationNotifications->send($user, 'register');
+        $verificationEmailSent = true;
 
-        Log::info('Email verification notification sent after registration', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-        ]);
+        try {
+            $this->emailVerificationNotifications->send($user, 'register');
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            Log::info('Email verification notification sent after registration', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+            ]);
+        } catch (Throwable $exception) {
+            $verificationEmailSent = false;
+
+            Log::warning('Registration completed but verification email could not be sent', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'exception_class' => $exception::class,
+            ]);
+        }
+
+        $token = $user->createToken(
+            'auth_token',
+            ['*'],
+            now()->addMinutes(120),
+        )->plainTextToken;
 
         return response()->json([
             'success' => true,
-            'message' => 'Register berhasil',
+            'message' => $verificationEmailSent
+                ? 'Register berhasil'
+                : 'Register berhasil. Email verifikasi belum dapat dikirim, silakan kirim ulang dari halaman profil.',
             'token' => $token,
             'user' => $this->authUser($user),
         ]);
@@ -64,6 +83,7 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
+            'remember' => ['nullable', 'boolean'],
         ]);
 
         $user = User::where('email', $request->email)->first();
@@ -76,7 +96,11 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken(
+            'auth_token',
+            ['*'],
+            $request->boolean('remember') ? now()->addDays(30) : now()->addMinutes(120),
+        )->plainTextToken;
 
         return response()->json([
 
@@ -133,6 +157,14 @@ class AuthController extends Controller
         $user->update([
             'password' => Hash::make($validated['new_password']),
         ]);
+
+        $currentToken = $request->user()->currentAccessToken();
+        $currentTokenId = $currentToken instanceof PersonalAccessToken
+            ? $currentToken->getKey()
+            : null;
+        $user->tokens()
+            ->when($currentTokenId, fn ($query) => $query->where('id', '!=', $currentTokenId))
+            ->delete();
 
         return response()->json([
             'success' => true,

@@ -9,6 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class ExpenseController extends Controller
 {
@@ -64,15 +66,25 @@ class ExpenseController extends Controller
 
         $validated = $request->validate($this->expenseRules());
 
-        $expense = Expense::create([
-            'branch_id' => $validated['branch_id'],
-            'category' => $validated['category'],
-            'description' => $validated['description'] ?? null,
-            'amount' => $validated['amount'],
-            'receipt_path' => $request->file('receipt')?->store('expenses/receipts', 'public'),
-            'expense_date' => $validated['expense_date'],
-            'created_by' => $request->user()->id,
-        ]);
+        $receiptPath = $request->file('receipt')?->store('expenses/receipts', 'local');
+
+        try {
+            $expense = Expense::create([
+                'branch_id' => $validated['branch_id'],
+                'category' => $validated['category'],
+                'description' => $validated['description'] ?? null,
+                'amount' => $validated['amount'],
+                'receipt_path' => $receiptPath,
+                'expense_date' => $validated['expense_date'],
+                'created_by' => $request->user()->id,
+            ]);
+        } catch (Throwable $exception) {
+            if ($receiptPath) {
+                Storage::disk('local')->delete($receiptPath);
+            }
+
+            throw $exception;
+        }
 
         return response()->json([
             'success' => true,
@@ -101,19 +113,27 @@ class ExpenseController extends Controller
 
         $validated = $request->validate($this->expenseRules());
         $previousReceiptPath = $expense->receipt_path;
-        $nextReceiptPath = $request->file('receipt')?->store('expenses/receipts', 'public');
+        $nextReceiptPath = $request->file('receipt')?->store('expenses/receipts', 'local');
 
-        $expense->update([
-            'branch_id' => $validated['branch_id'],
-            'category' => $validated['category'],
-            'description' => $validated['description'] ?? null,
-            'amount' => $validated['amount'],
-            'receipt_path' => $nextReceiptPath ?? $previousReceiptPath,
-            'expense_date' => $validated['expense_date'],
-        ]);
+        try {
+            $expense->update([
+                'branch_id' => $validated['branch_id'],
+                'category' => $validated['category'],
+                'description' => $validated['description'] ?? null,
+                'amount' => $validated['amount'],
+                'receipt_path' => $nextReceiptPath ?? $previousReceiptPath,
+                'expense_date' => $validated['expense_date'],
+            ]);
+        } catch (Throwable $exception) {
+            if ($nextReceiptPath) {
+                Storage::disk('local')->delete($nextReceiptPath);
+            }
+
+            throw $exception;
+        }
 
         if ($nextReceiptPath && $previousReceiptPath && $previousReceiptPath !== $nextReceiptPath) {
-            Storage::disk('public')->delete($previousReceiptPath);
+            Storage::disk('local')->delete($previousReceiptPath);
         }
 
         return response()->json([
@@ -135,6 +155,17 @@ class ExpenseController extends Controller
             'success' => true,
             'message' => 'Pengeluaran berhasil dihapus.',
             'data' => null,
+        ]);
+    }
+
+    public function receipt(Expense $expense): StreamedResponse
+    {
+        abort_unless($expense->receipt_path && Storage::disk('local')->exists($expense->receipt_path), 404);
+
+        return Storage::disk('local')->response($expense->receipt_path, basename($expense->receipt_path), [
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 

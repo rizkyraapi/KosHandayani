@@ -61,9 +61,15 @@ class EmailVerificationFlowTest extends TestCase
     public function test_debug_email_verification_endpoint_returns_signed_url_and_sends_notification(): void
     {
         Notification::fake();
+        $owner = User::factory()->create(['role' => 'owner']);
         $tenant = User::factory()->unverified()->create(['role' => 'tenant']);
 
         $this
+            ->getJson('/api/debug/email-verification/'.$tenant->id)
+            ->assertUnauthorized();
+
+        $this
+            ->actingAs($owner)
             ->getJson('/api/debug/email-verification/'.$tenant->id)
             ->assertOk()
             ->assertJsonPath('success', true)
@@ -162,7 +168,7 @@ class EmailVerificationFlowTest extends TestCase
 
     public function test_verified_user_can_create_rental_application(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $tenant = User::factory()->create([
             'role' => 'tenant',
             'phone' => '08123456789',
@@ -171,7 +177,7 @@ class EmailVerificationFlowTest extends TestCase
         ]);
         $room = $this->createRoom();
 
-        $this
+        $response = $this
             ->actingAs($tenant)
             ->postJson('/api/rental-applications', [
                 'room_id' => $room->id,
@@ -195,8 +201,15 @@ class EmailVerificationFlowTest extends TestCase
             'status' => 'pending',
             'payment_status' => 'pending',
         ]);
-        Storage::disk('public')->assertExists($application->ktp_file);
-        Storage::disk('public')->assertExists($application->kk_file);
+        Storage::disk('local')->assertExists($application->ktp_file);
+        Storage::disk('local')->assertExists($application->kk_file);
+
+        $ktpUrl = $response->json('data.ktp_file_url');
+        $this->assertIsString($ktpUrl);
+        $this->get($ktpUrl)->assertOk();
+        $this
+            ->get('/api/rental-documents/'.$application->id.'/ktp')
+            ->assertForbidden();
     }
 
     public function test_unverified_user_cannot_create_payment(): void

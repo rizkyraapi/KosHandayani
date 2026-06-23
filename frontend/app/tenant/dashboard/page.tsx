@@ -737,8 +737,6 @@ export default function Page() {
 
     if (!isLoading && user?.role === 'tenant') {
       void loadDashboardData();
-    } else if (!isLoading) {
-      setDashboardLoading(false);
     }
 
     const handleTenantDataSync = () => {
