@@ -3,16 +3,21 @@
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   BedDouble,
   CalendarDays,
   DoorOpen,
   Eye,
   Home,
+  Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   UserRound,
   Wrench,
+  X,
 } from 'lucide-react';
 import {
   BranchScopeControl,
@@ -30,7 +35,8 @@ import {
   SectionHeader,
   StatusPill,
 } from '@/components/owner/OwnerUi';
-import { getOwnerRoomsOverview, type OwnerRoomOverview } from '@/lib/api';
+import { deleteRoom, getOwnerRoomsOverview, type OwnerRoomOverview } from '@/lib/api';
+import { getAuthErrorMessage } from '@/lib/auth';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { useOwnerBranchScope } from '@/lib/use-owner-branch-scope';
 
@@ -46,12 +52,74 @@ function date(value?: string | null) {
   return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value)) : '-';
 }
 
+function DeleteRoomDialog({
+  room,
+  deleting,
+  onCancel,
+  onConfirm,
+}: {
+  room: OwnerRoomOverview | null;
+  deleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!room) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111c2d]/45 px-4 py-8">
+      <div className="w-full max-w-lg rounded-3xl border border-white bg-white p-6 shadow-[0_24px_70px_rgba(17,28,45,0.22)]">
+        <div className="flex items-start justify-between gap-4">
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-700">
+            <AlertTriangle size={24} />
+          </span>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={deleting}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f3ff] text-[#3d4a3d] transition hover:bg-[#e7eeff] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Tutup dialog hapus kamar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <h2 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-[#111c2d]">
+          Hapus {room.room_name}?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[#3d4a3d]">
+          Kamar tanpa riwayat sewa akan dihapus dari daftar beserta foto yang tersimpan. Tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div className="mt-5 rounded-2xl bg-[#f9f9ff] p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#006e2f]">
+            Validasi sebelum hapus
+          </p>
+          <p className="mt-1 text-sm font-semibold text-[#111c2d]">
+            Jika kamar sudah memiliki occupancy atau riwayat pengajuan, backend akan menolak penghapusan dan sarankan ubah status menjadi maintenance.
+          </p>
+        </div>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <OwnerButton onClick={onCancel} variant="secondary" disabled={deleting}>
+            Batal
+          </OwnerButton>
+          <OwnerButton onClick={onConfirm} variant="danger" disabled={deleting}>
+            {deleting ? <Loader2 className="animate-spin" size={17} /> : <Trash2 size={17} />}
+            {deleting ? 'Menghapus...' : 'Ya, hapus kamar'}
+          </OwnerButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Page() {
   const [rooms, setRooms] = useState<OwnerRoomOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [roomPendingDelete, setRoomPendingDelete] = useState<OwnerRoomOverview | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
   const { branches, branchScope, setBranchScope, branchesLoading } = useOwnerBranchScope();
 
   const load = useCallback(async () => {
@@ -70,6 +138,37 @@ export default function Page() {
     void Promise.resolve().then(load);
   }, [load]);
   useAutoRefresh(load);
+
+  const openDeleteDialog = useCallback((room: OwnerRoomOverview) => {
+    setDeleteMessage('');
+
+    if (room.occupancy) {
+      setDeleteError(`Kamar ${room.room_name} masih memiliki occupancy aktif. Akhiri masa sewa atau ubah status kamar menjadi maintenance, bukan menghapus data kamar.`);
+      setRoomPendingDelete(null);
+      return;
+    }
+
+    setDeleteError('');
+    setRoomPendingDelete(room);
+  }, []);
+
+  const confirmDeleteRoom = useCallback(async () => {
+    if (!roomPendingDelete) return;
+
+    try {
+      setDeletingRoomId(roomPendingDelete.id);
+      setDeleteError('');
+      await deleteRoom(roomPendingDelete.id);
+      setRooms((current) => current.filter((room) => room.id !== roomPendingDelete.id));
+      setDeleteMessage(`Kamar ${roomPendingDelete.room_name} berhasil dihapus.`);
+      setRoomPendingDelete(null);
+      void load();
+    } catch (deleteFailure) {
+      setDeleteError(getAuthErrorMessage(deleteFailure, 'Kamar gagal dihapus. Pastikan kamar tidak memiliki occupancy atau riwayat sewa.'));
+    } finally {
+      setDeletingRoomId(null);
+    }
+  }, [load, roomPendingDelete]);
 
   const summary = useMemo(() => ({
     total: rooms.length,
@@ -125,6 +224,21 @@ export default function Page() {
         disabled={loading || branchesLoading}
         className="mb-8"
       />
+
+      {(deleteError || deleteMessage) && (
+        <div
+          className={`mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${
+            deleteError
+              ? 'border-red-100 bg-red-50 text-red-800'
+              : 'border-green-100 bg-green-50 text-green-800'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            {deleteError ? <AlertTriangle className="mt-0.5 shrink-0" size={18} /> : <Trash2 className="mt-0.5 shrink-0" size={18} />}
+            <p className="leading-6">{deleteError || deleteMessage}</p>
+          </div>
+        </div>
+      )}
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total Unit" value={summary.total} icon={BedDouble} tone="blue" />
@@ -224,6 +338,18 @@ export default function Page() {
                         <Eye size={17} />
                         Detail kamar
                       </OwnerButton>
+                      <OwnerButton href={`/owner/rooms/create?edit=${room.id}`} variant="secondary">
+                        <Pencil size={17} />
+                        Edit
+                      </OwnerButton>
+                      <OwnerButton
+                        onClick={() => openDeleteDialog(room)}
+                        variant="danger"
+                        disabled={deletingRoomId === room.id}
+                      >
+                        {deletingRoomId === room.id ? <Loader2 className="animate-spin" size={17} /> : <Trash2 size={17} />}
+                        Hapus
+                      </OwnerButton>
                       {occupancy ? (
                         <OwnerButton href={`/owner/tenants/${occupancy.rental_application_id}`}>
                           <UserRound size={17} />
@@ -243,6 +369,13 @@ export default function Page() {
           </div>
         )}
       </OwnerCard>
+
+      <DeleteRoomDialog
+        room={roomPendingDelete}
+        deleting={deletingRoomId === roomPendingDelete?.id}
+        onCancel={() => setRoomPendingDelete(null)}
+        onConfirm={() => void confirmDeleteRoom()}
+      />
     </OwnerPage>
   );
 }

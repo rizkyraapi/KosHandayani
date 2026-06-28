@@ -44,7 +44,7 @@ export default function OwnerLayout({
           .owner-page-shell {
             padding-left: 0 !important;
             padding-top: 72px;
-            padding-bottom: 76px;
+            padding-bottom: 0;
           }
         }
       `}</style>

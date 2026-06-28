@@ -31,6 +31,7 @@
     "rentalApplications": "Pengajuan Sewa",
     "home": "Beranda",
     "allRooms": "Semua Kamar",
+    "viewRooms": "Lihat Kamar",
     "help": "Bantuan",
     "login": "Masuk",
     "logout": "Keluar",
@@ -74,6 +75,7 @@
     "pendingPayment": "Menunggu Pembayaran",
     "paymentSuccessful": "Pembayaran Berhasil",
     "paymentFailed": "Pembayaran Gagal",
+    "paymentReview": "Perlu Ditinjau",
     "awaitingOwnerApproval": "Menunggu Persetujuan Pemilik",
     "applicationRejected": "Pengajuan Ditolak",
     "awaitingVerification": "Menunggu Verifikasi",
@@ -84,7 +86,8 @@
     "tenantArea": "Area Penyewa",
     "ownerArea": "Area Pemilik",
     "openMenu": "Buka menu",
-    "closeMenu": "Tutup menu"
+    "closeMenu": "Tutup menu",
+    "mobileNavigation": "Navigasi Utama"
   },
   "auth": {
     "loginTitle": "Masuk ke Akun Anda",
@@ -93,11 +96,25 @@
     "registerSubtitle": "Mulai ajukan kamar kos dengan proses yang rapi dan mudah.",
     "email": "Email",
     "password": "Kata Sandi",
+    "newPassword": "Password Baru",
     "confirmPassword": "Konfirmasi Kata Sandi",
     "fullName": "Nama Lengkap",
     "whatsapp": "Nomor WhatsApp",
     "rememberMe": "Ingat saya",
     "forgotPassword": "Lupa kata sandi?",
+    "forgotPasswordTitle": "Lupa Kata Sandi?",
+    "forgotPasswordSubtitle": "Masukkan email akun Anda. Jika email terdaftar, kami akan mengirim tautan reset password.",
+    "forgotPasswordFailed": "Gagal mengirim tautan reset password.",
+    "sendResetLink": "Kirim Tautan Reset",
+    "resetLinkSentTitle": "Periksa Email Anda",
+    "resetLinkSentDescription": "Jika email terdaftar, tautan reset password telah dikirim.",
+    "resetPasswordTitle": "Reset Kata Sandi",
+    "resetPasswordSubtitle": "Buat kata sandi baru yang kuat untuk akun KosHandayani Anda.",
+    "resetPasswordFailed": "Gagal memperbarui kata sandi.",
+    "resetTokenMissing": "Tautan reset password tidak lengkap atau tidak valid.",
+    "updatePassword": "Perbarui Kata Sandi",
+    "backToLogin": "Kembali ke Masuk",
+    "rememberPassword": "Ingat kata sandi? Masuk",
     "noAccount": "Belum punya akun?",
     "haveAccount": "Sudah punya akun?",
     "loginFailed": "Masuk gagal. Periksa email dan kata sandi.",
@@ -141,7 +158,8 @@
     "paymentPending": "Pembayaran sedang diproses.",
     "paymentCancelled": "Pembayaran dibatalkan.",
     "roomDeleted": "Kamar berhasil dihapus.",
-    "passwordChanged": "Kata sandi berhasil diubah."
+    "passwordChanged": "Kata sandi berhasil diubah.",
+    "passwordResetSuccess": "Kata sandi berhasil diperbarui."
   },
   "empty": {
     "noData": "Belum ada data",
@@ -167,7 +185,7 @@
       "subtitle": "Pantau okupansi, pembayaran, dan aktivitas terbaru.",
       "summaryTitle": "Ringkasan Properti",
       "welcome": "Selamat datang kembali.",
-      "branchActive": "Cabang 1: Aktif",
+      "branchActive": "Cabang aktif",
       "ownerAvatar": "Avatar pemilik",
       "totalIncome": "Total Pemasukan",
       "successfulPayments": "{{count}} pembayaran berhasil",
@@ -269,6 +287,9 @@
     }
   },
   "tenant": {
+    "nav": {
+      "applyRental": "Ajukan Sewa"
+    },
     "dashboard": {
       "title": "Dashboard Penyewa",
       "premiumTenant": "Penyewa Premium",
@@ -321,7 +342,9 @@
       "awaitingPaymentTitle": "Pengajuan Disetujui, Lanjutkan Pembayaran",
       "awaitingPaymentDescription": "Kamar sudah disetujui oleh pemilik kos. Selesaikan pembayaran agar hunian dapat diaktifkan.",
       "paymentTotal": "Total Pembayaran",
-      "viewAll": "Lihat Semua"
+      "viewAll": "Lihat Semua",
+      "noAnnouncements": "Belum ada pengumuman",
+      "noAnnouncementsDescription": "Informasi terbaru dari pengelola akan tampil di sini saat tersedia."
     },
     "applications": {
       "title": "Pengajuan Sewa",
@@ -401,7 +424,7 @@
       "totalPay": "Total Bayar",
       "payAgain": "Bayar Ulang",
       "continuePayment": "Lanjutkan Pembayaran",
-      "noActiveBill": "Belum ada tagihan aktif.",
+      "noActiveBill": "Tidak ada tagihan saat ini.",
       "securityNotice": "Pembayaran Anda dilindungi oleh sistem keamanan 256-bit SSL. Struk digital akan diterbitkan otomatis setelah verifikasi.",
       "needHelp": "Butuh Bantuan?",
       "contactConcierge": "Hubungi Digital Concierge kami",

@@ -15,6 +15,7 @@ import {
   type RentalApplication,
 } from '@/lib/api';
 import type { Locale } from '@/lib/i18n';
+import { getPaymentMetaFromPayment } from '@/lib/paymentStatus';
 import { getDurationInMonths, getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -23,15 +24,13 @@ import { getDurationInMonths, getRentalPaymentBreakdown } from '@/lib/rental-pay
    Nothing outside this file needs changing.
 ═══════════════════════════════════════════════════════════════ */
 const CUSTOM_STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
 
 /* ── Base ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
-html { font-family: 'Inter', sans-serif; }
-body { font-family: 'Inter', sans-serif; }
-.font-manrope { font-family: 'Manrope', sans-serif !important; }
-.font-inter    { font-family: 'Inter',   sans-serif !important; }
+html { font-family: var(--font-manrope), Manrope, sans-serif; }
+body { font-family: var(--font-manrope), Manrope, sans-serif; }
+.font-manrope { font-family: var(--font-manrope), Manrope, sans-serif !important; }
+.font-inter    { font-family: var(--font-manrope), Manrope, sans-serif !important; }
 
 /* ── Material Symbols ─────────────────────────────── */
 .material-symbols-outlined {
@@ -215,12 +214,12 @@ const NAV_ITEMS = [
 ];
 
 const HOUSE_RULES = [
-  { icon: 'group',        color: 'text-primary',  label: 'Maks. 2 orang/kamar'  },
-  { icon: 'person_off',   color: 'text-tertiary', label: 'Tidak untuk pasutri'   },
-  { icon: 'child_care',   color: 'text-tertiary', label: 'Tidak boleh bawa anak' },
-  { icon: 'schedule',     color: 'text-primary',  label: 'Akses 24 Jam'          },
-  { icon: 'person_alert', color: 'text-primary',  label: 'Ada jam malam tamu'    },
-  { icon: 'badge',        color: 'text-primary',  label: 'Khusus karyawan'       },
+  'Maks. 2 orang per kamar',
+  'Tidak untuk pasutri',
+  'Tidak boleh membawa anak',
+  'Akses penghuni 24 jam',
+  'Tamu mengikuti jam malam',
+  'Khusus karyawan',
 ];
 
 const ROOM_AMENITIES = ['ac_unit', 'wifi', 'shower'];
@@ -239,16 +238,16 @@ const QUICK_ACTIONS = [
     bg: 'bg-tertiary-container-20',
     color: 'text-tertiary',
     title: 'Bantuan',
-    desc: 'Layanan pengaduan',
-    href: '#',
+    desc: 'Layanan pengaduan belum tersedia',
+    href: null,
   },
   {
     icon: 'qr_code_2',
     bg: 'bg-primary-container-20',
     color: 'text-primary',
     title: 'Akses Gate',
-    desc: 'QR Code pintu utama',
-    href: '#',
+    desc: 'Akses digital belum tersedia',
+    href: null,
   },
   {
     icon: 'account_balance_wallet',
@@ -260,22 +259,16 @@ const QUICK_ACTIONS = [
   },
 ];
 
-const ANNOUNCEMENTS = [
-  {
-    type: 'image' as const,
-    src: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCIhfNOi1gWADlGjw2_QiSAUQ-IFuL-Ti4w_nVjw495aY-KSvC8iYJA8BZsTmpunL397cV111NF8xKKG7YOLb4364je4ryWla4GpNdCFRZlygRZ7p5WLa9NZZddV6n5lacRVyynxVpIjeUnv3HMu0rFW7tyfGzT6wLEZubCFbQVS4exqRGIr6SU3gmrhB2B0OqTzk5pmGMR6cm4Sq8kgsHQ8bwpY6_rwREtIxvJcPjaKGy840zku1Wp913QHOCWTBHmeIPsJvYHDKhH',
-    badge: 'TERBARU',
-    title: 'Pembersihan Area Dapur Bersama',
-    body: 'Diberitahukan bahwa area dapur lantai 2 akan dibersihkan secara menyeluruh pada hari Sabtu, 31 Agustus pukul 10:00 – 14:00 WIB.',
-  },
-  {
-    type: 'icon' as const,
-    icon: 'wifi_tethering',
-    badge: null,
-    title: 'Upgrade Kapasitas Internet',
-    body: 'Peningkatan bandwidth internet sedang dilakukan untuk kenyamanan bekerja dari kos. Estimasi selesai sore ini.',
-  },
-];
+type Announcement = {
+  type: 'image' | 'icon';
+  src?: string;
+  icon?: string;
+  badge?: string | null;
+  title: string;
+  body: string;
+};
+
+const ANNOUNCEMENTS: Announcement[] = [];
 
 function formatRupiah(value?: number | null) {
   return new Intl.NumberFormat('id-ID', {
@@ -290,21 +283,10 @@ function formatDate(value?: string | null, locale: Locale = 'id') {
   return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'id-ID', { dateStyle: 'medium' }).format(new Date(value));
 }
 
-function normalizePaymentStatus(payment?: Payment | null) {
-  if (!payment) return 'none';
-  if (payment.rental_application?.payment_status === 'paid' || ['settlement', 'capture'].includes(payment.transaction_status)) return 'paid';
-  if (payment.rental_application?.payment_status === 'failed' || ['expire', 'cancel', 'deny'].includes(payment.transaction_status)) return 'failed';
-
-  return 'pending';
-}
-
 function getPaymentStatusLabel(payment: Payment | null | undefined, t: (key: string) => string) {
-  const status = normalizePaymentStatus(payment);
-  if (status === 'paid') return t('status.paid');
-  if (status === 'failed') return t('status.failed');
-  if (status === 'pending') return t('status.pendingPayment');
+  if (!payment) return t('tenant.billing.noActiveBill');
 
-  return t('tenant.billing.noActiveBill');
+  return t(getPaymentMetaFromPayment(payment).labelKey);
 }
 
 function parseDateOnly(value?: string | null) {
@@ -859,12 +841,20 @@ export default function Page() {
             )}
           </div>
           <div className="flex gap-3">
-            <button className="p-3 bg-surface-container-lowest rounded-xl shadow-sm hover-bg-surface-container transition-colors">
+            <span
+              aria-label="Notifikasi belum tersedia"
+              role="status"
+              className="p-3 bg-surface-container-lowest rounded-xl shadow-sm text-on-surface-variant opacity-70"
+            >
               <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
-            </button>
-            <button className="p-3 bg-surface-container-lowest rounded-xl shadow-sm hover-bg-surface-container transition-colors">
+            </span>
+            <span
+              aria-label="Pengaturan cepat belum tersedia"
+              role="status"
+              className="p-3 bg-surface-container-lowest rounded-xl shadow-sm text-on-surface-variant opacity-70"
+            >
               <span className="material-symbols-outlined text-on-surface-variant">settings</span>
-            </button>
+            </span>
           </div>
         </header>
 
@@ -915,27 +905,32 @@ export default function Page() {
         ) : (
           <>
         {/* House Rules */}
-        <div className="mb-10 bg-surface-container-low-50 border border-outline-variant-30 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3 px-2">
-            <span className="material-symbols-outlined text-primary text-sm">gavel</span>
-            <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-              Peraturan Hunian
-            </h4>
+        <section className="mb-10 rounded-2xl border border-outline-variant-20 bg-surface-container-low-50 p-5">
+          <div className="mb-4 flex items-start gap-3">
+            <span className="material-symbols-outlined rounded-xl bg-white p-2 text-primary shadow-sm">gavel</span>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                Peraturan Hunian
+              </h4>
+              <p className="mt-1 text-sm font-medium leading-6 text-on-surface-variant">
+                Ringkasan aturan utama selama tinggal di KosHandayani.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            {HOUSE_RULES.map((rule) => (
-              <div
-                key={rule.label}
-                className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-outline-variant-20 shadow-sm"
+          <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {HOUSE_RULES.map((rule, index) => (
+              <li
+                key={rule}
+                className="flex items-start gap-3 rounded-xl border border-outline-variant-20 bg-white/70 px-3 py-3"
               >
-                <span className={`material-symbols-outlined ${rule.color} text-lg`}>
-                  {rule.icon}
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary-container text-[11px] font-extrabold text-primary">
+                  {index + 1}
                 </span>
-                <span className="text-xs font-semibold text-on-surface">{rule.label}</span>
-              </div>
+                <span className="text-sm font-semibold leading-6 text-on-surface">{rule}</span>
+              </li>
             ))}
-          </div>
-        </div>
+          </ol>
+        </section>
 
         <section
           className="mb-10 rounded-2xl p-5 lg:p-6 shadow-sm"
@@ -1039,7 +1034,7 @@ export default function Page() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
                 <Link href="/tenant/tagihan" className="bg-linear-to-r from-primary to-primary-container text-on-primary py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-3 hover-shadow-primary-20 transition-all active:scale-95 group">
-                  {normalizePaymentStatus(activePayment) === 'paid' ? t('tenant.dashboard.viewBill') : t('tenant.applications.payNow')}
+                  {getPaymentMetaFromPayment(activePayment).isPaid ? t('tenant.dashboard.viewBill') : t('tenant.applications.payNow')}
                   <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
                     arrow_forward
                   </span>
@@ -1110,14 +1105,11 @@ export default function Page() {
               Akses Cepat
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
-              {QUICK_ACTIONS.map((action) => (
-                <a
-                  key={action.title}
-                  href={action.href}
-                  className="group bg-surface-container-lowest p-5 lg:p-6 rounded-2xl shadow-sm hover:shadow-md transition-all hover:-translate-y-1"
-                >
+              {QUICK_ACTIONS.map((action) => {
+                const content = (
+                  <>
                   <div
-                    className={`w-12 h-12 rounded-xl ${action.bg} ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+                    className={`w-12 h-12 rounded-xl ${action.bg} ${action.color} flex items-center justify-center mb-4 transition-transform ${action.href ? 'group-hover:scale-110' : ''}`}
                   >
                     <span
                       className="material-symbols-outlined"
@@ -1128,8 +1120,27 @@ export default function Page() {
                   </div>
                   <h5 className="font-bold text-on-surface">{action.title}</h5>
                   <p className="text-xs text-on-surface-variant mt-1">{action.desc}</p>
-                </a>
-              ))}
+                  </>
+                );
+
+                return action.href ? (
+                  <Link
+                    key={action.title}
+                    href={action.href}
+                    className="group bg-surface-container-lowest p-5 lg:p-6 rounded-2xl shadow-sm hover:shadow-md transition-all hover:-translate-y-1"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div
+                    key={action.title}
+                    aria-disabled="true"
+                    className="bg-surface-container-lowest p-5 lg:p-6 rounded-2xl shadow-sm opacity-75"
+                  >
+                    {content}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -1140,15 +1151,21 @@ export default function Page() {
                 <h4 className="text-xl font-bold font-manrope text-on-surface">
                   Pengumuman Terkini
                 </h4>
-                <button className="text-primary font-bold text-sm">Lihat Semua</button>
+                <span className="text-on-surface-variant text-sm font-bold">Informasi</span>
               </div>
+              {ANNOUNCEMENTS.length === 0 ? (
+                <EmptyState
+                  title={t('tenant.dashboard.noAnnouncements')}
+                  description={t('tenant.dashboard.noAnnouncementsDescription')}
+                />
+              ) : (
               <div className="space-y-6">
                 {ANNOUNCEMENTS.map((item, idx) => (
                   <div
                     key={item.title}
                     className={`flex gap-4 lg:gap-6 items-start${idx > 0 ? ' pt-6 border-t border-slate-100' : ''}`}
                   >
-                    {item.type === 'image' ? (
+                    {item.type === 'image' && item.src ? (
                       <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0">
                         <img
                           src={item.src}
@@ -1175,6 +1192,7 @@ export default function Page() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           </div>
 
@@ -1191,7 +1209,10 @@ export default function Page() {
               {applicationsError ? (
                 <p className="text-error text-sm font-bold">{applicationsError}</p>
               ) : visibleApplications.length === 0 ? (
-                <p className="text-on-surface-variant text-sm">{t('empty.noApplications')}</p>
+                <EmptyState
+                  title={t('empty.noApplications')}
+                  description={t('owner.applications.emptyDescription')}
+                />
               ) : (
                 <div className="space-y-3">
                   {visibleApplications.map((application) => (
@@ -1217,19 +1238,23 @@ export default function Page() {
 
         {/* Footer */}
         <footer className="mt-16 pb-8 flex flex-col items-center gap-4 text-slate-500 text-xs">
-          <p>© 2024 KosHandayani. Digital Concierge Property Management.</p>
-          <div className="flex gap-6">
-            <a href="#" className="hover:text-green-600 transition-colors">Tentang Kami</a>
-            <a href="#" className="hover:text-green-600 transition-colors">Syarat &amp; Ketentuan</a>
-            <a href="#" className="hover:text-green-600 transition-colors">Kebijakan Privasi</a>
+          <p>© 2026 KosHandayani. Digital Concierge Property Management.</p>
+          <div className="flex flex-wrap justify-center gap-6">
+            <span>Tentang Kami</span>
+            <span>Syarat &amp; Ketentuan</span>
+            <span>Kebijakan Privasi</span>
           </div>
         </footer>
       </main>
 
       {/* FAB */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50">
+      <div
+        aria-label="Chat belum tersedia"
+        role="status"
+        className="fixed bottom-8 right-8 w-14 h-14 bg-primary/80 text-on-primary rounded-full shadow-2xl flex items-center justify-center z-50"
+      >
         <span className="material-symbols-outlined">chat</span>
-      </button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\EmailPreviewController;
 use App\Http\Controllers\EmailVerificationController;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Route;
 // PUBLIC
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1');
+Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1');
 Route::get('/branches', [BranchController::class, 'index']);
 Route::get('/rooms', [RoomController::class, 'index']);
 Route::get('/rooms/{room}', [RoomController::class, 'show']);
@@ -59,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/payments/renewal/create', [PaymentController::class, 'createRenewal'])->middleware('verified.email');
         Route::post('/payments/sync-status', [PaymentController::class, 'syncStatus']);
         Route::get('/my-payments', [PaymentController::class, 'index']);
+        Route::get('/payments/{payment}/receipt', [PaymentController::class, 'receipt'])->whereNumber('payment');
         Route::get('/payments/{id}', [PaymentController::class, 'show'])->whereNumber('id');
     });
 
@@ -88,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/debug/email-verification/{userId}', [EmailVerificationController::class, 'debug'])
                 ->whereNumber('userId');
             Route::get('/debug/email-preview/verification', [EmailPreviewController::class, 'verification']);
+            Route::get('/debug/email-preview/password-reset', [EmailPreviewController::class, 'passwordReset']);
             Route::get('/debug/email-preview/reminder', [EmailPreviewController::class, 'reminder']);
             Route::get('/debug/email-preview/overdue', [EmailPreviewController::class, 'overdue']);
         }

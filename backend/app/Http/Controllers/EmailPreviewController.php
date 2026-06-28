@@ -44,6 +44,16 @@ class EmailPreviewController extends Controller
         ]);
     }
 
+    public function passwordReset(): Response
+    {
+        $this->ensureLocal();
+
+        return response()->view('emails.password-reset', [
+            'userName' => 'Rizky Ramadhan',
+            'resetUrl' => rtrim(config('app.frontend_url'), '/').'/reset-password?token=preview-token&email=preview%40koshandayani.test',
+        ]);
+    }
+
     public function overdue(): Response
     {
         $this->ensureLocal();

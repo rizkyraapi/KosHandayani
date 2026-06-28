@@ -81,7 +81,7 @@ export default function Page() {
   return (
     <main
       className="min-h-screen bg-[#f9f9ff] px-4 py-6 text-[#111c2d] sm:px-6 lg:px-8 lg:py-8"
-      style={{ fontFamily: 'var(--font-inter), Inter, sans-serif' }}
+      style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
     >
       <div className="mx-auto max-w-6xl">
         {isLoading ? (

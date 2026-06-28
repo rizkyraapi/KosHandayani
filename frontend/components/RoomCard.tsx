@@ -42,9 +42,6 @@ export default function RoomCard({
   const { t } = useLanguage();
   const [isHovered, setIsHovered] = React.useState(false);
   const [failedImageUrl, setFailedImageUrl] = React.useState<string | null>(null);
-  const [buttonHoverStates, setButtonHoverStates] = React.useState({
-    favoriteButton: false,
-  });
   const resolvedImageUrl = imageUrl || fallbackImageUrl;
   const displayedImageUrl = failedImageUrl === resolvedImageUrl ? fallbackImageUrl : resolvedImageUrl;
   const normalizedStatus = status === 'Kosong' ? 'available' : status === 'Terisi' ? 'occupied' : status;
@@ -119,27 +116,27 @@ export default function RoomCard({
           </span>
         </div>
         <div className="room-favorite-wrap" style={{ position: 'absolute', top: '16px', right: '16px' }}>
-          <button
+          <span
+            aria-label={t('common.comingSoon')}
+            role="status"
             className="room-favorite"
             style={{
               padding: '8px',
-              backgroundColor: buttonHoverStates.favoriteButton ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.2)',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
               borderRadius: '50%',
               color: '#ffffff',
               border: 'none',
-              cursor: 'pointer',
+              cursor: 'default',
+              opacity: 0.75,
               transition: 'background-color 0.2s',
             }}
-            onMouseEnter={() => setButtonHoverStates({ ...buttonHoverStates, favoriteButton: true })}
-            onMouseLeave={() => setButtonHoverStates({ ...buttonHoverStates, favoriteButton: false })}
-            onClick={(event) => event.stopPropagation()}
           >
             <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
               favorite
             </span>
-          </button>
+          </span>
         </div>
       </div>
 
@@ -251,7 +248,7 @@ export default function RoomCard({
               style={{
                 fontSize: '1.25rem',
                 fontWeight: 700,
-                fontFamily: 'Manrope, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                 color: isHovered ? '#006e2f' : '#111c2d',
                 transition: 'color 0.2s',
                 margin: 0,

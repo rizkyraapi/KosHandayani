@@ -865,6 +865,123 @@ class PaymentFlowTest extends TestCase
         ]);
     }
 
+    public function test_tenant_can_download_initial_payment_receipt_pdf(): void
+    {
+        $tenant = User::factory()->create([
+            'role' => 'tenant',
+            'name' => 'Tenant Receipt',
+            'email' => 'tenant-receipt@koshandayani.test',
+        ]);
+        $room = $this->createRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room, '3 Bulan');
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'payment_category' => Payment::CATEGORY_INITIAL_RENT,
+            'order_id' => 'KH-RECEIPT-INITIAL',
+            'transaction_id' => 'TX-INITIAL-1',
+            'subtotal_amount' => 1500000,
+            'discount_amount' => 100000,
+            'duration_months' => 3,
+            'monthly_price' => 500000,
+            'period_start' => '2026-06-10',
+            'period_end' => '2026-09-10',
+            'gross_amount' => 1400000,
+            'payment_type' => 'bank_transfer',
+            'transaction_status' => 'settlement',
+            'paid_at' => now(),
+            'settlement_time' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($tenant)
+            ->get('/api/payments/'.$payment->id.'/receipt');
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+        $this->assertStringContainsString('filename=', (string) $response->headers->get('content-disposition'));
+    }
+
+    public function test_tenant_can_download_renewal_payment_receipt_pdf(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $room = $this->createOccupiedRoom(500000);
+        $application = $this->createPaidApplication($tenant, $room);
+        $occupancy = $this->createActiveOccupancy($tenant, $room, $application);
+        $payment = Payment::create([
+            'rental_application_id' => $application->id,
+            'room_occupancy_id' => $occupancy->id,
+            'payment_category' => Payment::CATEGORY_RENEWAL,
+            'order_id' => 'KH-RECEIPT-RENEWAL',
+            'transaction_id' => 'TX-RENEWAL-1',
+            'subtotal_amount' => 1500000,
+            'discount_amount' => 100000,
+            'duration_months' => 3,
+            'monthly_price' => 500000,
+            'period_start' => '2026-09-11',
+            'period_end' => '2026-12-11',
+            'gross_amount' => 1400000,
+            'payment_type' => 'bank_transfer',
+            'transaction_status' => 'capture',
+            'paid_at' => now(),
+            'settlement_time' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($tenant)
+            ->get('/api/payments/'.$payment->id.'/receipt');
+
+        $response
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+    }
+
+    public function test_receipt_download_requires_successful_owned_tenant_payment(): void
+    {
+        $tenant = User::factory()->create(['role' => 'tenant']);
+        $otherTenant = User::factory()->create(['role' => 'tenant']);
+        $owner = User::factory()->create(['role' => 'owner']);
+        $pendingApplication = $this->createApprovedApplication($tenant, $this->createRoom(500000));
+        $pendingPayment = Payment::create([
+            'rental_application_id' => $pendingApplication->id,
+            'payment_category' => Payment::CATEGORY_INITIAL_RENT,
+            'order_id' => 'KH-RECEIPT-PENDING',
+            'gross_amount' => 500000,
+            'transaction_status' => 'pending',
+            'snap_token' => 'pending-token',
+        ]);
+        $otherApplication = $this->createPaidApplication($otherTenant, $this->createRoom(500000));
+        $otherPayment = Payment::create([
+            'rental_application_id' => $otherApplication->id,
+            'payment_category' => Payment::CATEGORY_INITIAL_RENT,
+            'order_id' => 'KH-RECEIPT-OTHER',
+            'gross_amount' => 500000,
+            'transaction_status' => 'settlement',
+            'paid_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($tenant)
+            ->getJson('/api/payments/'.$pendingPayment->id.'/receipt')
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Bukti pembayaran tersedia setelah pembayaran berhasil.');
+
+        $this
+            ->actingAs($tenant)
+            ->getJson('/api/payments/'.$otherPayment->id.'/receipt')
+            ->assertNotFound();
+
+        $this
+            ->actingAs($owner)
+            ->getJson('/api/payments/'.$otherPayment->id.'/receipt')
+            ->assertForbidden();
+    }
+
     public static function durationDiscountCases(): array
     {
         return [

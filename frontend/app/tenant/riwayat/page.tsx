@@ -1,41 +1,36 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getMyPayments, getMyRentalApplications, type Payment, type RentalApplication } from '@/lib/api';
+import {
+  downloadPaymentReceipt,
+  getMyPayments,
+  getMyRentalApplications,
+  type Payment,
+  type RentalApplication,
+} from '@/lib/api';
 import type { AuthUser } from '@/lib/auth';
+import {
+  getPaymentMetaFromApplication,
+  getPaymentMetaFromPayment,
+  getPaymentStatusMetaFromKey,
+  type PaymentStatusKey,
+} from '@/lib/paymentStatus';
 import { getDurationInMonths, getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 /* ─────────────────────────────────────────────
    INJECT FONTS & MATERIAL SYMBOLS
 ───────────────────────────────────────────── */
-const GOOGLE_FONTS_URL =
-  'https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap';
-const MATERIAL_SYMBOLS_URL =
-  'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap';
-
-function useInjectLink(href: string) {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${href}"]`)) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = href;
-    document.head.appendChild(link);
-  }, [href]);
-}
-
 /* ─────────────────────────────────────────────
    INLINE STYLES (Material Symbols + glass-effect)
 ───────────────────────────────────────────── */
 const inlineCSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; }
 
-  body { font-family: 'Inter', sans-serif; margin: 0; }
+  body { font-family: var(--font-manrope), Manrope, sans-serif; margin: 0; }
 
-  .font-headline { font-family: 'Manrope', sans-serif; }
+  .font-headline { font-family: var(--font-manrope), Manrope, sans-serif; }
 
   .material-symbols-outlined {
     font-family: 'Material Symbols Outlined';
@@ -134,6 +129,7 @@ const cssVarsCSS = `
 ───────────────────────────────────────────── */
 interface Transaction {
   id: string;
+  paymentId?: number;
   period: string;
   periodDetail: string;
   typeLabel: string;
@@ -143,8 +139,11 @@ interface Transaction {
   subtotal: string;
   discount: string;
   discountValue: number;
-  status: 'Lunas' | 'Gagal' | 'Pending';
+  status: PaymentStatusKey;
+  canDownloadReceipt: boolean;
 }
+
+const RECEIPT_READY_STATUSES = new Set(['settlement', 'capture']);
 
 function formatRupiah(value?: number | null) {
   return new Intl.NumberFormat('id-ID', {
@@ -165,17 +164,11 @@ function formatPeriod(value?: string | null) {
 }
 
 function normalizePaymentStatus(payment: Payment): Transaction['status'] {
-  if (payment.rental_application?.payment_status === 'paid' || ['settlement', 'capture'].includes(payment.transaction_status)) return 'Lunas';
-  if (payment.rental_application?.payment_status === 'failed' || ['expire', 'cancel', 'deny'].includes(payment.transaction_status)) return 'Gagal';
-
-  return 'Pending';
+  return getPaymentMetaFromPayment(payment).key;
 }
 
 function normalizeApplicationStatus(application: RentalApplication): Transaction['status'] {
-  if (application.payment_status === 'paid') return 'Lunas';
-  if (application.payment_status === 'failed' || application.status === 'rejected') return 'Gagal';
-
-  return 'Pending';
+  return getPaymentMetaFromApplication(application).key;
 }
 
 function buildTransactions(payments: Payment[], applications: RentalApplication[], t: (key: string, params?: Record<string, string | number>) => string): Transaction[] {
@@ -193,6 +186,7 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
 
     return {
       id: payment.order_id,
+      paymentId: payment.id,
       period: payment.period_start && payment.period_end
         ? `${formatDate(payment.period_start)} - ${formatDate(payment.period_end)}`
         : formatPeriod(payment.paid_at ?? payment.created_at),
@@ -205,6 +199,7 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
       discount: breakdown.discountAmount > 0 ? `-${formatRupiah(breakdown.discountAmount)}` : formatRupiah(0),
       discountValue: breakdown.discountAmount,
       status: normalizePaymentStatus(payment),
+      canDownloadReceipt: RECEIPT_READY_STATUSES.has(payment.transaction_status.toLowerCase()),
     };
   });
   const applicationRows = applications
@@ -231,6 +226,7 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
         discount: breakdown.discountAmount > 0 ? `-${formatRupiah(breakdown.discountAmount)}` : formatRupiah(0),
         discountValue: breakdown.discountAmount,
         status: normalizeApplicationStatus(application),
+        canDownloadReceipt: false,
       };
     });
 
@@ -240,14 +236,15 @@ function buildTransactions(payments: Payment[], applications: RentalApplication[
 interface NavItem {
   icon: string;
   labelKey: string;
+  href: string;
   active?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { icon: 'dashboard', labelKey: 'common.myRoom' },
-  { icon: 'receipt_long', labelKey: 'common.bill' },
-  { icon: 'history', labelKey: 'common.history', active: true },
-  { icon: 'person', labelKey: 'common.profile' },
+  { icon: 'dashboard', labelKey: 'common.myRoom', href: '/tenant/dashboard' },
+  { icon: 'receipt_long', labelKey: 'common.bill', href: '/tenant/tagihan' },
+  { icon: 'history', labelKey: 'common.history', href: '/tenant/riwayat', active: true },
+  { icon: 'person', labelKey: 'common.profile', href: '/tenant/profil' },
 ];
 
 /* ─────────────────────────────────────────────
@@ -264,8 +261,9 @@ function Icon({ name, className = '', style }: { name: string; className?: strin
 
 function StatusBadge({ status }: { status: Transaction['status'] }) {
   const { t } = useLanguage();
+  const meta = getPaymentStatusMetaFromKey(status);
 
-  if (status === 'Lunas') {
+  if (meta.isPaid) {
     return (
       <span
         style={{
@@ -275,11 +273,11 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
         }}
         className="text-[11px] font-bold px-3 py-1 rounded-full"
       >
-        {t('status.paid')}
+        {t(meta.labelKey)}
       </span>
     );
   }
-  if (status === 'Gagal') {
+  if (meta.isFailed) {
     return (
       <span
         style={{
@@ -289,7 +287,7 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
         }}
         className="text-[11px] font-bold px-3 py-1 rounded-full"
       >
-        {t('status.failed')}
+        {t(meta.labelKey)}
       </span>
     );
   }
@@ -302,7 +300,7 @@ function StatusBadge({ status }: { status: Transaction['status'] }) {
       }}
       className="text-[11px] font-bold px-3 py-1 rounded-full"
     >
-      {t('status.pending')}
+      {t(meta.labelKey)}
     </span>
   );
 }
@@ -367,19 +365,19 @@ function SideNav({
         <nav className="flex flex-col flex-1 space-y-1">
           {navItems.map((item) =>
             item.active ? (
-              <a
+              <Link
                 key={item.labelKey}
-                href="#"
+                href={item.href}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-sm font-semibold text-sm translate-x-1 transition-transform"
                 style={{ background: '#ffffff', color: '#16a34a' }}
               >
                 <Icon name={item.icon} />
                 {t(item.labelKey)}
-              </a>
+              </Link>
             ) : (
-              <a
+              <Link
                 key={item.labelKey}
-                href="#"
+                href={item.href}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-sm font-medium"
                 style={{ color: '#64748b' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#e2e8f0')}
@@ -387,7 +385,7 @@ function SideNav({
               >
                 <Icon name={item.icon} />
                 {t(item.labelKey)}
-              </a>
+              </Link>
             )
           )}
         </nav>
@@ -443,7 +441,7 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
       <div className="flex items-center gap-2 sm:gap-4" style={{ paddingLeft: '0' }}>
         {/* Mobile hamburger */}
         <button
-          className="lg:hidden p-2 rounded-full transition-colors"
+          className="tenant-local-menu-button lg:hidden p-2 rounded-full transition-colors"
           style={{ color: '#64748b' }}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(226,232,240,0.5)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -452,16 +450,17 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
           <Icon name="menu" />
         </button>
 
-        <button
+        <Link
+          href="/tenant/dashboard"
           className="hidden lg:flex p-2 rounded-full transition-colors"
           style={{ color: '#64748b' }}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(226,232,240,0.5)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
           <Icon name="arrow_back" />
-        </button>
+        </Link>
         <nav className="flex text-xs font-medium gap-2 items-center" style={{ color: '#94a3b8' }}>
-          <a href="#" className="hover:text-green-700 transition-colors">{t('common.myRoom')}</a>
+          <Link href="/tenant/dashboard" className="hover:text-green-700 transition-colors">{t('common.myRoom')}</Link>
           <Icon name="chevron_right" className="text-[10px]" />
           <span className="font-bold" style={{ color: '#006e2f' }}>{t('common.history')}</span>
         </nav>
@@ -469,26 +468,26 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
 
       {/* Right */}
       <div className="flex items-center gap-2 sm:gap-4" style={{ marginLeft: 'calc(256px)' }}>
-        <button
-          className="p-2 rounded-full transition-colors relative"
-          style={{ color: '#64748b' }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(226,232,240,0.5)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        <span
+          aria-label="Notifikasi belum tersedia"
+          role="status"
+          className="p-2 rounded-full relative"
+          style={{ color: '#94a3b8' }}
         >
           <Icon name="notifications" />
           <span
             className="absolute top-2 right-2 w-2 h-2 rounded-full"
             style={{ background: '#ef4444', border: '2px solid #f8fafc' }}
           />
-        </button>
-        <button
-          className="p-2 rounded-full transition-colors"
-          style={{ color: '#64748b' }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(226,232,240,0.5)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        </span>
+        <span
+          aria-label="Bantuan belum tersedia"
+          role="status"
+          className="p-2 rounded-full"
+          style={{ color: '#94a3b8' }}
         >
           <Icon name="help_outline" />
-        </button>
+        </span>
       </div>
     </header>
   );
@@ -496,7 +495,7 @@ function TopHeader({ onMenuToggle }: { onMenuToggle: () => void }) {
 
 function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
   const { t } = useLanguage();
-  const paidTransactions = transactions.filter((transaction) => transaction.status === 'Lunas');
+  const paidTransactions = transactions.filter((transaction) => transaction.status === 'paid');
   const totalPaid = paidTransactions.reduce((total, transaction) => total + transaction.amountValue, 0);
   const lastPaid = paidTransactions[0];
 
@@ -557,7 +556,7 @@ function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
               className="text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest"
               style={{ background: 'rgba(34,197,94,0.2)', color: '#004b1e' }}
             >
-              {lastPaid?.status === 'Lunas' ? t('status.paid') : lastPaid?.status === 'Gagal' ? t('status.failed') : t('status.pending')}
+              {lastPaid ? t(getPaymentStatusMetaFromKey(lastPaid.status).labelKey) : t('status.pendingPayment')}
             </span>
           </div>
           <p className="text-sm mb-1" style={{ color: '#3d4a3d' }}>{t('tenant.history.latestStatus')}</p>
@@ -573,10 +572,52 @@ function SummaryGrid({ transactions }: { transactions: Transaction[] }) {
   );
 }
 
+function saveBlobAsFile(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function ReceiptDownloadButton({
+  transaction,
+  isDownloading,
+  onDownload,
+}: {
+  transaction: Transaction;
+  isDownloading: boolean;
+  onDownload: (transaction: Transaction) => void;
+}) {
+  const { t } = useLanguage();
+  const disabled = !transaction.paymentId || !transaction.canDownloadReceipt || isDownloading;
+  const unavailableText = 'Bukti pembayaran tersedia setelah pembayaran berhasil.';
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={disabled ? unavailableText : t('tenant.history.download')}
+      aria-label={disabled ? unavailableText : t('tenant.history.download')}
+      onClick={() => onDownload(transaction)}
+      className="inline-flex items-center gap-1 text-sm font-bold transition-colors disabled:cursor-not-allowed"
+      style={{ color: disabled ? '#94a3b8' : '#006e2f' }}
+    >
+      <Icon name="download" style={{ fontSize: '18px' }} />
+      {isDownloading ? 'Mengunduh...' : t('tenant.history.download')}
+    </button>
+  );
+}
+
 function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [downloadingPaymentId, setDownloadingPaymentId] = useState<number | null>(null);
   const rowsPerPage = 4;
 
   const filtered = transactions.filter((t) =>
@@ -585,6 +626,22 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
   const paginated = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  async function handleDownloadReceipt(transaction: Transaction) {
+    if (!transaction.paymentId || !transaction.canDownloadReceipt || downloadingPaymentId) {
+      return;
+    }
+
+    try {
+      setDownloadingPaymentId(transaction.paymentId);
+      const { blob, filename } = await downloadPaymentReceipt(transaction.paymentId);
+      saveBlobAsFile(blob, filename);
+    } catch {
+      window.alert('Bukti pembayaran belum dapat diunduh. Silakan coba lagi.');
+    } finally {
+      setDownloadingPaymentId(null);
+    }
+  }
 
   return (
     <div
@@ -611,14 +668,14 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
               style={{ color: '#111c2d' }}
             />
           </div>
-          <button
-            className="p-2 rounded-lg transition-colors"
-            style={{ color: '#3d4a3d' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          <span
+            aria-label="Filter tambahan belum tersedia"
+            role="status"
+            className="p-2 rounded-lg"
+            style={{ color: '#94a3b8' }}
           >
             <Icon name="filter_list" />
-          </button>
+          </span>
         </div>
       </div>
 
@@ -652,7 +709,7 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
               >
                 <td className="px-8 py-6 font-mono text-sm font-semibold" style={{ color: '#006e2f' }}>
                   {tx.id}
-                  <div className="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold" style={{ background: '#eefdf2', color: '#006e2f', fontFamily: 'Inter, sans-serif' }}>
+                  <div className="mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold" style={{ background: '#eefdf2', color: '#006e2f', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
                     {tx.typeLabel}
                   </div>
                 </td>
@@ -673,17 +730,11 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
                   </div>
                 </td>
                 <td className="px-8 py-6 text-right">
-                  {tx.status !== 'Gagal' ? (
-                    <button
-                      className="inline-flex items-center gap-1 text-sm font-bold transition-all hover:underline"
-                      style={{ color: '#006e2f' }}
-                    >
-                      <Icon name="download" className="" style={{ fontSize: '18px' }} />
-                      {t('tenant.history.download')}
-                    </button>
-                  ) : (
-                    <span className="text-xs italic" style={{ color: '#cbd5e1' }}>N/A</span>
-                  )}
+                  <ReceiptDownloadButton
+                    transaction={tx}
+                    isDownloading={downloadingPaymentId === tx.paymentId}
+                    onDownload={handleDownloadReceipt}
+                  />
                 </td>
               </tr>
             ))}
@@ -712,17 +763,11 @@ function TransactionsTable({ transactions }: { transactions: Transaction[] }) {
                   {t('tenant.history.discountReceived')}: {tx.discount}
                 </p>
               </div>
-              {tx.status !== 'Gagal' ? (
-                <button
-                  className="inline-flex items-center gap-1 text-sm font-bold"
-                  style={{ color: '#006e2f' }}
-                >
-                  <Icon name="download" style={{ fontSize: '18px' }} />
-                  {t('tenant.history.download')}
-                </button>
-              ) : (
-                <span className="text-xs italic" style={{ color: '#cbd5e1' }}>N/A</span>
-              )}
+              <ReceiptDownloadButton
+                transaction={tx}
+                isDownloading={downloadingPaymentId === tx.paymentId}
+                onDownload={handleDownloadReceipt}
+              />
             </div>
           </div>
         ))}
@@ -806,15 +851,12 @@ function HelpBanner() {
           </p>
         </div>
       </div>
-      <a
-        href="#"
-        className="font-bold py-4 px-8 rounded-xl transition-all shadow-md text-white shrink-0 text-sm active:scale-95 inline-block"
-        style={{ background: '#006e2f' }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = '#005321')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = '#006e2f')}
+      <span
+        className="font-bold py-4 px-8 rounded-xl text-white shrink-0 text-sm inline-block"
+        style={{ background: '#006e2f', opacity: 0.72 }}
       >
         Hubungi Admin
-      </a>
+      </span>
     </div>
   );
 }
@@ -826,27 +868,18 @@ function Footer() {
       style={{ borderTop: '1px solid #f1f5f9', background: '#ffffff' }}
     >
       <div className="flex flex-col md:flex-row justify-between items-center px-4 sm:px-8 lg:px-12 gap-4">
-        <p className="text-xs" style={{ color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}>
-          © 2024 KosHandayani Property Management.
+        <p className="text-xs" style={{ color: '#94a3b8', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
+          © 2026 KosHandayani Property Management.
         </p>
         <div className="flex gap-6">
           {['Syarat & Ketentuan', 'Kebijakan Privasi', 'Hubungi Kami'].map((label) => (
-            <a
+            <span
               key={label}
-              href="#"
-              className="text-xs transition-all"
-              style={{ color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#16a34a';
-                e.currentTarget.style.textDecoration = 'underline';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#94a3b8';
-                e.currentTarget.style.textDecoration = 'none';
-              }}
+              className="text-xs"
+              style={{ color: '#94a3b8', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
             >
               {label}
-            </a>
+            </span>
           ))}
         </div>
       </div>
@@ -858,8 +891,6 @@ function Footer() {
    PAGE ROOT
 ───────────────────────────────────────────── */
 export default function Page() {
-  useInjectLink(GOOGLE_FONTS_URL);
-  useInjectLink(MATERIAL_SYMBOLS_URL);
   const { user, logout, isLoading } = useAuth();
   const { t } = useLanguage();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -936,7 +967,8 @@ export default function Page() {
                     {t('tenant.history.subtitle')}
                   </p>
                 </div>
-                <button
+                <Link
+                  href="/tenant/dashboard"
                   className="flex items-center gap-2 py-3 px-6 rounded-xl font-semibold transition-all text-sm shrink-0"
                   style={{ background: '#f0f3ff', color: '#111c2d' }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = '#dee8ff')}
@@ -944,7 +976,7 @@ export default function Page() {
                 >
                   <Icon name="arrow_back" className="text-sm" style={{ fontSize: '18px' }} />
                   {t('tenant.history.backHome')}
-                </button>
+                </Link>
               </div>
 
               {historyError && (

@@ -97,7 +97,7 @@ export default function RentalApplicationForm({ room, onSuccess, onCancel }: Pro
     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 18 }}>
       <div style={{ border: '1px solid #e7eeff', borderRadius: 10, padding: 14, background: '#f9f9ff' }}>
         <p style={{ margin: '0 0 4px', color: '#3d4a3d', fontSize: 13, fontWeight: 700 }}>Kamar yang diajukan</p>
-        <h3 style={{ margin: 0, color: '#111c2d', fontFamily: 'Manrope, sans-serif', fontSize: 20 }}>{room.room_name}</h3>
+        <h3 style={{ margin: 0, color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 20 }}>{room.room_name}</h3>
         <p style={{ margin: '6px 0 0', color: '#006e2f', fontWeight: 700 }}>
           {room.branch?.branch_name || 'Cabang belum diatur'} - {formatRupiah(room.price)} / bulan
         </p>
@@ -138,7 +138,7 @@ export default function RentalApplicationForm({ room, onSuccess, onCancel }: Pro
 
       <div style={{ border: '1px solid #d8e3fb', borderRadius: 12, background: '#f0f3ff', padding: 16, display: 'grid', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ margin: 0, color: '#111c2d', fontFamily: 'Manrope, sans-serif', fontSize: 16, fontWeight: 800 }}>
+          <p style={{ margin: 0, color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 16, fontWeight: 800 }}>
             {t('tenant.detail.paymentSummary')}
           </p>
           <span style={{ color: '#006e2f', fontSize: 12, fontWeight: 800, background: '#dcfce7', borderRadius: 999, padding: '5px 10px' }}>

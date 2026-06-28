@@ -24,6 +24,7 @@ import {
 import {
   AttentionList,
   BranchScopeControl,
+  EmptyPanel,
   ErrorPanel,
   LoadingPanel,
   MetricCard,
@@ -230,7 +231,10 @@ export default function Page() {
               />
               <div className="space-y-1">
                 {data.activities.length === 0 ? (
-                  <p className="py-8 text-center text-base text-[#3d4a3d]">Belum ada aktivitas terbaru.</p>
+                  <EmptyPanel
+                    title="Belum ada aktivitas terbaru"
+                    description="Aktivitas pengajuan, pembayaran, renewal, dan reminder akan muncul di sini."
+                  />
                 ) : data.activities.map((activity, index) => (
                   <Link key={activity.id} href={activity.href} className="group flex gap-4 py-4">
                     <div className="flex flex-col items-center">
@@ -255,38 +259,45 @@ export default function Page() {
 
           <OwnerCard>
             <SectionHeader title="Statistik Cabang" description="Unit, okupansi, revenue, expense, laba bersih, dan tenant aktif per cabang." />
-            <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-              {data.branches.map((branch) => (
-                <div key={branch.id} className="rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-bold uppercase tracking-[0.1em] text-[#006e2f]">Cabang</p>
-                      <h3 className="mt-2 text-xl font-semibold text-[#111c2d]">{branch.branch_name}</h3>
+            {data.branches.length === 0 ? (
+              <EmptyPanel
+                title="Belum ada data cabang"
+                description="Statistik cabang akan tampil setelah kamar, occupancy, dan transaksi tersedia."
+              />
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                {data.branches.map((branch) => (
+                  <div key={branch.id} className="rounded-2xl border border-[#e7eeff] bg-[#f9f9ff] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold uppercase tracking-[0.1em] text-[#006e2f]">Cabang</p>
+                        <h3 className="mt-2 text-xl font-semibold text-[#111c2d]">{branch.branch_name}</h3>
+                      </div>
+                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#006e2f] shadow-sm">
+                        <Building2 size={20} />
+                      </span>
                     </div>
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-[#006e2f] shadow-sm">
-                      <Building2 size={20} />
-                    </span>
-                  </div>
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                    <div><p className="text-[#3d4a3d]">Jumlah kamar</p><p className="mt-1 text-lg font-bold">{branch.room_count}</p></div>
-                    <div><p className="text-[#3d4a3d]">Kamar terisi</p><p className="mt-1 text-lg font-bold">{branch.occupied_units}</p></div>
-                    <div><p className="text-[#3d4a3d]">Revenue</p><p className="mt-1 text-lg font-bold">{rupiah(branch.revenue)}</p></div>
-                    <div><p className="text-[#3d4a3d]">Expense</p><p className="mt-1 text-lg font-bold text-red-700">{rupiah(branch.expense)}</p></div>
-                    <div><p className="text-[#3d4a3d]">Laba bersih</p><p className="mt-1 text-lg font-bold">{rupiah(branch.net_profit)}</p></div>
-                    <div><p className="text-[#3d4a3d]">Tenant aktif</p><p className="mt-1 text-lg font-bold">{branch.active_tenants}</p></div>
-                  </div>
-                  <div className="mt-5">
-                    <div className="mb-2 flex justify-between text-sm font-semibold">
-                      <span>Occupancy rate</span>
-                      <span className="text-[#006e2f]">{branch.occupancy_rate}%</span>
+                    <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                      <div><p className="text-[#3d4a3d]">Jumlah kamar</p><p className="mt-1 text-lg font-bold">{branch.room_count}</p></div>
+                      <div><p className="text-[#3d4a3d]">Kamar terisi</p><p className="mt-1 text-lg font-bold">{branch.occupied_units}</p></div>
+                      <div><p className="text-[#3d4a3d]">Revenue</p><p className="mt-1 text-lg font-bold">{rupiah(branch.revenue)}</p></div>
+                      <div><p className="text-[#3d4a3d]">Expense</p><p className="mt-1 text-lg font-bold text-red-700">{rupiah(branch.expense)}</p></div>
+                      <div><p className="text-[#3d4a3d]">Laba bersih</p><p className="mt-1 text-lg font-bold">{rupiah(branch.net_profit)}</p></div>
+                      <div><p className="text-[#3d4a3d]">Tenant aktif</p><p className="mt-1 text-lg font-bold">{branch.active_tenants}</p></div>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-[#e7eeff]">
-                      <div className="h-full rounded-full bg-[#006e2f]" style={{ width: `${Math.min(100, branch.occupancy_rate)}%` }} />
+                    <div className="mt-5">
+                      <div className="mb-2 flex justify-between text-sm font-semibold">
+                        <span>Occupancy rate</span>
+                        <span className="text-[#006e2f]">{branch.occupancy_rate}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[#e7eeff]">
+                        <div className="h-full rounded-full bg-[#006e2f]" style={{ width: `${Math.min(100, branch.occupancy_rate)}%` }} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </OwnerCard>
 
           <OwnerCard className="bg-[#006e2f] text-white">

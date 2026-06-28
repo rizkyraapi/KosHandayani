@@ -27,6 +27,7 @@ import {
   StatusPill,
 } from '@/components/owner/OwnerUi';
 import { getOwnerPayments, type OwnerPaymentOverview } from '@/lib/api';
+import { getPaymentStatusMeta } from '@/lib/paymentStatus';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { useOwnerBranchScope } from '@/lib/use-owner-branch-scope';
 
@@ -54,8 +55,9 @@ function dateTime(value?: string | null) {
 }
 
 function normalizedStatus(status: string) {
-  if (['settlement', 'capture'].includes(status)) return 'success';
-  if (['expire', 'cancel', 'deny'].includes(status)) return 'failed';
+  const meta = getPaymentStatusMeta(status);
+  if (meta.isPaid) return 'success';
+  if (meta.isFailed) return 'failed';
   return 'pending';
 }
 
@@ -121,9 +123,9 @@ export default function Page() {
     { key: 'all', label: 'Semua' },
     { key: 'initial', label: 'Initial Rent' },
     { key: 'renewal', label: 'Renewal' },
-    { key: 'success', label: 'Success' },
-    { key: 'pending', label: 'Pending' },
-    { key: 'failed', label: 'Failed' },
+    { key: 'success', label: 'Lunas' },
+    { key: 'pending', label: 'Menunggu' },
+    { key: 'failed', label: 'Gagal' },
   ];
 
   return (

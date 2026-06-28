@@ -16,6 +16,8 @@ export default function TenantLayout({
       <style>{`
         .tenant-page-shell > div > aside,
         .tenant-page-shell .sidebar-overlay,
+        .tenant-page-shell .mobile-menu-btn,
+        .tenant-page-shell .tenant-local-menu-button,
         .tenant-page-shell .bottom-nav-mobile,
         .tenant-page-shell .show-mobile {
           display: none !important;

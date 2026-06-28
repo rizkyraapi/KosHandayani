@@ -40,6 +40,59 @@ function statusLabel(status: ApiRoom['room_status']) {
   }[status];
 }
 
+function RoomDetailStateCard({
+  icon,
+  title,
+  description,
+  tone = 'default',
+  compact = false,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  tone?: 'default' | 'error';
+  compact?: boolean;
+}) {
+  const color = tone === 'error' ? '#ba1a1a' : '#006e2f';
+  const background = tone === 'error' ? '#ffdad6' : '#e7eeff';
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        border: '1px dashed #bccbb9',
+        borderRadius: 14,
+        background: '#ffffff',
+        padding: compact ? 20 : 32,
+        textAlign: 'center',
+      }}
+    >
+      <span
+        className="material-symbols-outlined"
+        style={{
+          display: 'inline-flex',
+          width: compact ? 42 : 52,
+          height: compact ? 42 : 52,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 16,
+          background,
+          color,
+          fontSize: compact ? 22 : 26,
+        }}
+      >
+        {icon}
+      </span>
+      <h3 style={{ margin: '14px 0 0', color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: compact ? 17 : 21, fontWeight: 800 }}>
+        {title}
+      </h3>
+      <p style={{ margin: '6px auto 0', maxWidth: 480, color: '#3d4a3d', fontSize: 14, lineHeight: 1.6 }}>
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export default function Page() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -130,22 +183,31 @@ export default function Page() {
 
   if (isLoading) {
     return (
-      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9f9ff', color: '#3d4a3d', fontFamily: 'Inter, sans-serif' }}>
-        Memuat detail kamar...
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9f9ff', color: '#3d4a3d', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
+        <RoomDetailStateCard
+          icon="progress_activity"
+          title="Memuat detail kamar"
+          description="Mengambil data kamar, fasilitas, dan rekomendasi kamar terkait."
+        />
       </main>
     );
   }
 
   if (error || !room) {
     return (
-      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9f9ff', color: '#ba1a1a', fontFamily: 'Inter, sans-serif', padding: 24, textAlign: 'center' }}>
-        {error || 'Kamar tidak ditemukan.'}
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f9f9ff', fontFamily: 'var(--font-manrope), Manrope, sans-serif', padding: 24 }}>
+        <RoomDetailStateCard
+          icon="error"
+          title="Kamar tidak ditemukan"
+          description={error || 'Data kamar tidak tersedia atau sudah tidak dipublikasikan.'}
+          tone="error"
+        />
       </main>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f9f9ff', color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f9f9ff', color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
       <style>{`
         .room-detail-gallery {
           display: grid;
@@ -196,7 +258,7 @@ export default function Page() {
                 <span style={{ padding: '6px 10px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{statusLabel(room.room_status)}</span>
                 <span style={{ padding: '6px 10px', borderRadius: 999, background: '#f0f3ff', color: '#3d4a3d', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{room.gender_type}</span>
               </div>
-              <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(30px, 4vw, 44px)', lineHeight: 1.12, margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>{room.room_name}</h1>
+              <h1 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 'clamp(30px, 4vw, 44px)', lineHeight: 1.12, margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>{room.room_name}</h1>
               <p style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3d4a3d', fontWeight: 500, fontSize: 15, lineHeight: 1.6, marginTop: 12 }}>
                 <span className="material-symbols-outlined" style={{ color: '#006e2f' }}>location_on</span>
                 {room.branch?.branch_name || 'Cabang belum diatur'}{room.branch?.city ? `, ${room.branch.city}` : ''}
@@ -204,12 +266,12 @@ export default function Page() {
             </header>
 
             <section style={{ background: '#fff', borderRadius: 12, padding: 24, borderLeft: '4px solid #006e2f', boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 21, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 12px' }}>Deskripsi Kamar</h2>
+              <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 21, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 12px' }}>Deskripsi Kamar</h2>
               <p style={{ color: '#3d4a3d', fontSize: 15, fontWeight: 400, lineHeight: 1.8, margin: 0 }}>{room.description || 'Belum ada deskripsi untuk kamar ini.'}</p>
             </section>
 
             <section>
-              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 23, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 16px' }}>Fasilitas</h2>
+              <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 23, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 16px' }}>Fasilitas</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
                 {room.facilities.length > 0 ? room.facilities.map((facility) => (
                   <div key={facility.id} style={{ minHeight: 82, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', borderRadius: 10, color: '#3d4a3d' }}>
@@ -217,7 +279,12 @@ export default function Page() {
                     <span style={{ fontWeight: 600, textAlign: 'center', fontSize: 13, lineHeight: 1.4 }}>{facility.facility_name}</span>
                   </div>
                 )) : (
-                  <p style={{ color: '#3d4a3d', fontSize: 15, fontWeight: 400 }}>Belum ada fasilitas yang dicatat.</p>
+                  <RoomDetailStateCard
+                    icon="inventory_2"
+                    title="Belum ada fasilitas"
+                    description="Fasilitas kamar akan tampil di sini setelah dilengkapi oleh owner."
+                    compact
+                  />
                 )}
               </div>
             </section>
@@ -227,7 +294,7 @@ export default function Page() {
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', borderTop: '8px solid #006e2f', boxShadow: '0 20px 44px rgba(17,28,45,0.1)' }}>
               <div style={{ padding: 24 }}>
                 <p style={{ color: '#3d4a3d', fontSize: 13, fontWeight: 500, lineHeight: 1.5, margin: '0 0 6px' }}>Harga per bulan</p>
-                <h2 style={{ fontFamily: 'Manrope, sans-serif', color: '#006e2f', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{formatRupiah(room.price)}</h2>
+                <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', color: '#006e2f', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{formatRupiah(room.price)}</h2>
                 <div style={{ display: 'grid', gap: 10, marginTop: 22 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: '#f0f3ff', borderRadius: 8 }}>
                     <span style={{ color: '#3d4a3d', fontSize: 14, fontWeight: 400 }}>Maksimal tamu</span>
@@ -259,7 +326,7 @@ export default function Page() {
         </div>
 
         <section style={{ marginTop: 56 }}>
-          <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 26, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' }}>Kamar Lain di Cabang Ini</h2>
+          <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 26, fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' }}>Kamar Lain di Cabang Ini</h2>
           {relatedRooms.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
               {relatedRooms.map((related) => (
@@ -280,7 +347,12 @@ export default function Page() {
               ))}
             </div>
           ) : (
-            <p style={{ color: '#3d4a3d' }}>Belum ada kamar terkait di cabang ini.</p>
+            <RoomDetailStateCard
+              icon="meeting_room"
+              title="Belum ada kamar terkait"
+              description="Kamar lain dari cabang yang sama akan muncul otomatis saat tersedia."
+              compact
+            />
           )}
         </section>
       </main>
@@ -298,7 +370,7 @@ export default function Page() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
               <div>
-                <h2 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 24 }}>Formulir Pengajuan Sewa</h2>
+                <h2 style={{ margin: 0, fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 24 }}>Formulir Pengajuan Sewa</h2>
                 <p style={{ margin: '6px 0 0', color: '#3d4a3d' }}>Lengkapi tanggal masuk, durasi, dan dokumen pendukung.</p>
               </div>
               <button

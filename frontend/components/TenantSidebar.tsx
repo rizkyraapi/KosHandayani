@@ -2,18 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClipboardList, LayoutDashboard, LogOut, ReceiptText, ScrollText, UserRound } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
-
-const tenantNavItems = [
-  { labelKey: 'common.myRoom', href: '/tenant/dashboard', icon: LayoutDashboard },
-  { labelKey: 'common.rentalApplications', href: '/tenant/rental-applications', icon: ClipboardList },
-  { labelKey: 'common.bill', href: '/tenant/tagihan', icon: ReceiptText },
-  { labelKey: 'common.history', href: '/tenant/riwayat', icon: ScrollText },
-  { labelKey: 'common.profile', href: '/tenant/profil', icon: UserRound },
-];
+import { isActiveNavItem, tenantNavItems } from './navigation/menuItems';
 
 export default function TenantSidebar() {
   const pathname = usePathname();
@@ -32,7 +25,7 @@ export default function TenantSidebar() {
       <nav className="flex flex-col gap-2">
         {tenantNavItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active = isActiveNavItem(pathname, item);
 
           return (
             <Link

@@ -31,6 +31,7 @@
     "rentalApplications": "Rental Applications",
     "home": "Home",
     "allRooms": "All Rooms",
+    "viewRooms": "View Rooms",
     "help": "Help",
     "login": "Login",
     "logout": "Logout",
@@ -74,6 +75,7 @@
     "pendingPayment": "Pending Payment",
     "paymentSuccessful": "Payment Successful",
     "paymentFailed": "Payment Failed",
+    "paymentReview": "Under Review",
     "awaitingOwnerApproval": "Awaiting Owner Approval",
     "applicationRejected": "Application Rejected",
     "awaitingVerification": "Awaiting Verification",
@@ -84,7 +86,8 @@
     "tenantArea": "Tenant Area",
     "ownerArea": "Owner Area",
     "openMenu": "Open menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "mobileNavigation": "Main Navigation"
   },
   "auth": {
     "loginTitle": "Log in to Your Account",
@@ -93,11 +96,25 @@
     "registerSubtitle": "Start applying for rooms with a neat and easy process.",
     "email": "Email",
     "password": "Password",
+    "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
     "fullName": "Full Name",
     "whatsapp": "WhatsApp Number",
     "rememberMe": "Remember me",
     "forgotPassword": "Forgot password?",
+    "forgotPasswordTitle": "Forgot Password?",
+    "forgotPasswordSubtitle": "Enter your account email. If the email is registered, we will send a password reset link.",
+    "forgotPasswordFailed": "Failed to send password reset link.",
+    "sendResetLink": "Send Reset Link",
+    "resetLinkSentTitle": "Check Your Email",
+    "resetLinkSentDescription": "If the email is registered, a password reset link has been sent.",
+    "resetPasswordTitle": "Reset Password",
+    "resetPasswordSubtitle": "Create a strong new password for your KosHandayani account.",
+    "resetPasswordFailed": "Failed to update password.",
+    "resetTokenMissing": "The password reset link is incomplete or invalid.",
+    "updatePassword": "Update Password",
+    "backToLogin": "Back to Login",
+    "rememberPassword": "Remember your password? Login",
     "noAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
     "loginFailed": "Login failed. Check your email and password.",
@@ -141,7 +158,8 @@
     "paymentPending": "Payment is being processed.",
     "paymentCancelled": "Payment was cancelled.",
     "roomDeleted": "Room deleted successfully.",
-    "passwordChanged": "Password changed successfully."
+    "passwordChanged": "Password changed successfully.",
+    "passwordResetSuccess": "Password updated successfully."
   },
   "empty": {
     "noData": "No data yet",
@@ -167,7 +185,7 @@
       "subtitle": "Monitor occupancy, payments, and recent activity.",
       "summaryTitle": "Property Summary",
       "welcome": "Welcome back.",
-      "branchActive": "Branch 1: Active",
+      "branchActive": "Active branch",
       "ownerAvatar": "Owner avatar",
       "totalIncome": "Total Income",
       "successfulPayments": "{{count}} successful payments",
@@ -269,6 +287,9 @@
     }
   },
   "tenant": {
+    "nav": {
+      "applyRental": "Apply Rental"
+    },
     "dashboard": {
       "title": "Tenant Dashboard",
       "premiumTenant": "Premium Tenant",
@@ -321,7 +342,9 @@
       "awaitingPaymentTitle": "Application Approved, Continue Payment",
       "awaitingPaymentDescription": "The owner has approved your room application. Complete payment so the occupancy can be activated.",
       "paymentTotal": "Payment Total",
-      "viewAll": "View All"
+      "viewAll": "View All",
+      "noAnnouncements": "No announcements yet",
+      "noAnnouncementsDescription": "Latest information from the owner will appear here when available."
     },
     "applications": {
       "title": "Rental Applications",
@@ -401,7 +424,7 @@
       "totalPay": "Total Payment",
       "payAgain": "Pay Again",
       "continuePayment": "Continue Payment",
-      "noActiveBill": "No active bill yet.",
+      "noActiveBill": "No active bill right now.",
       "securityNotice": "Your payment is protected by 256-bit SSL security. A digital receipt will be issued automatically after verification.",
       "needHelp": "Need Help?",
       "contactConcierge": "Contact our Digital Concierge",

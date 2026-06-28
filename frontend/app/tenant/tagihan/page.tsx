@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,14 +8,12 @@ import { createPayment, getMyPayments, syncPaymentStatus, type Payment } from '@
 import type { AuthUser } from '@/lib/auth';
 import type { Locale } from '@/lib/i18n';
 import { payWithMidtransSnap } from '@/lib/midtrans';
+import { getPaymentMetaFromPayment } from '@/lib/paymentStatus';
 import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 const globalStyle = `
-  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-
   :root {
     --color-on-error: #ffffff;
     --color-on-primary-fixed: #002109;
@@ -84,14 +83,14 @@ const globalStyle = `
   }
 
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-manrope), Manrope, sans-serif;
     background-color: var(--color-background);
     color: var(--color-on-background);
     min-height: 100vh;
   }
 
   h1, h2, h3, .headline {
-    font-family: 'Manrope', sans-serif;
+    font-family: var(--font-manrope), Manrope, sans-serif;
   }
 
   .glass-effect {
@@ -136,11 +135,11 @@ const globalStyle = `
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const navItems = [
-  { icon: 'home', labelKey: 'common.myRoom', active: false },
-  { icon: 'door_front', labelKey: 'tenant.billing.myRoom', active: false },
-  { icon: 'request_quote', labelKey: 'common.bill', active: true },
-  { icon: 'history', labelKey: 'common.history', active: false },
-  { icon: 'account_circle', labelKey: 'common.profile', active: false },
+  { icon: 'home', labelKey: 'common.myRoom', href: '/tenant/dashboard', active: false },
+  { icon: 'door_front', labelKey: 'tenant.billing.myRoom', href: '/rooms', active: false },
+  { icon: 'request_quote', labelKey: 'common.bill', href: '/tenant/tagihan', active: true },
+  { icon: 'history', labelKey: 'common.history', href: '/tenant/riwayat', active: false },
+  { icon: 'account_circle', labelKey: 'common.profile', href: '/tenant/profil', active: false },
 ];
 
 function formatRupiah(value?: number | null) {
@@ -157,19 +156,15 @@ function formatDate(value?: string | null, locale: Locale = 'id') {
 }
 
 function normalizePaymentStatus(payment?: Payment | null) {
-  if (!payment) return 'pending';
-  if (payment.rental_application?.payment_status === 'paid' || ['settlement', 'capture'].includes(payment.transaction_status)) return 'paid';
-  if (payment.rental_application?.payment_status === 'failed' || ['expire', 'cancel', 'deny'].includes(payment.transaction_status)) return 'failed';
-
-  return 'pending';
+  return getPaymentMetaFromPayment(payment).key;
 }
 
 function paymentStatusLabel(payment: Payment | null | undefined, t: (key: string) => string) {
-  const status = normalizePaymentStatus(payment);
-  if (status === 'paid') return t('status.paymentSuccessful');
-  if (status === 'failed') return t('status.paymentFailed');
+  return t(getPaymentMetaFromPayment(payment).labelKey);
+}
 
-  return t('status.pendingPayment');
+function isActiveBill(payment: Payment) {
+  return getPaymentMetaFromPayment(payment).isActiveBill;
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -229,7 +224,7 @@ function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
             fontWeight: 900,
             color: '#0f172a',
             letterSpacing: '-0.05em',
-            fontFamily: 'Manrope, sans-serif',
+            fontFamily: 'var(--font-manrope), Manrope, sans-serif',
           }}
         >
           KosHandayani
@@ -249,9 +244,9 @@ function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flexGrow: 1 }}>
         {navItems.map((item) => (
-          <a
+          <Link
             key={item.labelKey}
-            href="#"
+            href={item.href}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -284,7 +279,7 @@ function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
           >
             <Icon name={item.icon} filled={item.active} />
             <span>{t(item.labelKey)}</span>
-          </a>
+          </Link>
         ))}
       </nav>
 
@@ -319,7 +314,7 @@ function Sidebar({ currentUser }: { currentUser: AuthUser | null }) {
           <p style={{ fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {displayName}
           </p>
-          <p style={{ fontSize: '0.625rem', color: '#3d4a3d' }}>Kamar 204 • Emerald</p>
+          <p style={{ fontSize: '0.625rem', color: '#3d4a3d' }}>{currentUser?.email || t('tenant.applications.tenantArea')}</p>
         </div>
       </div>
     </aside>
@@ -339,6 +334,11 @@ function BillSummaryCard({
 }) {
   const { locale, t } = useLanguage();
   const room = payment?.rental_application?.room;
+  const title = isLoading && !payment
+    ? t('tenant.billing.loadingBill')
+    : room?.room_name
+      ? t('tenant.billing.roomRent', { room: room.room_name })
+      : t('empty.noPayments');
   const breakdown = getRentalPaymentBreakdown({
     monthlyPrice: payment?.monthly_price ?? room?.price,
     duration: payment?.duration_months ? `${payment.duration_months} Bulan` : payment?.rental_application?.duration,
@@ -405,10 +405,10 @@ function BillSummaryCard({
                 fontSize: '1.5rem',
                 fontWeight: 700,
                 color: '#111c2d',
-                fontFamily: 'Manrope, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
               }}
             >
-              {room?.room_name ? t('tenant.billing.roomRent', { room: room.room_name }) : t('empty.noPayments')}
+              {title}
             </h3>
             <p style={{ fontSize: '0.875rem', color: '#3d4a3d' }}>
               {t('tenant.detail.paymentDate')}: {formatDate(payment?.paid_at, locale)}
@@ -427,7 +427,7 @@ function BillSummaryCard({
                 fontWeight: 900,
                 color: '#006e2f',
                 letterSpacing: '-0.05em',
-                fontFamily: 'Manrope, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
               }}
             >
               {formatRupiah(payment ? breakdown.grossAmount : null)}
@@ -549,7 +549,7 @@ function ConfirmationSidebar({
             fontSize: '1.25rem',
             fontWeight: 700,
             marginBottom: '2rem',
-            fontFamily: 'Manrope, sans-serif',
+            fontFamily: 'var(--font-manrope), Manrope, sans-serif',
             color: '#111c2d',
           }}
         >
@@ -589,7 +589,7 @@ function ConfirmationSidebar({
               paddingTop: '1rem',
             }}
           >
-            <span style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111c2d', fontFamily: 'Manrope, sans-serif' }}>
+            <span style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
               {t('tenant.billing.totalPay')}
             </span>
             <span
@@ -598,7 +598,7 @@ function ConfirmationSidebar({
                 fontWeight: 900,
                 color: '#111c2d',
                 letterSpacing: '-0.05em',
-                fontFamily: 'Manrope, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
               }}
             >
               {formatRupiah(payment ? breakdown.grossAmount : null)}
@@ -626,7 +626,7 @@ function ConfirmationSidebar({
               justifyContent: 'center',
               gap: '0.75rem',
               transition: 'all 0.15s',
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: 'var(--font-manrope), Manrope, sans-serif',
               opacity: isPaying ? 0.7 : 1,
             }}
             onMouseEnter={(e) => {
@@ -692,29 +692,190 @@ function ConfirmationSidebar({
           <p style={{ fontSize: '0.625rem', color: '#3d4a3d' }}>{t('tenant.billing.contactConcierge')}</p>
         </div>
         <button
+          type="button"
+          disabled
+          aria-label={t('tenant.billing.contactConcierge')}
           style={{
             backgroundColor: '#ffffff',
             padding: '0.75rem',
             borderRadius: '9999px',
             boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
             border: 'none',
-            cursor: 'pointer',
+            cursor: 'not-allowed',
+            opacity: 0.72,
             transition: 'transform 0.15s',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
           }}
         >
           <Icon name="support_agent" style={{ color: '#006e2f' }} />
         </button>
       </div>
     </div>
+  );
+}
+
+function BillingEmptyState() {
+  const { t } = useLanguage();
+
+  return (
+    <section
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '1rem',
+        border: '1px solid #e7eeff',
+        padding: 'clamp(2rem, 5vw, 3rem)',
+        boxShadow: '0 12px 32px rgba(17,28,45,0.06)',
+        textAlign: 'center',
+      }}
+    >
+      <span
+        style={{
+          width: '4rem',
+          height: '4rem',
+          margin: '0 auto',
+          borderRadius: '1.25rem',
+          backgroundColor: '#e7f8eb',
+          color: '#006e2f',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name="check_circle" filled style={{ fontSize: '2rem' }} />
+      </span>
+      <h3
+        style={{
+          margin: '1.25rem 0 0',
+          fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+          fontSize: 'clamp(1.5rem, 3vw, 2rem)',
+          fontWeight: 900,
+          color: '#111c2d',
+          letterSpacing: '-0.04em',
+        }}
+      >
+        Tidak ada tagihan saat ini
+      </h3>
+      <p
+        style={{
+          margin: '0.75rem auto 0',
+          maxWidth: '34rem',
+          color: '#3d4a3d',
+          lineHeight: 1.7,
+          fontSize: '0.95rem',
+        }}
+      >
+        Semua tagihan aktif sudah dibayar. Jika ada pembayaran baru atau perpanjangan sewa, tagihan akan muncul otomatis di halaman ini.
+      </p>
+      <div
+        style={{
+          marginTop: '1.75rem',
+          display: 'flex',
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+        }}
+      >
+        <Link
+          href="/tenant/riwayat"
+          style={{
+            minHeight: '2.75rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            borderRadius: '0.75rem',
+            backgroundColor: '#006e2f',
+            color: '#ffffff',
+            padding: '0 1rem',
+            fontSize: '0.875rem',
+            fontWeight: 800,
+            textDecoration: 'none',
+          }}
+        >
+          <Icon name="history" style={{ fontSize: '1.125rem' }} />
+          {t('common.history')}
+        </Link>
+        <Link
+          href="/tenant/dashboard"
+          style={{
+            minHeight: '2.75rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            borderRadius: '0.75rem',
+            backgroundColor: '#f0f3ff',
+            color: '#111c2d',
+            padding: '0 1rem',
+            fontSize: '0.875rem',
+            fontWeight: 800,
+            textDecoration: 'none',
+          }}
+        >
+          <Icon name="home" style={{ fontSize: '1.125rem' }} />
+          Dashboard
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function BillingErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useLanguage();
+
+  return (
+    <section
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '1rem',
+        border: '1px solid #ffdad6',
+        padding: 'clamp(1.5rem, 4vw, 2rem)',
+        boxShadow: '0 12px 32px rgba(17,28,45,0.06)',
+      }}
+    >
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+        <span
+          style={{
+            width: '3rem',
+            height: '3rem',
+            borderRadius: '1rem',
+            backgroundColor: '#ffdad6',
+            color: '#93000a',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="error" filled />
+        </span>
+        <div>
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: '1.25rem', fontWeight: 900, color: '#111c2d' }}>
+            Gagal memuat tagihan
+          </h3>
+          <p style={{ margin: '0.5rem 0 0', color: '#3d4a3d', lineHeight: 1.7 }}>{message}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            style={{
+              marginTop: '1rem',
+              minHeight: '2.5rem',
+              border: 'none',
+              borderRadius: '0.75rem',
+              backgroundColor: '#006e2f',
+              color: '#ffffff',
+              padding: '0 1rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            {t('common.tryAgain')}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -736,7 +897,8 @@ function MobileNav() {
       }}
       className="show-mobile"
     >
-      <button
+      <Link
+        href="/tenant/dashboard"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -745,14 +907,15 @@ function MobileNav() {
           color: '#64748b',
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
+          textDecoration: 'none',
         }}
       >
         <Icon name="home" />
         <span style={{ fontSize: '0.625rem', fontWeight: 500 }}>Beranda</span>
-      </button>
+      </Link>
 
-      <button
+      <Link
+        href="/tenant/tagihan"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -761,15 +924,16 @@ function MobileNav() {
           color: '#006e2f',
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
+          textDecoration: 'none',
         }}
       >
         <Icon name="request_quote" filled />
         <span style={{ fontSize: '0.625rem', fontWeight: 700 }}>Tagihan</span>
-      </button>
+      </Link>
 
       <div style={{ marginTop: '-2.5rem' }}>
-        <button
+        <Link
+          href="/rooms"
           style={{
             width: '3.5rem',
             height: '3.5rem',
@@ -782,13 +946,15 @@ function MobileNav() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            textDecoration: 'none',
           }}
         >
           <Icon name="add" />
-        </button>
+        </Link>
       </div>
 
-      <button
+      <Link
+        href="/tenant/riwayat"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -797,14 +963,15 @@ function MobileNav() {
           color: '#64748b',
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
+          textDecoration: 'none',
         }}
       >
         <Icon name="history" />
         <span style={{ fontSize: '0.625rem', fontWeight: 500 }}>Riwayat</span>
-      </button>
+      </Link>
 
-      <button
+      <Link
+        href="/tenant/profil"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -813,12 +980,12 @@ function MobileNav() {
           color: '#64748b',
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
+          textDecoration: 'none',
         }}
       >
         <Icon name="account_circle" />
         <span style={{ fontSize: '0.625rem', fontWeight: 500 }}>Profil</span>
-      </button>
+      </Link>
     </nav>
   );
 }
@@ -870,29 +1037,22 @@ export default function Page() {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
   const [paymentError, setPaymentError] = useState('');
-  const activePayment = payments.find((payment) => normalizePaymentStatus(payment) === 'pending') ?? payments[0] ?? null;
+  const activePayment = payments.find(isActiveBill) ?? null;
 
   const refreshPayments = useCallback(async () => {
-    setIsLoadingPayments(true);
-    setPaymentError('');
-    const data = await getMyPayments();
-    setPayments(data);
-    setIsLoadingPayments(false);
+    try {
+      setIsLoadingPayments(true);
+      setPaymentError('');
+      const data = await getMyPayments();
+      setPayments(data);
+    } catch (loadError) {
+      setPaymentError(loadError instanceof Error ? loadError.message : 'Gagal memuat tagihan.');
+    } finally {
+      setIsLoadingPayments(false);
+    }
   }, []);
 
   useEffect(() => {
-    const fontLink1 = document.createElement('link');
-    fontLink1.rel = 'stylesheet';
-    fontLink1.href =
-      'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap';
-    document.head.appendChild(fontLink1);
-
-    const fontLink2 = document.createElement('link');
-    fontLink2.rel = 'stylesheet';
-    fontLink2.href =
-      'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap';
-    document.head.appendChild(fontLink2);
-
     const globalStyleElement = document.createElement('style');
     globalStyleElement.textContent = globalStyle;
     document.head.appendChild(globalStyleElement);
@@ -902,8 +1062,6 @@ export default function Page() {
     document.head.appendChild(responsiveStyleElement);
 
     return () => {
-      fontLink1.remove();
-      fontLink2.remove();
       globalStyleElement.remove();
       responsiveStyleElement.remove();
     };
@@ -1036,7 +1194,7 @@ export default function Page() {
               letterSpacing: '-0.025em',
               color: '#111c2d',
               marginBottom: '0.5rem',
-              fontFamily: 'Manrope, sans-serif',
+              fontFamily: 'var(--font-manrope), Manrope, sans-serif',
             }}
           >
             {t('tenant.detail.paymentSummary')}
@@ -1052,16 +1210,25 @@ export default function Page() {
           </p>
         </header>
 
-        {/* Bento Grid */}
-        <div className="bento-grid">
-          {/* Left Column */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <BillSummaryCard payment={activePayment} isLoading={isLoadingPayments} error={paymentError} message={paymentMessage} />
+        {isLoadingPayments ? (
+          <div className="bento-grid">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <BillSummaryCard payment={activePayment} isLoading={isLoadingPayments} error={paymentError} message={paymentMessage} />
+            </div>
+            <ConfirmationSidebar payment={activePayment} isPaying={isPaying} onPay={() => void handleContinuePayment()} />
           </div>
-
-          {/* Right Column */}
-          <ConfirmationSidebar payment={activePayment} isPaying={isPaying} onPay={() => void handleContinuePayment()} />
-        </div>
+        ) : paymentError && !activePayment ? (
+          <BillingErrorState message={paymentError} onRetry={() => void refreshPayments()} />
+        ) : !activePayment ? (
+          <BillingEmptyState />
+        ) : (
+          <div className="bento-grid">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <BillSummaryCard payment={activePayment} isLoading={isLoadingPayments} error={paymentError} message={paymentMessage} />
+            </div>
+            <ConfirmationSidebar payment={activePayment} isPaying={isPaying} onPay={() => void handleContinuePayment()} />
+          </div>
+        )}
 
         {/* Footer */}
         <footer
@@ -1077,29 +1244,21 @@ export default function Page() {
             gap: '1rem',
           }}
         >
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.75rem', color: '#64748b' }}>
-            © 2024 KosHandayani. Digital Concierge Property Management.
+          <p style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: '0.75rem', color: '#64748b' }}>
+            © 2026 KosHandayani. Digital Concierge Property Management.
           </p>
           <div style={{ display: 'flex', gap: '2rem' }}>
             {['Tentang Kami', 'Syarat & Ketentuan', 'Kebijakan Privasi'].map((link) => (
-              <a
+              <span
                 key={link}
-                href="#"
                 style={{
                   color: '#94a3b8',
                   fontSize: '0.75rem',
                   textDecoration: 'none',
-                  transition: 'color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = '#475569';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = '#94a3b8';
                 }}
               >
                 {link}
-              </a>
+              </span>
             ))}
           </div>
         </footer>

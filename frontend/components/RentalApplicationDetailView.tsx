@@ -26,6 +26,7 @@ import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBa
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { RentalApplication } from '@/lib/api';
 import type { Locale } from '@/lib/i18n';
+import { getPaymentMetaFromApplication } from '@/lib/paymentStatus';
 import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 
 const fallbackImageUrl = 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=900';
@@ -52,13 +53,10 @@ function isAwaitingPayment(application: RentalApplication) {
 
 function paymentStatusLabel(application: RentalApplication, t: TFunction) {
   if (application.status === 'pending') return t('status.awaitingOwnerApproval');
-  if (isAwaitingPayment(application)) return t('status.pendingPayment');
-  if (application.status === 'approved' && application.payment_status === 'paid') return t('status.paymentSuccessful');
-  if (application.payment_status === 'failed') return t('status.paymentFailed');
   if (application.status === 'cancelled') return t('status.cancelled');
   if (application.status === 'rejected') return t('status.applicationRejected');
 
-  return application.payment_status ? t(`status.${application.payment_status}`) : t('common.none');
+  return t(getPaymentMetaFromApplication(application).labelKey);
 }
 
 function tenantPaymentTone(application: RentalApplication) {
@@ -71,7 +69,9 @@ function tenantPaymentTone(application: RentalApplication) {
     };
   }
 
-  if (isAwaitingPayment(application)) {
+  const paymentMeta = getPaymentMetaFromApplication(application);
+
+  if (isAwaitingPayment(application) || paymentMeta.isPending) {
     return {
       bg: 'bg-emerald-50',
       border: 'border-emerald-100',
@@ -80,7 +80,7 @@ function tenantPaymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'approved' && application.payment_status === 'paid') {
+  if (paymentMeta.isPaid) {
     return {
       bg: 'bg-green-50',
       border: 'border-green-100',
@@ -89,7 +89,7 @@ function tenantPaymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'rejected' || application.status === 'cancelled' || application.payment_status === 'failed') {
+  if (application.status === 'rejected' || application.status === 'cancelled' || paymentMeta.isFailed) {
     return {
       bg: 'bg-red-50',
       border: 'border-red-100',
@@ -260,7 +260,7 @@ function TenantRentalApplicationDetailView({
   return (
     <div
       className="space-y-6"
-      style={{ fontFamily: 'var(--font-inter), Inter, sans-serif' }}
+      style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
     >
       <Link
         href="/tenant/rental-applications"
@@ -554,7 +554,7 @@ export default function RentalApplicationDetailView({
     <div style={{ display: 'grid', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(26px, 4vw, 36px)' }}>
+          <h1 style={{ margin: 0, fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 'clamp(26px, 4vw, 36px)' }}>
             {t('tenant.detail.applicationNumber', { id: application.id })}
           </h1>
           <p style={{ margin: '6px 0 0', color: '#3d4a3d' }}>{room?.room_name || t('tenant.applications.roomUnavailable')}</p>
@@ -571,7 +571,7 @@ export default function RentalApplicationDetailView({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
         <section style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
           <img src={room?.thumbnail || room?.image_url || fallbackImageUrl} alt={room?.room_name || t('common.room')} style={{ width: '100%', height: 210, objectFit: 'cover', borderRadius: 10, marginBottom: 16 }} />
-          <h2 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 22 }}>{t('tenant.detail.roomDetail')}</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 22 }}>{t('tenant.detail.roomDetail')}</h2>
           <p style={{ color: '#3d4a3d' }}>{room?.branch?.branch_name || t('tenant.applications.branchUnset')}</p>
           <p style={{ color: '#3d4a3d' }}>{t('owner.applications.moveInDate')}: <strong>{formatDate(application.move_in_date, locale)}</strong></p>
           <p style={{ color: '#3d4a3d' }}>{t('tenant.detail.duration')}: <strong>{application.duration}</strong></p>
@@ -598,7 +598,7 @@ export default function RentalApplicationDetailView({
         </section>
 
         <section style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-          <h2 style={{ margin: '0 0 14px', fontFamily: 'Manrope, sans-serif', fontSize: 22 }}>{t('tenant.detail.tenantData')}</h2>
+          <h2 style={{ margin: '0 0 14px', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 22 }}>{t('tenant.detail.tenantData')}</h2>
           <p><strong>{t('auth.fullName')}:</strong> {tenant?.full_name || '-'}</p>
           <p><strong>Email:</strong> {tenant?.email || '-'}</p>
           <p><strong>WhatsApp:</strong> {tenant?.whatsapp || '-'}</p>
@@ -616,7 +616,7 @@ export default function RentalApplicationDetailView({
       )}
 
       <section style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 12px 36px rgba(17,28,45,0.05)' }}>
-        <h2 style={{ margin: '0 0 16px', fontFamily: 'Manrope, sans-serif', fontSize: 22 }}>{t('tenant.detail.documents')}</h2>
+        <h2 style={{ margin: '0 0 16px', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 22 }}>{t('tenant.detail.documents')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
           <DocumentPreview label="KTP" url={application.ktp_file_url} />
           <DocumentPreview label="KK" url={application.kk_file_url} />

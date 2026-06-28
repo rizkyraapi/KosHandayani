@@ -8,6 +8,7 @@ use App\Services\EmailVerificationNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -96,6 +97,16 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($request->boolean('remember')) {
+            $user->forceFill([
+                'remember_token' => Str::random(60),
+            ])->save();
+        } else {
+            $user->forceFill([
+                'remember_token' => null,
+            ])->save();
+        }
+
         $token = $user->createToken(
             'auth_token',
             ['*'],
@@ -120,6 +131,9 @@ class AuthController extends Controller
             : $request->user()->currentAccessToken();
 
         $accessToken?->delete();
+        $request->user()?->forceFill([
+            'remember_token' => null,
+        ])->save();
 
         return response()->json([
             'success' => true,

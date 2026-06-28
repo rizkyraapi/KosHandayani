@@ -29,7 +29,7 @@ export default function EmailVerificationSuccessPage() {
         padding: '32px 20px',
         background: colors.page,
         color: colors.text,
-        fontFamily: 'var(--font-inter), Inter, sans-serif',
+        fontFamily: 'var(--font-manrope), Manrope, sans-serif',
       }}
     >
       <section

@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, LayoutDashboard, LogOut, Menu, UserCircle, X } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, LogOut, Menu, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -9,32 +9,29 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getRedirectPathForRole } from '@/lib/auth';
 import LanguageSwitcher from './LanguageSwitcher';
-
-const navLinks = [
-  { labelKey: 'common.home', href: '/' },
-  { labelKey: 'common.allRooms', href: '/rooms' },
-  { labelKey: 'common.help', href: '/#bantuan' },
-];
-
-function isActiveLink(pathname: string, href: string) {
-  if (href === '/') {
-    return pathname === '/';
-  }
-
-  return pathname.startsWith(href);
-}
+import MobileNavigationDrawer from './navigation/MobileNavigationDrawer';
+import {
+  isActiveNavItem,
+  publicNavItems,
+  tenantNavItems,
+} from './navigation/menuItems';
 
 export default function Navbar() {
   const pathname = usePathname();
   const { user, logout, isLoading } = useAuth();
   const { t } = useLanguage();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const isTenantArea = pathname.startsWith('/tenant');
+  const mobileItems = isTenantArea ? tenantNavItems : publicNavItems;
+  const mobileBreakpointClass = isTenantArea ? 'lg:hidden' : 'md:hidden';
+  const desktopBreakpointClass = isTenantArea ? 'hidden lg:flex' : 'hidden md:flex';
+  const accountBreakpointClass = isTenantArea ? 'hidden lg:flex' : 'hidden md:flex';
   const dashboardHref = user ? getRedirectPathForRole(user.role) : '/login';
 
   async function handleLogout() {
     setProfileOpen(false);
-    setMobileMenuOpen(false);
+    setMobileDrawerOpen(false);
     await logout();
   }
 
@@ -50,20 +47,22 @@ export default function Navbar() {
         }}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 md:px-8 py-4">
-        <Link href="/" className="shrink-0" aria-label="Kos Handayani Beranda">
-          <Image
-            src="/KosHandayani_Logo.png"
-            alt="Kos Handayani"
-            width={164}
-            height={40}
-            priority
-            style={{ width: '164px', height: 'auto', objectFit: 'contain' }}
-          />
-        </Link>
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/" className="shrink-0" aria-label="Kos Handayani Beranda">
+            <Image
+              src="/KosHandayani_Logo.png"
+              alt="Kos Handayani"
+              width={164}
+              height={40}
+              priority
+              style={{ width: '164px', height: 'auto', objectFit: 'contain' }}
+            />
+          </Link>
+        </div>
 
-        <div className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => {
-            const isActive = isActiveLink(pathname, link.href);
+        <div className={`${desktopBreakpointClass} items-center gap-8`}>
+          {publicNavItems.map((link) => {
+            const isActive = isActiveNavItem(pathname, link);
 
             return (
               <Link
@@ -74,7 +73,7 @@ export default function Navbar() {
                     ? 'border-green-600 font-bold text-green-700'
                     : 'border-transparent font-medium text-slate-600 hover:text-green-600'
                 }`}
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={() => setMobileDrawerOpen(false)}
               >
                 {t(link.labelKey)}
               </Link>
@@ -84,7 +83,7 @@ export default function Navbar() {
 
         {user ? (
           <div
-            className="hidden md:flex relative items-center gap-3"
+            className={`${accountBreakpointClass} relative items-center gap-3`}
           >
             <LanguageSwitcher compact />
             <button
@@ -131,7 +130,7 @@ export default function Navbar() {
             )}
           </div>
         ) : (
-          <div className="hidden md:flex items-center gap-4">
+          <div className={`${accountBreakpointClass} items-center gap-4`}>
             <Link
               href="/login"
               className="px-5 py-2 font-medium text-slate-600 text-base tracking-[-0.4px] hover:text-green-600 transition-colors"
@@ -153,87 +152,28 @@ export default function Navbar() {
 
         <button
           type="button"
-          className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
-          aria-label={mobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
-          aria-expanded={mobileMenuOpen}
-          onClick={() => setMobileMenuOpen((open) => !open)}
+          className={`${mobileBreakpointClass} rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100`}
+          aria-label={mobileDrawerOpen ? t('nav.closeMenu') : t('nav.openMenu')}
+          aria-expanded={mobileDrawerOpen}
+          aria-controls="mobile-navigation-drawer"
+          onClick={() => setMobileDrawerOpen((open) => !open)}
         >
-          {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          <Menu size={22} />
         </button>
         </div>
-
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-t border-slate-100 px-4 sm:px-6 py-4 flex flex-col gap-4">
-          {navLinks.map((link) => {
-            const isActive = isActiveLink(pathname, link.href);
-
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`text-base transition-colors ${
-                  isActive ? 'text-green-700 font-bold' : 'text-slate-600 font-medium'
-                }`}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {t(link.labelKey)}
-              </Link>
-            );
-          })}
-
-          {user ? (
-            <div className="pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-3 px-1 pb-3">
-                <UserCircle size={30} className="text-green-700" />
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-800 truncate">{user.full_name || 'Pengguna'}</p>
-                  <p className="text-xs text-slate-500 truncate">{user.email}</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Link
-                  href={dashboardHref}
-                  className="flex-1 py-2 text-center font-medium text-slate-600 border border-slate-200 rounded-lg"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {t('common.dashboard')}
-                </Link>
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={handleLogout}
-                  className="flex-1 py-2 text-center font-semibold text-red-600 border border-red-100 rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {t('common.logout')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-3 pt-2">
-              <Link
-                href="/login"
-                className="flex-1 py-2 text-center font-medium text-slate-600 border border-slate-200 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {t('common.login')}
-              </Link>
-              <Link
-                href="/register"
-                className="flex-1 py-2 text-center rounded-lg text-white font-semibold border-0"
-                style={{
-                  background:
-                    'linear-gradient(90deg, rgba(0,110,47,1) 0%, rgba(34,197,94,1) 100%)',
-                }}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                {t('common.register')}
-              </Link>
-            </div>
-          )}
-          <LanguageSwitcher />
-          </div>
-        )}
       </nav>
+      <MobileNavigationDrawer
+        id="mobile-navigation-drawer"
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        items={mobileItems}
+        user={user}
+        onLogout={isTenantArea || user ? handleLogout : undefined}
+        isLoggingOut={isLoading}
+        dashboardHref={dashboardHref}
+        showAuthActions={!isTenantArea}
+        hideAt={isTenantArea ? 'lg' : 'md'}
+      />
       <div aria-hidden="true" className="h-[72px] shrink-0" />
     </>
   );

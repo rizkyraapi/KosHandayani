@@ -277,17 +277,21 @@ export default function Page() {
 
             <OwnerCard>
               <SectionHeader title="Pengeluaran per Cabang" description="Total biaya operasional berdasarkan lokasi." />
-              <div className="grid gap-3">
-                {report.expense_by_branch.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#e7eeff] bg-[#f9f9ff] p-4">
-                    <div>
-                      <p className="font-semibold">{item.branch_name}</p>
-                      <p className="mt-1 text-sm text-[#3d4a3d]">{item.transactions} transaksi</p>
+              {report.expense_by_branch.length === 0 ? (
+                <EmptyPanel title="Belum ada pengeluaran" description="Tidak ada pengeluaran cabang pada filter periode ini." />
+              ) : (
+                <div className="grid gap-3">
+                  {report.expense_by_branch.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-4 rounded-xl border border-[#e7eeff] bg-[#f9f9ff] p-4">
+                      <div>
+                        <p className="font-semibold">{item.branch_name}</p>
+                        <p className="mt-1 text-sm text-[#3d4a3d]">{item.transactions} transaksi</p>
+                      </div>
+                      <p className="font-bold text-red-700">{rupiah(item.amount)}</p>
                     </div>
-                    <p className="font-bold text-red-700">{rupiah(item.amount)}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </OwnerCard>
           </div>
 

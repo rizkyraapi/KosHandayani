@@ -1,27 +1,15 @@
 'use client';
 import axios from 'axios';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { changePassword, getProfile, resendEmailVerification, updateProfile, type ChangePasswordPayload, type ProfilePayload } from '@/lib/api';
-import { getAuthErrorMessage } from '@/lib/auth';
+import { getAuthErrorMessage, type AuthUser } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 // Inject Google Fonts and Material Symbols into <head>
 function useGlobalStyles() {
   useEffect(() => {
-    const links = [
-      'https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap',
-      'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap',
-    ];
-    links.forEach((href) => {
-      if (!document.querySelector(`link[href="${href}"]`)) {
-        const el = document.createElement('link');
-        el.rel = 'stylesheet';
-        el.href = href;
-        document.head.appendChild(el);
-      }
-    });
-
     const styleId = 'page-tsx-global-styles';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
@@ -71,7 +59,7 @@ function useGlobalStyles() {
 
         /* ── Material Symbols ── */
         .material-symbols-outlined {
-          font-family: 'Material Symbols Outlined', sans-serif;
+          font-family: 'Material Symbols Outlined';
           font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
           font-size: 24px;
           line-height: 1;
@@ -81,8 +69,8 @@ function useGlobalStyles() {
         }
 
         /* ── Typography ── */
-        body { font-family: 'Inter', sans-serif; }
-        h1, h2, h3, h4 { font-family: 'Manrope', sans-serif; }
+        body { font-family: var(--font-manrope), Manrope, sans-serif; }
+        h1, h2, h3, h4 { font-family: var(--font-manrope), Manrope, sans-serif; }
 
         /* ── Utility shadow ── */
         .surface-shift-shadow { box-shadow: 0 12px 40px rgba(17, 28, 45, 0.06); }
@@ -141,16 +129,27 @@ function getApiErrorMessages(error: unknown, fallback: string) {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function SideNav() {
+function SideNav({
+  currentUser,
+  onLogout,
+  isLoggingOut,
+}: {
+  currentUser: AuthUser | null;
+  onLogout: () => Promise<void>;
+  isLoggingOut: boolean;
+}) {
   const { t } = useLanguage();
   const navItems = [
-    { icon: 'dashboard', labelKey: 'common.myRoom', active: false },
-    { icon: 'domain', labelKey: 'owner.applications.branch', active: false },
-    { icon: 'group', labelKey: 'common.tenants', active: false },
-    { icon: 'payments', labelKey: 'common.payments', active: false },
-    { icon: 'analytics', labelKey: 'common.reports', active: false },
-    { icon: 'settings', labelKey: 'tenant.profile.settings', active: true },
+    { icon: 'dashboard', labelKey: 'common.myRoom', href: '/tenant/dashboard', active: false },
+    { icon: 'assignment', labelKey: 'common.rentalApplications', href: '/tenant/rental-applications', active: false },
+    { icon: 'payments', labelKey: 'common.bill', href: '/tenant/tagihan', active: false },
+    { icon: 'history', labelKey: 'common.history', href: '/tenant/riwayat', active: false },
+    { icon: 'settings', labelKey: 'tenant.profile.settings', href: '/tenant/profil', active: true },
   ];
+  const displayName = currentUser?.full_name || currentUser?.email || t('common.tenant');
+  const displaySubtitle = currentUser?.email || t('tenant.applications.tenantArea');
+  const avatarName = encodeURIComponent(displayName);
+  const profilePhoto = currentUser?.profile_photo_url || `https://ui-avatars.com/api/?name=${avatarName}&background=006e2f&color=ffffff&size=128&bold=true`;
 
   return (
     <aside
@@ -174,36 +173,36 @@ function SideNav() {
       <div
         style={{
           fontSize: '1.1rem',
-          fontFamily: 'Manrope, sans-serif',
+          fontFamily: 'var(--font-manrope), Manrope, sans-serif',
           fontWeight: 800,
           color: '#15803d',
           marginBottom: '2rem',
         }}
       >
-        KosHandayani Admin
+        KosHandayani
       </div>
 
-      {/* Owner card */}
+      {/* Tenant card */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem', padding: '0 0.5rem' }}>
         <img
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCc95Wl--k9fDDk6Es5AP9W5GT1kW04aN3RGcy2g2RVpbQk7PSc9n11afN8g67JPB5LwlcbaRjtCBN6u_WefqFUd9ZGeoJD5CiVYakLInaup6cW84LRmY9h5it8rgf6_8x5_eA4VCA0fkOGlAlZ5IsFT18kcyjGvHMWg-794e8h_zbezL2pU6HSsQYJCKweXt0FnT31MmUhR1JtvS8c1A-ezMC0SWU4ZJvJASpqHXk-2RntV77GcT5RKqbaCTwo0hOrvrGX7rSjzoYt"
-          alt="Owner Avatar"
+          src={profilePhoto}
+          alt={displayName}
           style={{ width: '2.5rem', height: '2.5rem', borderRadius: '9999px', objectFit: 'cover' }}
         />
         <div>
-          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: '0.875rem', fontWeight: 700, color: C.onBackground }}>
-            Super Admin
+          <div style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: '0.875rem', fontWeight: 700, color: C.onBackground }}>
+            {displayName}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Owner Avatar</div>
+          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{displaySubtitle}</div>
         </div>
       </div>
 
       {/* Nav items */}
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         {navItems.map((item) => (
-          <a
+          <Link
             key={item.labelKey}
-            href="#"
+            href={item.href}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -212,27 +211,27 @@ function SideNav() {
               borderRadius: '0.5rem',
               fontSize: '0.875rem',
               fontWeight: item.active ? 700 : 500,
-              fontFamily: 'Inter, sans-serif',
+              fontFamily: 'var(--font-manrope), Manrope, sans-serif',
               color: item.active ? C.primary : '#64748b',
               background: item.active ? '#f0fdf4' : 'transparent',
               textDecoration: 'none',
               transition: 'background 0.15s',
             }}
             onMouseEnter={(e) => {
-              if (!item.active) (e.currentTarget as HTMLAnchorElement).style.background = '#f1f5f9';
+              if (!item.active) (e.currentTarget as HTMLElement).style.background = '#f1f5f9';
             }}
             onMouseLeave={(e) => {
-              if (!item.active) (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+              if (!item.active) (e.currentTarget as HTMLElement).style.background = 'transparent';
             }}
           >
             <span className="material-symbols-outlined">{item.icon}</span>
             {t(item.labelKey)}
-          </a>
+          </Link>
         ))}
       </nav>
 
-      {/* Add Room CTA */}
-      <button
+      <Link
+        href="/rooms"
         style={{
           marginTop: '1rem',
           marginBottom: '2rem',
@@ -247,47 +246,61 @@ function SideNav() {
           justifyContent: 'center',
           gap: '0.5rem',
           border: 'none',
-          cursor: 'pointer',
+          textDecoration: 'none',
           transition: 'transform 0.15s',
         }}
-        onMouseDown={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)')}
-        onMouseUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)')}
+        onMouseDown={(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(0.95)')}
+        onMouseUp={(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')}
       >
         <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-          add
+          search
         </span>
-        {t('owner.rooms.addShort')} {t('common.room')}
-      </button>
+        {t('common.viewRooms')}
+      </Link>
 
       {/* Bottom links */}
       <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        {[
-          { icon: 'help', labelKey: 'common.help' },
-          { icon: 'logout', labelKey: 'common.logout' },
-        ].map((item) => (
-          <a
-            key={item.labelKey}
-            href="#"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              padding: '0.5rem 0.75rem',
-              borderRadius: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              fontFamily: 'Inter, sans-serif',
-              color: '#64748b',
-              textDecoration: 'none',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = '#f1f5f9')}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = 'transparent')}
-          >
-            <span className="material-symbols-outlined">{item.icon}</span>
-            {t(item.labelKey)}
-          </a>
-        ))}
+        <span
+          aria-label="Bantuan belum tersedia"
+          role="status"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.5rem 0.75rem',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+            color: '#94a3b8',
+          }}
+        >
+          <span className="material-symbols-outlined">help</span>
+          {t('common.help')}
+        </span>
+        <button
+          type="button"
+          disabled={isLoggingOut}
+          onClick={() => void onLogout()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.5rem 0.75rem',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+            color: '#ef4444',
+            background: 'transparent',
+            border: 'none',
+            cursor: isLoggingOut ? 'wait' : 'pointer',
+            opacity: isLoggingOut ? 0.7 : 1,
+          }}
+        >
+          <span className="material-symbols-outlined">logout</span>
+          {t('common.logout')}
+        </button>
       </div>
     </aside>
   );
@@ -986,7 +999,7 @@ function FormField({ label, type, value, icon, disabled = false, onChange }: For
     border: disabled ? '1px solid #e2e8f0' : '1px solid rgba(0,110,47,0.35)',
     color: disabled ? '#64748b' : C.onBackground,
     fontWeight: 500,
-    fontFamily: 'Inter, sans-serif',
+    fontFamily: 'var(--font-manrope), Manrope, sans-serif',
     fontSize: '0.875rem',
     outline: 'none',
     boxSizing: 'border-box',
@@ -1077,7 +1090,7 @@ function FormFieldTextarea({ label, value, icon, disabled = false, onChange }: F
             border: disabled ? '1px solid #e2e8f0' : '1px solid rgba(0,110,47,0.35)',
             color: disabled ? '#64748b' : C.onBackground,
             fontWeight: 500,
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: 'var(--font-manrope), Manrope, sans-serif',
             fontSize: '0.875rem',
             outline: 'none',
             resize: 'none',
@@ -1144,29 +1157,26 @@ function SecondaryCard({
           </span>
         </div>
         <div>
-          <h4 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 700, color: C.onBackground, fontSize: '1rem' }}>
+          <h4 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontWeight: 700, color: C.onBackground, fontSize: '1rem' }}>
             {title}
           </h4>
           <p style={{ fontSize: '0.75rem', color: C.onSurfaceVariant }}>{subtitle}</p>
         </div>
       </div>
-      <button
+      <span
+        aria-disabled="true"
         style={{
           padding: '0.5rem 1rem',
           borderRadius: '0.5rem',
           background: C.surfaceContainerLow,
-          color: C.onSurface,
+          color: C.onSurfaceVariant,
           fontWeight: 700,
           fontSize: '0.75rem',
-          border: 'none',
-          cursor: 'pointer',
-          transition: 'background 0.15s',
+          opacity: 0.72,
         }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = C.surfaceContainerHigh)}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = C.surfaceContainerLow)}
       >
         {actionLabel}
-      </button>
+      </span>
     </div>
   );
 }
@@ -1175,7 +1185,7 @@ function SecondaryCard({
 
 export default function Page() {
   useGlobalStyles();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout, isLoading: authLoading } = useAuth();
   const { t } = useLanguage();
   const [form, setForm] = useState<ProfilePayload & { email: string }>({
     full_name: '',
@@ -1331,7 +1341,7 @@ export default function Page() {
 
   return (
     <div style={{ background: C.background, color: C.onBackground, minHeight: '100vh' }}>
-      <SideNav />
+      <SideNav currentUser={user} onLogout={logout} isLoggingOut={authLoading} />
 
       {/* Main content: offset by sidebar width on lg+ */}
       <main

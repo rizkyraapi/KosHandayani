@@ -30,7 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import RentalApplicationStatusBadge from '@/components/RentalApplicationStatusBadge';
-import { ErrorState, LoadingState } from '@/components/UiState';
+import { EmptyState, ErrorState, LoadingState } from '@/components/UiState';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getOwnerRentalApplication,
@@ -39,6 +39,7 @@ import {
 } from '@/lib/api';
 import { getAuthErrorMessage } from '@/lib/auth';
 import type { Locale } from '@/lib/i18n';
+import { getPaymentMetaFromApplication } from '@/lib/paymentStatus';
 import { getRentalPaymentBreakdown } from '@/lib/rental-payment';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
@@ -68,17 +69,14 @@ function paymentStatusLabel(application: RentalApplication, t: Translate) {
   if (application.status === 'pending') return t('status.awaitingOwnerApproval');
   if (application.status === 'cancelled') return t('status.cancelled');
   if (application.status === 'rejected') return t('status.applicationRejected');
-  if (application.payment_status === 'paid') return t('status.paymentSuccessful');
-  if (application.payment_status === 'failed') return t('status.paymentFailed');
-  if (application.status === 'approved') return t('status.pendingPayment');
 
-  return application.payment_status
-    ? t(`status.${application.payment_status}`)
-    : t('common.none');
+  return t(getPaymentMetaFromApplication(application).labelKey);
 }
 
 function paymentTone(application: RentalApplication) {
-  if (application.payment_status === 'paid') {
+  const paymentMeta = getPaymentMetaFromApplication(application);
+
+  if (paymentMeta.isPaid) {
     return {
       className: 'border-green-100 bg-green-50 text-green-700',
       icon: CheckCircle2,
@@ -88,7 +86,7 @@ function paymentTone(application: RentalApplication) {
   if (
     application.status === 'rejected'
     || application.status === 'cancelled'
-    || application.payment_status === 'failed'
+    || paymentMeta.isFailed
   ) {
     return {
       className: 'border-red-100 bg-red-50 text-red-700',
@@ -96,7 +94,7 @@ function paymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'approved') {
+  if (application.status === 'approved' || paymentMeta.isPending) {
     return {
       className: 'border-emerald-100 bg-emerald-50 text-emerald-700',
       icon: CreditCard,
@@ -614,7 +612,10 @@ export default function Page() {
                     </div>
                     <div className="space-y-1">
                       {(application.status_history || []).length === 0 ? (
-                        <p className="rounded-xl bg-[#f9f9ff] p-4 text-sm text-[#3d4a3d]">Belum ada histori status.</p>
+                        <EmptyState
+                          title="Belum ada histori status"
+                          description="Timeline perubahan status pengajuan akan muncul setelah ada aktivitas."
+                        />
                       ) : application.status_history?.map((item, index) => (
                         <div key={item.key} className="flex gap-3">
                           <div className="flex flex-col items-center">
@@ -642,7 +643,10 @@ export default function Page() {
                     </div>
                     <div className="grid gap-3">
                       {(application.payment_history || []).length === 0 ? (
-                        <p className="rounded-xl bg-[#f9f9ff] p-4 text-sm text-[#3d4a3d]">Belum ada histori pembayaran.</p>
+                        <EmptyState
+                          title="Belum ada histori pembayaran"
+                          description="Initial rent dan renewal yang terkait pengajuan ini akan tampil di sini."
+                        />
                       ) : application.payment_history?.map((historyPayment) => (
                         <div key={historyPayment.id} className="rounded-xl border border-[#e7eeff] bg-[#f9f9ff] p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">

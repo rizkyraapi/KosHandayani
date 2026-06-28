@@ -1,40 +1,16 @@
 'use client';
 import Image from 'next/image';
-import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Navbar from '../components/Navbar';
 import RoomCard from '../components/RoomCard';
-import { getRooms } from '../lib/api';
-import type { ApiRoom } from '../lib/api';
+import { getBranches, getRooms } from '../lib/api';
+import type { ApiBranch, ApiRoom } from '../lib/api';
 
 const fallbackRoomImages = [
   'https://lh3.googleusercontent.com/aida-public/AB6AXuC7uVQv8xDfsE9bJJTiyHrg-mERi5kyQhFpZ41wqDnrM1ah5iYR3qDsh1lFDWAhG0fH6jSif0k6OtydDEZwNg9rNyO9dUdEhXR59M9HyLc3ou6pCJbx2j37PhexqprKNNVkEw5OX8ymP1xeFnVswqe0dWfvayjHamQpTyQMKLpn7824sxUyezJFbvJ3GjgXulU4t-Zha28LZ7dUP1WtPy1ktshKt-YUSb3bRmkQhN5tdsBITPqVbLyjfa8lVybDt05cTYko93QzqEKs',
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAYeGTfgiMhJ-6jkx1L404v4nkblcFwQgOLUEUxDPURKrJwtD2KYvMF8jmwmJLqCt32F1HDDuRIPQyhEQag9uw58tbxXXfKltsjqvdiy2fkE1_1IEigOkviSg4FwZAS4bgV83qjdT_i14GpQ2YZXKQhGnIjxq3-qo-0abmRAsgh4lyI6QtOXilrsiThWiaZBPEWm07LgGM0X8VY-EK7Bwqwq2oC7mUJNAAliz-KLQxRX88GsCIiLBt4pl4VEsQjJHZJxtmzicAdtr4v',
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAawYG1UBuHaZaPoa-nzL1rziF2Fi5Br9_c0UMRJVtQJNrYsyeu3yAjU1ACcDlsoERgXnQfRXzo4ggqxMm54xz5Uw-es_y4sBy4ZAFVgQ59mMNRNU68Cq4ihEDOsoNBbc4jP7HvEmIY6E_MteV91RmEGDdyozszXHEc7RHIkGBmw04-CgGUF3NqSAS7WXwRx7exEXORTE6GxeOLdJ5V0oyGr7TEe4JC6yW2C-kU3UFy3Ul8MF9rOnWGizcMkl3O5NDyXWuqX15UDyKQ',
-];
-
-const branchDetails = [
-  {
-    name: 'Cabang 1',
-    area: 'Pusat kota',
-    image: 'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=960&q=80',
-    summary:
-      'Cabang 1 terletak di pusat kota dengan akses mudah ke fasilitas umum dan transportasi. Cocok untuk penyewa yang butuh mobilitas cepat setiap hari.',
-    address: 'Jl. Handayani Raya No. 12, area bisnis dan perkantoran',
-    access: '5 menit ke halte utama, minimarket, ATM, dan pusat kuliner',
-    units: '64 unit aktif',
-    facilities: ['Keamanan 24 jam', 'Kebersihan rutin', 'Parkir motor', 'Dapur bersama'],
-  },
-  {
-    name: 'Cabang 2',
-    area: 'Area kampus',
-    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=960&q=80',
-    summary:
-      'Cabang 2 menawarkan suasana lebih tenang dekat area kampus. Lingkungannya nyaman untuk belajar, bekerja remote, dan istirahat setelah aktivitas harian.',
-    address: 'Jl. Melati Residence No. 8, dekat kawasan pendidikan',
-    access: '7 menit ke kampus, laundry, warung makan, dan transportasi online',
-    units: '48 unit aktif',
-    facilities: ['WiFi cepat', 'Ruang bersama', 'Dapur modern', 'Area jemur'],
-  },
 ];
 
 const glassEffectStyle: CSSProperties = {
@@ -50,6 +26,18 @@ type HomepageRoom = {
   imageUrl: string;
   genderType: string;
   status: ApiRoom['room_status'];
+};
+
+type HomepageBranch = {
+  id: number;
+  name: string;
+  area: string;
+  image: string;
+  summary: string;
+  address: string;
+  access: string;
+  units: string;
+  facilities: string[];
 };
 
 function formatRupiah(price: number) {
@@ -72,12 +60,93 @@ function mapRoomToCard(room: ApiRoom, index: number): HomepageRoom {
   };
 }
 
+function mapBranchToCard(branch: ApiBranch, rooms: ApiRoom[], index: number): HomepageBranch {
+  const branchRooms = rooms.filter((room) => Number(room.branch_id) === Number(branch.id));
+  const availableCount = branchRooms.filter((room) => room.room_status === 'available').length;
+  const roomWithImage = branchRooms.find((room) => room.thumbnail || room.image_url);
+  const facilities = Array.from(
+    new Set(
+      branchRooms
+        .flatMap((room) => room.facilities || [])
+        .map((facility) => facility.facility_name || facility.name)
+        .filter((facility): facility is string => Boolean(facility)),
+    ),
+  ).slice(0, 4);
+
+  return {
+    id: branch.id,
+    name: branch.branch_name,
+    area: branch.city || 'Area belum diatur',
+    image: roomWithImage?.thumbnail || roomWithImage?.image_url || fallbackRoomImages[index % fallbackRoomImages.length],
+    summary: branch.description || `Cabang ${branch.branch_name} tersedia dalam jaringan KosHandayani.`,
+    address: branch.address || 'Alamat cabang belum diatur.',
+    access: branch.city || 'Area cabang belum diatur.',
+    units: availableCount > 0 ? `${availableCount} kamar tersedia` : 'Data kamar tersedia belum ada',
+    facilities: facilities.length ? facilities : ['Data fasilitas mengikuti kamar tersedia'],
+  };
+}
+
+function HomepageRoomState({
+  icon,
+  title,
+  description,
+  tone = 'default',
+  spinning = false,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  tone?: 'default' | 'error';
+  spinning?: boolean;
+}) {
+  const color = tone === 'error' ? '#b91c1c' : '#006e2f';
+  const background = tone === 'error' ? '#fff1f2' : '#e7eeff';
+
+  return (
+    <div style={{ marginBottom: '64px', textAlign: 'center' }}>
+      <span
+        style={{
+          width: 56,
+          height: 56,
+          margin: '0 auto',
+          borderRadius: 18,
+          background,
+          color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          className="material-symbols-outlined"
+          style={{
+            fontSize: 26,
+            animation: spinning ? 'kos-spin 1s linear infinite' : undefined,
+          }}
+        >
+          {icon}
+        </span>
+      </span>
+      <h3 style={{ margin: '16px 0 0', color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: '1.25rem', fontWeight: 900 }}>
+        {title}
+      </h3>
+      <p style={{ margin: '8px auto 0', maxWidth: 520, color: '#3d4a3d', fontSize: '0.95rem', lineHeight: 1.6 }}>
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export default function Page() {
   const [apiRooms, setApiRooms] = useState<ApiRoom[]>([]);
+  const [apiBranches, setApiBranches] = useState<ApiBranch[]>([]);
+  const [branchRooms, setBranchRooms] = useState<ApiRoom[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [roomsError, setRoomsError] = useState('');
+  const [branchesError, setBranchesError] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [activeSearchKeyword, setActiveSearchKeyword] = useState('');
+  const resultsSectionRef = useRef<HTMLElement | null>(null);
 
   const loadRooms = useCallback(async (keyword = '') => {
     try {
@@ -100,13 +169,38 @@ export default function Page() {
     }
   }, []);
 
+  const loadBranches = useCallback(async () => {
+    try {
+      setBranchesError('');
+      const [branches, rooms] = await Promise.all([
+        getBranches(),
+        getRooms({ limit: 24 }),
+      ]);
+
+      setApiBranches(branches);
+      setBranchRooms(rooms);
+    } catch (error) {
+      setBranchesError(error instanceof Error ? error.message : 'Data cabang belum dapat dimuat.');
+    }
+  }, []);
+
   useEffect(() => {
     void Promise.resolve().then(() => loadRooms());
-  }, [loadRooms]);
+    void Promise.resolve().then(loadBranches);
+  }, [loadBranches, loadRooms]);
+
+  function scrollToResults() {
+    window.requestAnimationFrame(() => {
+      resultsSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void loadRooms(searchKeyword);
+    void loadRooms(searchKeyword).then(scrollToResults);
   }
 
   function clearSearch() {
@@ -118,6 +212,11 @@ export default function Page() {
   }
 
   const rooms = useMemo(() => apiRooms.map(mapRoomToCard), [apiRooms]);
+  const homepageBranches = useMemo(
+    () => apiBranches.map((branch, index) => mapBranchToCard(branch, branchRooms, index)),
+    [apiBranches, branchRooms],
+  );
+  const managedRoomCount = branchRooms.length || apiRooms.length;
   const homepageRooms = useMemo(
     () => rooms.filter((room) => room.status === 'available').slice(0, 10),
     [rooms],
@@ -127,7 +226,7 @@ export default function Page() {
     <div
       style={{
         backgroundColor: '#f9f9ff',
-        fontFamily: 'Inter, sans-serif',
+        fontFamily: 'var(--font-manrope), Manrope, sans-serif',
         color: '#111c2d',
       }}
     >
@@ -143,6 +242,9 @@ export default function Page() {
           white-space: nowrap;
           direction: ltr;
         }
+        @keyframes kos-spin {
+          to { transform: rotate(360deg); }
+        }
         .nav-inner,
         .content-shell {
           width: 100%;
@@ -154,6 +256,7 @@ export default function Page() {
         }
         .hero-section {
           padding: clamp(48px, 9vw, 80px) clamp(16px, 4vw, 32px) clamp(72px, 12vw, 128px);
+          overflow: hidden;
         }
         .hero-title {
           font-size: clamp(2rem, 7vw, 4rem) !important;
@@ -164,8 +267,7 @@ export default function Page() {
         .search-grid {
           display: flex;
           align-items: center;
-          gap: 16px;
-          padding: 12px 16px;
+          padding: 0 8px 0 18px;
           flex: 1;
         }
         .search-panel {
@@ -179,38 +281,15 @@ export default function Page() {
           box-shadow: 0 28px 70px rgba(0, 83, 33, 0.18) !important;
           transform: translateY(-2px);
         }
-        .search-icon-box {
-          width: 48px;
-          height: 48px;
-          flex: 0 0 48px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 14px;
-          color: #006e2f;
-          background: linear-gradient(145deg, #e6f7eb, #f0f3ff);
-          border: 1px solid rgba(0, 110, 47, 0.1);
-        }
         .search-field {
           min-width: 0;
           flex: 1;
           text-align: left;
         }
-        .search-field-label {
-          display: block;
-          color: #006e2f;
-          font-family: 'Manrope', sans-serif;
-          font-size: 0.7rem;
-          font-weight: 800;
-          letter-spacing: 0.12em;
-          line-height: 1;
-          text-transform: uppercase;
-        }
         .search-input-row {
           position: relative;
           display: flex;
           align-items: center;
-          margin-top: 7px;
         }
         .search-input {
           width: 100%;
@@ -218,8 +297,8 @@ export default function Page() {
           outline: 0;
           background: transparent;
           color: #111c2d;
-          font-family: 'Manrope', sans-serif;
-          font-size: 1.05rem;
+          font-family: var(--font-manrope), Manrope, sans-serif;
+          font-size: 1rem;
           font-weight: 700;
           line-height: 1.35;
           padding: 0 36px 0 0;
@@ -228,12 +307,6 @@ export default function Page() {
           color: #728074;
           font-weight: 500;
           opacity: 1;
-        }
-        .search-helper {
-          margin-top: 5px;
-          color: #657166;
-          font-size: 0.75rem;
-          line-height: 1.35;
         }
         .select-wrap {
           position: relative;
@@ -269,7 +342,7 @@ export default function Page() {
           background-color: rgba(0, 110, 47, 0.08);
         }
         .search-button {
-          min-width: 190px;
+          min-width: 132px;
           box-shadow: 0 12px 26px rgba(0, 110, 47, 0.22);
         }
         .search-button:hover {
@@ -399,7 +472,7 @@ export default function Page() {
           border-radius: 999px;
           background: #f0f3ff;
           color: #006e2f;
-          font-family: 'Inter', sans-serif;
+          font-family: var(--font-manrope), Manrope, sans-serif;
           font-size: 0.78rem;
           font-weight: 800;
           text-transform: uppercase;
@@ -407,7 +480,7 @@ export default function Page() {
           margin-bottom: 14px;
         }
         .branch-content h3 {
-          font-family: 'Manrope', sans-serif;
+          font-family: var(--font-manrope), Manrope, sans-serif;
           font-size: clamp(1.5rem, 3vw, 1.875rem);
           font-weight: 800;
           letter-spacing: -0.025em;
@@ -415,7 +488,7 @@ export default function Page() {
           color: #111c2d;
         }
         .branch-content p {
-          font-family: 'Inter', sans-serif;
+          font-family: var(--font-manrope), Manrope, sans-serif;
           color: #334155;
           line-height: 1.8;
         }
@@ -486,7 +559,7 @@ export default function Page() {
           border-radius: 999px;
           background: #006e2f;
           color: #ffffff;
-          font-family: 'Inter', sans-serif;
+          font-family: var(--font-manrope), Manrope, sans-serif;
           font-weight: 800;
           text-decoration: none;
           box-shadow: 0 12px 22px rgba(0, 110, 47, 0.18);
@@ -551,22 +624,12 @@ export default function Page() {
             align-items: stretch !important;
           }
           .search-grid {
-            align-items: flex-start;
-            gap: 12px;
-            padding: 10px 8px 12px;
+            align-items: center;
+            padding: 12px 10px;
             width: 100%;
-          }
-          .search-icon-box {
-            width: 42px;
-            height: 42px;
-            flex-basis: 42px;
-            border-radius: 12px;
           }
           .search-input {
             font-size: 0.92rem;
-          }
-          .search-helper {
-            font-size: 0.68rem;
           }
           .search-button {
             min-width: 0;
@@ -587,7 +650,7 @@ export default function Page() {
           .room-grid {
             gap: 14px;
             margin-bottom: 40px;
-            margin-right: calc(clamp(16px, 4vw, 32px) * -1);
+            margin-right: 0;
             padding-right: clamp(16px, 4vw, 32px);
           }
           .room-grid > .room-card {
@@ -603,7 +666,7 @@ export default function Page() {
             transform: none !important;
           }
           .trust-badge {
-            right: 8px !important;
+            right: 0 !important;
             bottom: -18px !important;
             max-width: 152px !important;
             padding: 14px !important;
@@ -691,7 +754,7 @@ export default function Page() {
               style={{
                 fontSize: 'clamp(2rem, 10vw, 4rem)',
                 fontWeight: 800,
-                fontFamily: 'Manrope, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                 letterSpacing: '-0.02em',
                 color: '#111c2d',
                 lineHeight: 1.2,
@@ -734,21 +797,16 @@ export default function Page() {
               }}
             >
               <div className="search-grid">
-                <span className="search-icon-box" aria-hidden="true">
-                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>bed</span>
-                </span>
                 <div className="search-field">
-                  <label htmlFor="homepage-room-search" className="search-field-label">
-                    Cari kamar tersedia
-                  </label>
                   <div className="search-input-row">
                     <input
                       id="homepage-room-search"
                       className="search-input"
                       type="text"
+                      aria-label="Cari kamar tersedia"
                       value={searchKeyword}
                       onChange={(event) => setSearchKeyword(event.target.value)}
-                      placeholder="Nama kamar, fasilitas, atau cabang..."
+                      placeholder="Cari kamar atau cabang..."
                     />
                     {searchKeyword || activeSearchKeyword ? (
                       <button
@@ -761,7 +819,6 @@ export default function Page() {
                       </button>
                     ) : null}
                   </div>
-                  <p className="search-helper">Temukan kamar yang cocok dari seluruh cabang KosHandayani.</p>
                 </div>
               </div>
 
@@ -787,23 +844,20 @@ export default function Page() {
                   transition: 'all 0.2s',
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                  search
-                </span>
-                Temukan Kamar
+                Cari
               </button>
             </form>
           </div>
         </section>
 
-        <section id="kamar-tersedia" className="content-shell" style={{ paddingTop: '64px', paddingBottom: '64px' }}>
+        <section ref={resultsSectionRef} id="kamar-tersedia" className="content-shell" style={{ paddingTop: '64px', paddingBottom: '64px' }}>
           <div className="section-heading-row">
             <div>
               <h2
                 style={{
                   fontSize: '1.875rem',
                   fontWeight: 800,
-                  fontFamily: 'Manrope, sans-serif',
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                   letterSpacing: '-0.025em',
                 }}
               >
@@ -821,13 +875,19 @@ export default function Page() {
           </div>
 
           {isLoadingRooms ? (
-            <div style={{ marginBottom: '64px', textAlign: 'center', color: '#3d4a3d' }}>
-              Memuat data kamar...
-            </div>
+            <HomepageRoomState
+              icon="progress_activity"
+              title="Memuat kamar"
+              description="Mengambil daftar kamar tersedia terbaru dari database."
+              spinning
+            />
           ) : roomsError ? (
-            <div style={{ marginBottom: '64px', textAlign: 'center', color: '#b91c1c' }}>
-              {roomsError}. Pastikan backend Laravel berjalan di http://127.0.0.1:8000.
-            </div>
+            <HomepageRoomState
+              icon="error"
+              title="Kamar belum dapat dimuat"
+              description={`${roomsError}. Silakan coba lagi atau hubungi pengelola jika masalah berlanjut.`}
+              tone="error"
+            />
           ) : homepageRooms.length > 0 ? (
             <div className="room-grid">
               {homepageRooms.map((room) => (
@@ -844,15 +904,18 @@ export default function Page() {
               ))}
             </div>
           ) : (
-            <div style={{ marginBottom: '64px', textAlign: 'center', color: '#3d4a3d' }}>
-              {activeSearchKeyword
-                ? `Tidak ada kamar yang cocok dengan pencarian "${activeSearchKeyword}".`
-                : 'Belum ada kamar tersedia dari database.'}
-            </div>
+            <HomepageRoomState
+              icon="search_off"
+              title={activeSearchKeyword ? 'Kamar tidak ditemukan' : 'Belum ada kamar tersedia'}
+              description={activeSearchKeyword
+                ? `Tidak ada kamar yang cocok dengan pencarian "${activeSearchKeyword}". Coba kata kunci lain.`
+                : 'Kamar tersedia akan tampil otomatis setelah data kamar siap dipublikasikan.'}
+            />
           )}
 
           <div style={{ marginTop: '64px', textAlign: 'center' }}>
-            <button
+            <Link
+              href="/rooms"
               style={{
                 paddingLeft: '32px',
                 paddingRight: '32px',
@@ -868,7 +931,7 @@ export default function Page() {
                 gap: '8px',
                 marginLeft: 'auto',
                 marginRight: 'auto',
-                cursor: 'pointer',
+                textDecoration: 'none',
                 transition: 'background-color 0.2s',
               }}
               onMouseEnter={(e) => {
@@ -880,7 +943,7 @@ export default function Page() {
             >
               Lihat Kamar Lainnya
               <span className="material-symbols-outlined">arrow_forward</span>
-            </button>
+            </Link>
           </div>
         </section>
 
@@ -890,7 +953,7 @@ export default function Page() {
               style={{
                 fontSize: '1.875rem',
                 fontWeight: 800,
-                fontFamily: 'Manrope, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                 letterSpacing: '-0.025em',
                 marginBottom: '12px',
               }}
@@ -902,9 +965,23 @@ export default function Page() {
             </p>
           </div>
 
+          {branchesError ? (
+            <HomepageRoomState
+              icon="apartment"
+              title="Data cabang belum dapat dimuat"
+              description={`${branchesError}. Informasi cabang akan tampil otomatis setelah data tersedia.`}
+              tone="error"
+            />
+          ) : homepageBranches.length === 0 ? (
+            <HomepageRoomState
+              icon="apartment"
+              title="Belum ada cabang terdaftar"
+              description="Informasi cabang akan tampil otomatis setelah data cabang tersedia dari sistem."
+            />
+          ) : (
           <div className="branch-grid">
-            {branchDetails.map((branch, index) => (
-              <div key={branch.name} className={`branch-card ${index % 2 === 1 ? 'reverse' : ''}`}>
+            {homepageBranches.map((branch, index) => (
+              <div key={branch.id} className={`branch-card ${index % 2 === 1 ? 'reverse' : ''}`}>
                 <div className="branch-image">
                   <img src={branch.image} alt={branch.name} />
                   <div className="branch-image-badge">
@@ -931,7 +1008,7 @@ export default function Page() {
                     <div className="branch-meta-card">
                       <span className="material-symbols-outlined">directions_bus</span>
                       <div>
-                        <p className="branch-meta-label">Akses</p>
+                        <p className="branch-meta-label">Area</p>
                         <p className="branch-meta-value">{branch.access}</p>
                       </div>
                     </div>
@@ -954,6 +1031,7 @@ export default function Page() {
               </div>
             ))}
           </div>
+          )}
         </section>
 
         <section className="content-shell feature-section" style={{ paddingTop: '96px', paddingBottom: '96px' }}>
@@ -1009,7 +1087,9 @@ export default function Page() {
                   <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>Terpercaya</span>
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#3d4a3d' }}>
-                  Telah mengelola 500+ unit kamar kos di seluruh Indonesia.
+                  {managedRoomCount > 0
+                    ? `Mengelola ${managedRoomCount} unit kamar kos aktif di sistem.`
+                    : 'Mengelola data kamar kos aktif di sistem.'}
                 </p>
               </div>
             </div>
@@ -1020,7 +1100,7 @@ export default function Page() {
                 style={{
                   fontSize: '2.25rem',
                   fontWeight: 800,
-                  fontFamily: 'Manrope, sans-serif',
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                   lineHeight: 1.2,
                 }}
               >
@@ -1069,13 +1149,13 @@ export default function Page() {
                       color: '#006e2f',
                     }}
                   >
-                    <span className="material-symbols-outlined">support_agent</span>
+                    <span className="material-symbols-outlined">assignment_turned_in</span>
                   </div>
                   <div>
-                    <h4 style={{ fontWeight: 700, fontSize: '1.125rem' }}>Digital Concierge</h4>
+                    <h4 style={{ fontWeight: 700, fontSize: '1.125rem' }}>Pengajuan Sewa Online</h4>
                     <p style={{ color: '#3d4a3d' }}>
-                      Layanan bantuan tenant 24/7 untuk perbaikan fasilitas atau pertanyaan seputar
-                      kos.
+                      Pilih kamar, kirim pengajuan sewa, dan unggah dokumen identitas langsung dari
+                      aplikasi.
                     </p>
                   </div>
                 </div>
@@ -1095,13 +1175,13 @@ export default function Page() {
                       color: '#006e2f',
                     }}
                   >
-                    <span className="material-symbols-outlined">key</span>
+                    <span className="material-symbols-outlined">receipt_long</span>
                   </div>
                   <div>
-                    <h4 style={{ fontWeight: 700, fontSize: '1.125rem' }}>Akses Tanpa Kunci</h4>
+                    <h4 style={{ fontWeight: 700, fontSize: '1.125rem' }}>Tagihan & Riwayat</h4>
                     <p style={{ color: '#3d4a3d' }}>
-                      Beberapa unit kami telah dilengkapi sistem Smart Lock untuk keamanan maksimal
-                      Anda.
+                      Pantau tagihan aktif, status pembayaran, dan riwayat transaksi sewa dalam satu
+                      tempat.
                     </p>
                   </div>
                 </div>
@@ -1143,60 +1223,36 @@ export default function Page() {
             style={{ width: '132px', height: 'auto', objectFit: 'contain' }}
           />
           <div className="footer-links">
-            <a
-              href="#"
+            <span
               style={{
                 fontSize: '0.75rem',
                 color: '#a0aec0',
                 textDecoration: 'none',
-                transition: 'color 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#475569';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#a0aec0';
               }}
             >
               Tentang Kami
-            </a>
-            <a
-              href="#"
+            </span>
+            <span
               style={{
                 fontSize: '0.75rem',
                 color: '#a0aec0',
                 textDecoration: 'none',
-                transition: 'color 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#475569';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#a0aec0';
               }}
             >
               Syarat &amp; Ketentuan
-            </a>
-            <a
-              href="#"
+            </span>
+            <span
               style={{
                 fontSize: '0.75rem',
                 color: '#a0aec0',
                 textDecoration: 'none',
-                transition: 'color 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#475569';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#a0aec0';
               }}
             >
               Kebijakan Privasi
-            </a>
+            </span>
           </div>
-          <p style={{ fontSize: '0.75rem', color: '#708090', textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
-            &copy; 2024 KosHandayani. Digital Concierge Property Management.
+          <p style={{ fontSize: '0.75rem', color: '#708090', textAlign: 'center', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
+            &copy; 2026 KosHandayani. Digital Concierge Property Management.
           </p>
         </div>
       </footer>

@@ -462,6 +462,25 @@ export async function getPayment(id: number | string): Promise<Payment> {
   return unwrapData(data, 'Detail pembayaran tidak ditemukan.');
 }
 
+export async function downloadPaymentReceipt(paymentId: number | string): Promise<{
+  blob: Blob;
+  filename: string;
+}> {
+  const response = await apiClient.get<Blob>(`/payments/${paymentId}/receipt`, {
+    responseType: 'blob',
+  });
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  const encodedFilename = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plainFilename = disposition?.match(/filename="?([^";]+)"?/i)?.[1];
+
+  return {
+    blob: response.data,
+    filename: encodedFilename
+      ? decodeURIComponent(encodedFilename)
+      : plainFilename || `bukti-pembayaran-${paymentId}.pdf`,
+  };
+}
+
 export async function syncPaymentStatus(orderId: string): Promise<Payment> {
   const { data } = await apiClient.post<ApiEnvelope<Payment>>('/payments/sync-status', {
     order_id: orderId,

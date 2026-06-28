@@ -40,6 +40,17 @@ export type RegisterPayload = {
   whatsapp?: string;
 };
 
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ResetPasswordPayload = {
+  token: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+};
+
 type ApiUser = {
   id: number;
   full_name?: string | null;
@@ -67,6 +78,12 @@ type AuthResponse = {
     user?: ApiUser;
   };
   message?: string;
+};
+
+type AuthMessageResponse = {
+  success?: boolean;
+  message?: string;
+  errors?: Record<string, string[]>;
 };
 
 const SESSION_IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES ?? 120);
@@ -270,6 +287,19 @@ export const authService = {
     } finally {
       clearLocalSession();
     }
+  },
+
+  async forgotPassword(payload: ForgotPasswordPayload) {
+    const { data } = await apiClient.post<AuthMessageResponse>('/forgot-password', payload);
+
+    return data;
+  },
+
+  async resetPassword(payload: ResetPasswordPayload) {
+    const { data } = await apiClient.post<AuthMessageResponse>('/reset-password', payload);
+    clearLocalSession();
+
+    return data;
   },
 
   clearSession: clearLocalSession,

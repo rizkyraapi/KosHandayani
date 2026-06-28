@@ -26,12 +26,14 @@ import {
   SectionHeader,
   StatusPill,
 } from '@/components/owner/OwnerUi';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   getOwnerApplicationMonitoring,
   type OwnerApplicationMonitorItem,
   type OwnerApplicationMonitoring,
   type OwnerPaymentOverview,
 } from '@/lib/api';
+import { getPaymentMetaFromApplication } from '@/lib/paymentStatus';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { useOwnerBranchScope } from '@/lib/use-owner-branch-scope';
 
@@ -49,16 +51,17 @@ function rupiah(value: number) {
   }).format(value);
 }
 
-function applicationPaymentLabel(item: OwnerApplicationMonitorItem) {
-  if (item.payment_status === 'paid') return 'Pembayaran berhasil';
-  if (item.payment_status === 'failed') return 'Pembayaran gagal';
-  if (item.status === 'approved') return 'Menunggu pembayaran';
-  if (item.status === 'cancelled') return 'Dibatalkan';
-  if (item.status === 'rejected') return 'Ditolak';
-  return 'Belum diproses';
+function applicationPaymentLabel(item: OwnerApplicationMonitorItem, t: (key: string) => string) {
+  if (item.status === 'cancelled') return t('status.cancelled');
+  if (item.status === 'rejected') return t('status.rejected');
+  if (item.status === 'pending') return t('status.awaitingOwnerApproval');
+
+  return t(getPaymentMetaFromApplication(item).labelKey);
 }
 
 function ApplicationRow({ item }: { item: OwnerApplicationMonitorItem }) {
+  const { t } = useLanguage();
+
   return (
     <Link
       href={`/owner/rental-applications/${item.id}`}
@@ -79,7 +82,7 @@ function ApplicationRow({ item }: { item: OwnerApplicationMonitorItem }) {
         <div><p className="text-[#3d4a3d]">Tanggal masuk</p><p className="mt-1 font-semibold">{date(item.move_in_date)}</p></div>
         <div><p className="text-[#3d4a3d]">Durasi</p><p className="mt-1 font-semibold">{item.duration}</p></div>
         <div><p className="text-[#3d4a3d]">Diajukan</p><p className="mt-1 font-semibold">{date(item.created_at)}</p></div>
-        <div><p className="text-[#3d4a3d]">Pembayaran</p><p className="mt-1 font-semibold">{applicationPaymentLabel(item)}</p></div>
+        <div><p className="text-[#3d4a3d]">Pembayaran</p><p className="mt-1 font-semibold">{applicationPaymentLabel(item, t)}</p></div>
       </div>
       <div className="flex items-center justify-between gap-3 lg:justify-end">
         <span className="text-sm font-semibold text-[#3d4a3d]">{item.payment_count} transaksi</span>

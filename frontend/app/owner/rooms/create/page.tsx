@@ -382,8 +382,6 @@ function RoomFormPage() {
   return (
     <main style={{ minHeight: '100vh', background: colors.surface, padding: '40px clamp(16px, 4vw, 48px)' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
         .material-symbols-outlined {
           font-family: 'Material Symbols Outlined';
           font-weight: normal;
@@ -442,7 +440,7 @@ function RoomFormPage() {
           <p style={{ color: colors.primary, fontWeight: 900, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 8px' }}>
             Manajemen Properti
           </p>
-          <h1 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 40px)', color: colors.text, margin: 0, lineHeight: 1.1 }}>
+          <h1 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 40px)', color: colors.text, margin: 0, lineHeight: 1.1 }}>
             {isEditMode ? 'Edit Kamar' : 'Tambah Kamar Baru'}
           </h1>
           <p style={{ color: colors.muted, marginTop: 10, maxWidth: 620, lineHeight: 1.6 }}>
@@ -496,7 +494,7 @@ function RoomFormPage() {
           )}
 
           <section>
-            <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
+            <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
               Detail Kamar
             </h2>
             <div className="room-create-grid">
@@ -597,7 +595,7 @@ function RoomFormPage() {
           </section>
 
           <section>
-            <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
+            <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
               Fasilitas
             </h2>
             <div className="facility-grid">
@@ -634,7 +632,7 @@ function RoomFormPage() {
           </section>
 
           <section>
-            <h2 style={{ fontFamily: 'Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
+            <h2 style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 19, margin: '0 0 16px', color: colors.text }}>
               Foto Kamar
             </h2>
             <label

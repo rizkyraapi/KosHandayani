@@ -3,43 +3,24 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  BarChart3,
-  BedDouble,
-  ClipboardList,
-  LayoutDashboard,
-  LogOut,
-  ReceiptText,
-  UsersRound,
-  WalletCards,
-  Menu,
-} from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
-
-const ownerNavItems = [
-  { labelKey: 'common.dashboard', href: '/owner/dashboard', icon: LayoutDashboard },
-  { labelKey: 'nav.ownerRooms', href: '/owner/rooms', icon: BedDouble },
-  { labelKey: 'common.rentalApplications', href: '/owner/rental-applications', icon: ClipboardList },
-  { labelKey: 'common.activeTenants', href: '/owner/tenants', icon: UsersRound },
-  { labelKey: 'common.payments', href: '/owner/payments', icon: ReceiptText },
-  { labelKey: 'common.expenses', href: '/owner/expenses', icon: WalletCards },
-  { labelKey: 'common.reports', href: '/owner/reports', icon: BarChart3 },
-];
-
-function isActivePath(pathname: string, href: string) {
-  if (href === '/owner/dashboard') {
-    return pathname === href;
-  }
-
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+import MobileNavigationDrawer from './navigation/MobileNavigationDrawer';
+import { isActiveNavItem, ownerNavItems } from './navigation/menuItems';
 
 export default function OwnerSidebar() {
   const pathname = usePathname();
-  const { logout, isLoading } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const { t } = useLanguage();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  async function handleLogout() {
+    setDrawerOpen(false);
+    await logout();
+  }
 
   return (
     <>
@@ -91,7 +72,7 @@ export default function OwnerSidebar() {
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {ownerNavItems.map((item) => {
           const Icon = item.icon;
-          const active = isActivePath(pathname, item.href);
+          const active = isActiveNavItem(pathname, item);
 
           return (
             <Link
@@ -126,7 +107,7 @@ export default function OwnerSidebar() {
         <button
           type="button"
           disabled={isLoading}
-          onClick={logout}
+          onClick={() => void handleLogout()}
           style={{
             display: 'flex',
             width: '100%',
@@ -149,40 +130,38 @@ export default function OwnerSidebar() {
       </div>
       </aside>
 
-      <header className="owner-mobile-header fixed inset-x-0 top-0 z-40 flex h-[72px] items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:hidden">
-        <Link href="/owner/dashboard" className="flex items-center gap-3">
+      <header className="owner-mobile-header fixed inset-x-0 top-0 z-40 flex h-[72px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:hidden">
+        <button
+          type="button"
+          className="rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100"
+          aria-label={drawerOpen ? t('nav.closeMenu') : t('nav.openMenu')}
+          aria-expanded={drawerOpen}
+          aria-controls="owner-mobile-navigation-drawer"
+          onClick={() => setDrawerOpen((open) => !open)}
+        >
+          <Menu size={22} />
+        </button>
+        <Link href="/owner/dashboard" className="flex shrink-0 items-center gap-3">
           <Image
             src="/KosHandayani_Logo.png"
             alt="KosHandayani"
-            width={142}
-            height={48}
-            style={{ width: 142, height: 'auto' }}
+            width={132}
+            height={42}
+            style={{ width: 132, height: 'auto' }}
           />
         </Link>
-        <div className="flex items-center gap-2">
-          <LanguageSwitcher compact />
-          <Menu size={21} className="text-[#006e2f]" />
-        </div>
       </header>
 
-      <nav className="owner-mobile-nav fixed inset-x-0 bottom-0 z-50 grid grid-cols-7 border-t border-slate-200 bg-white/95 px-1 py-2 backdrop-blur lg:hidden">
-        {ownerNavItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActivePath(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-bold ${
-                active ? 'bg-green-50 text-[#006e2f]' : 'text-slate-500'
-              }`}
-            >
-              <Icon size={18} />
-              <span className="max-w-full truncate">{t(item.labelKey)}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <MobileNavigationDrawer
+        id="owner-mobile-navigation-drawer"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        items={ownerNavItems}
+        user={user}
+        onLogout={handleLogout}
+        isLoggingOut={isLoading}
+        hideAt="lg"
+      />
     </>
   );
 }

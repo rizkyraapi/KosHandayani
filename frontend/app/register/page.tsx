@@ -8,8 +8,6 @@ import { getAuthErrorMessage } from '@/lib/auth';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
   .material-symbols-outlined {
     font-family: 'Material Symbols Outlined';
@@ -47,7 +45,7 @@ const styles = `
   }
 
   .page-root {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-manrope), Manrope, sans-serif;
     background-color: #f9f9ff;
     color: #111c2d;
     min-height: 100vh;
@@ -100,7 +98,7 @@ function InputField({ label, icon, placeholder, type = 'text', value, onChange, 
       <label
         style={{
           display: 'block',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'var(--font-manrope), Manrope, sans-serif',
           fontSize: '14px',
           fontWeight: 600,
           color: colors.onSurfaceVariant,
@@ -268,7 +266,7 @@ export default function Page() {
               </div>
               <h2
                 style={{
-                  fontFamily: 'Manrope, sans-serif',
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                   fontWeight: 700,
                   fontSize: '24px',
                   color: colors.onSurface,
@@ -280,7 +278,7 @@ export default function Page() {
               </h2>
               <p
                 style={{
-                  fontFamily: 'Inter, sans-serif',
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                   fontSize: '14px',
                   color: colors.onSurfaceVariant,
                   margin: 0,
@@ -434,7 +432,7 @@ export default function Page() {
                   style={{
                     width: '100%',
                     color: colors.onPrimary,
-                    fontFamily: 'Manrope, sans-serif',
+                    fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                     fontWeight: 700,
                     fontSize: '16px',
                     padding: '16px',
@@ -497,7 +495,7 @@ export default function Page() {
               style={{
                 marginTop: '32px',
                 textAlign: 'center',
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                 fontSize: '12px',
                 color: colors.outline,
                 lineHeight: '1.5',
@@ -506,7 +504,7 @@ export default function Page() {
                 marginRight: 'auto',
               }}
             >
-              © 2024 KosHandayani. Digital Concierge Property Management.
+              © 2026 KosHandayani. Digital Concierge Property Management.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
               <LanguageSwitcher compact />
@@ -516,7 +514,9 @@ export default function Page() {
 
         {/* Support Bubble */}
         <div style={{ position: 'fixed', bottom: '24px', right: '24px' }}>
-          <button
+          <span
+            aria-label={t('common.comingSoon')}
+            role="status"
             style={{
               backgroundColor: colors.surfaceContainerLowest,
               padding: '16px',
@@ -524,21 +524,15 @@ export default function Page() {
               boxShadow: '0 8px 24px rgba(17, 28, 45, 0.15)',
               color: colors.primary,
               border: 'none',
-              cursor: 'pointer',
+              cursor: 'default',
+              opacity: 0.72,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'background-color 0.2s',
             }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = colors.surfaceContainerHigh)
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = colors.surfaceContainerLowest)
-            }
           >
             <span className="material-symbols-outlined">support_agent</span>
-          </button>
+          </span>
         </div>
       </div>
     </>

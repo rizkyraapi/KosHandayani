@@ -22,6 +22,7 @@ import { cancelMyRentalApplication, createPayment, getMyRentalApplications, sync
 import { getAuthErrorMessage } from '@/lib/auth';
 import type { Locale } from '@/lib/i18n';
 import { payWithMidtransSnap } from '@/lib/midtrans';
+import { getPaymentMetaFromApplication } from '@/lib/paymentStatus';
 import { syncTenantDataAfterPayment } from '@/lib/tenant-data-sync';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
@@ -47,13 +48,10 @@ function isAwaitingPayment(application: RentalApplication) {
 
 function paymentStatusLabel(application: RentalApplication, t: (key: string) => string) {
   if (application.status === 'pending') return t('status.awaitingOwnerApproval');
-  if (isAwaitingPayment(application)) return t('status.pendingPayment');
-  if (application.status === 'approved' && application.payment_status === 'paid') return t('status.paymentSuccessful');
-  if (application.payment_status === 'failed') return t('status.paymentFailed');
   if (application.status === 'cancelled') return t('status.cancelled');
   if (application.status === 'rejected') return t('status.applicationRejected');
 
-  return application.payment_status ? t(`status.${application.payment_status}`) : t('common.none');
+  return t(getPaymentMetaFromApplication(application).labelKey);
 }
 
 function paymentTone(application: RentalApplication) {
@@ -65,7 +63,9 @@ function paymentTone(application: RentalApplication) {
     };
   }
 
-  if (isAwaitingPayment(application)) {
+  const paymentMeta = getPaymentMetaFromApplication(application);
+
+  if (isAwaitingPayment(application) || paymentMeta.isPending) {
     return {
       bg: 'bg-emerald-50',
       text: 'text-emerald-700',
@@ -73,7 +73,7 @@ function paymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'approved' && application.payment_status === 'paid') {
+  if (paymentMeta.isPaid) {
     return {
       bg: 'bg-green-50',
       text: 'text-green-700',
@@ -81,7 +81,7 @@ function paymentTone(application: RentalApplication) {
     };
   }
 
-  if (application.status === 'rejected' || application.status === 'cancelled' || application.payment_status === 'failed') {
+  if (application.status === 'rejected' || application.status === 'cancelled' || paymentMeta.isFailed) {
     return {
       bg: 'bg-red-50',
       text: 'text-red-700',
@@ -305,7 +305,7 @@ export default function Page() {
   return (
     <main
       className="min-h-screen bg-[#f9f9ff] px-4 py-6 text-[#111c2d] sm:px-6 lg:px-8 lg:py-8"
-      style={{ fontFamily: 'var(--font-inter), Inter, sans-serif' }}
+      style={{ fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}
     >
       <div className="mx-auto max-w-6xl">
         <header className="mb-6 rounded-2xl border border-white bg-white/80 p-5 shadow-sm sm:p-6 lg:p-7">

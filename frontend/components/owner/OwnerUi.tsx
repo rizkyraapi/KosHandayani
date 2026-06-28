@@ -4,11 +4,14 @@ import Link from 'next/link';
 import {
   AlertCircle,
   ArrowRight,
+  Inbox,
   Loader2,
   RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import type { ApiBranch } from '@/lib/api';
+import { getPaymentStatusMeta } from '@/lib/paymentStatus';
 
 export const OWNER_COLORS = {
   background: '#f9f9ff',
@@ -181,14 +184,11 @@ export function LifecyclePill({
 }
 
 export function PaymentStatusPill({ status }: { status?: string | null }) {
-  if (['settlement', 'capture', 'paid'].includes(status || '')) {
-    return <StatusPill label="Success" tone="green" />;
-  }
-  if (['expire', 'cancel', 'deny', 'failed'].includes(status || '')) {
-    return <StatusPill label="Failed" tone="red" />;
-  }
+  const { t } = useLanguage();
+  const meta = getPaymentStatusMeta(status);
+  const tone = meta.tone === 'orange' ? 'orange' : meta.tone === 'slate' ? 'slate' : meta.tone;
 
-  return <StatusPill label="Pending" tone="amber" />;
+  return <StatusPill label={t(meta.labelKey)} tone={tone} />;
 }
 
 export function OwnerButton({
@@ -373,13 +373,18 @@ export function ErrorPanel({
 export function EmptyPanel({
   title,
   description,
+  icon: Icon = Inbox,
 }: {
   title: string;
   description: string;
+  icon?: LucideIcon;
 }) {
   return (
     <div className="rounded-2xl border border-dashed border-[#bccbb9] bg-[#f9f9ff] px-6 py-12 text-center">
-      <p className="text-lg font-semibold text-[#111c2d]">{title}</p>
+      <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e7eeff] text-[#006e2f]">
+        <Icon size={24} />
+      </span>
+      <p className="mt-4 text-lg font-semibold text-[#111c2d]">{title}</p>
       <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#3d4a3d]">{description}</p>
     </div>
   );

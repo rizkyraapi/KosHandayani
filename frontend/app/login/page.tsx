@@ -8,8 +8,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
   .material-symbols-outlined {
     font-family: 'Material Symbols Outlined';
@@ -43,7 +41,7 @@ const styles = `
   }
 
   .page-root {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-manrope), Manrope, sans-serif;
     background-color: #f9f9ff;
     color: #111c2d;
     min-height: 100vh;
@@ -71,6 +69,10 @@ function getRegisteredSearchParam() {
   return new URLSearchParams(window.location.search).get('registered') === '1';
 }
 
+function getResetSuccessSearchParam() {
+  return new URLSearchParams(window.location.search).get('reset') === 'success';
+}
+
 function getServerRegisteredSearchParam() {
   return false;
 }
@@ -93,7 +95,7 @@ function InputField({ label, icon, placeholder, type = 'text', value, onChange, 
       <label
         style={{
           display: 'block',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'var(--font-manrope), Manrope, sans-serif',
           fontSize: '14px',
           fontWeight: 600,
           color: colors.onSurfaceVariant,
@@ -159,8 +161,18 @@ export default function Page() {
     getRegisteredSearchParam,
     getServerRegisteredSearchParam
   );
+  const resetSuccess = useSyncExternalStore(
+    subscribeToUrlChanges,
+    getResetSuccessSearchParam,
+    getServerRegisteredSearchParam
+  );
 
   const errorMessage = localError || authError;
+  const successMessage = registered
+    ? t('messages.registerSuccess')
+    : resetSuccess
+      ? t('messages.passwordResetSuccess')
+      : '';
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -247,7 +259,7 @@ export default function Page() {
               </div>
               <h2
                 style={{
-                  fontFamily: 'Manrope, sans-serif',
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                   fontWeight: 700,
                   fontSize: '24px',
                   color: colors.onSurface,
@@ -259,7 +271,7 @@ export default function Page() {
               </h2>
               <p
                 style={{
-                  fontFamily: 'Inter, sans-serif',
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                   fontSize: '14px',
                   color: colors.onSurfaceVariant,
                   margin: 0,
@@ -292,40 +304,18 @@ export default function Page() {
                 />
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div
+                  <label
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
+                      display: 'block',
+                      fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: colors.onSurfaceVariant,
+                      marginLeft: '4px',
                     }}
                   >
-                    <label
-                      style={{
-                        display: 'block',
-                        fontFamily: 'Inter, sans-serif',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: colors.onSurfaceVariant,
-                        marginLeft: '4px',
-                      }}
-                    >
-                      {t('auth.password')}
-                    </label>
-                    <a
-                      href="#"
-                      style={{
-                        fontSize: '12px',
-                        color: colors.primary,
-                        fontWeight: 600,
-                        textDecoration: 'none',
-                      }}
-                      onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-                      onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
-                    >
-                      {t('auth.forgotPassword')}
-                    </a>
-                  </div>
+                    {t('auth.password')}
+                  </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <span
                       className="material-symbols-outlined"
@@ -370,35 +360,87 @@ export default function Page() {
                   </div>
                 </div>
 
-                <label
+                <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
-                    width: 'fit-content',
-                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                    color: colors.onSurfaceVariant,
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    userSelect: 'none',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={form.remember}
-                    disabled={isSubmitting}
-                    onChange={(e) => setForm((current) => ({ ...current, remember: e.target.checked }))}
+                  <label
                     style={{
-                      width: '18px',
-                      height: '18px',
-                      accentColor: colors.primary,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
                       cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      color: colors.onSurfaceVariant,
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      userSelect: 'none',
                     }}
-                  />
-                  {t('auth.rememberMe')}
-                </label>
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.remember}
+                      disabled={isSubmitting}
+                      onChange={(e) => setForm((current) => ({ ...current, remember: e.target.checked }))}
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        accentColor: colors.primary,
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      }}
+                    />
+                    {t('auth.rememberMe')}
+                  </label>
 
-                {(errorMessage || registered) && (
+                  <Link
+                    href="/forgot-password"
+                    style={{
+                      fontSize: '13px',
+                      color: colors.primary,
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                    onMouseOut={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                  >
+                    {t('auth.forgotPassword')}
+                  </Link>
+                </div>
+
+                {resetSuccess && (
+                  <div
+                    role="status"
+                    style={{
+                      position: 'fixed',
+                      top: '20px',
+                      right: '20px',
+                      zIndex: 40,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      maxWidth: '360px',
+                      padding: '14px 16px',
+                      borderRadius: '16px',
+                      backgroundColor: '#f0fff4',
+                      border: '1px solid #bbf7d0',
+                      boxShadow: '0 18px 45px rgba(17,28,45,.12)',
+                      color: colors.primary,
+                      fontSize: '13px',
+                      fontWeight: 800,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                      check_circle
+                    </span>
+                    {t('messages.passwordResetSuccess')}
+                  </div>
+                )}
+
+                {(errorMessage || successMessage) && (
                   <p
                     style={{
                       margin: 0,
@@ -408,7 +450,7 @@ export default function Page() {
                       lineHeight: 1.5,
                     }}
                   >
-                    {errorMessage || t('messages.registerSuccess')}
+                    {errorMessage || successMessage}
                   </p>
                 )}
 
@@ -419,7 +461,7 @@ export default function Page() {
                   style={{
                     width: '100%',
                     color: colors.onPrimary,
-                    fontFamily: 'Manrope, sans-serif',
+                    fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                     fontWeight: 700,
                     fontSize: '16px',
                     padding: '16px',
@@ -480,7 +522,7 @@ export default function Page() {
               style={{
                 marginTop: '32px',
                 textAlign: 'center',
-                fontFamily: 'Inter, sans-serif',
+                fontFamily: 'var(--font-manrope), Manrope, sans-serif',
                 fontSize: '12px',
                 color: colors.outline,
                 lineHeight: '1.5',
@@ -489,7 +531,7 @@ export default function Page() {
                 marginRight: 'auto',
               }}
             >
-              © 2024 KosHandayani. Digital Concierge Property Management.
+              © 2026 KosHandayani. Digital Concierge Property Management.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
               <LanguageSwitcher compact />
@@ -498,7 +540,9 @@ export default function Page() {
         </main>
 
         <div style={{ position: 'fixed', bottom: '24px', right: '24px' }}>
-          <button
+          <span
+            aria-label={t('common.comingSoon')}
+            role="status"
             style={{
               backgroundColor: colors.surfaceContainerLowest,
               padding: '16px',
@@ -506,21 +550,15 @@ export default function Page() {
               boxShadow: '0 8px 24px rgba(17, 28, 45, 0.15)',
               color: colors.primary,
               border: 'none',
-              cursor: 'pointer',
+              cursor: 'default',
+              opacity: 0.72,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'background-color 0.2s',
             }}
-            onMouseOver={(e) =>
-              (e.currentTarget.style.backgroundColor = colors.surfaceContainerHigh)
-            }
-            onMouseOut={(e) =>
-              (e.currentTarget.style.backgroundColor = colors.surfaceContainerLowest)
-            }
           >
             <span className="material-symbols-outlined">support_agent</span>
-          </button>
+          </span>
         </div>
       </div>
     </>

@@ -7,6 +7,7 @@ use App\Models\RentalApplication;
 use App\Models\Room;
 use App\Models\RoomOccupancy;
 use App\Services\MidtransService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -457,6 +458,44 @@ class PaymentController extends Controller
         ]);
     }
 
+    public function receipt(Request $request, Payment $payment)
+    {
+        if ($response = $this->ensureTenant($request)) {
+            return $response;
+        }
+
+        $payment->loadMissing([
+            'rentalApplication.user',
+            'rentalApplication.room.branch',
+            'rentalApplication.roomOccupancy',
+            'roomOccupancy',
+        ]);
+
+        if (! $payment->rentalApplication || (int) $payment->rentalApplication->user_id !== (int) $request->user()->id) {
+            abort(404);
+        }
+
+        if (! $this->isSuccessfulStatus((string) $payment->transaction_status)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bukti pembayaran tersedia setelah pembayaran berhasil.',
+            ], 422);
+        }
+
+        $logoPath = resource_path('images/koshandayani-logo.svg');
+        $logoDataUri = is_file($logoPath)
+            ? 'data:image/svg+xml;base64,'.base64_encode((string) file_get_contents($logoPath))
+            : null;
+        $filename = 'bukti-pembayaran-koshandayani-'.Str::slug((string) $payment->order_id).'.pdf';
+
+        return Pdf::loadView('payments.receipt', [
+            'receipt' => $this->receiptData($payment),
+            'logoDataUri' => $logoDataUri,
+        ])
+            ->setPaper('a4', 'portrait')
+            ->download($filename);
+    }
+
     private function applySuccessfulPayment(Payment $payment): void
     {
         if ($payment->payment_category === Payment::CATEGORY_RENEWAL) {
@@ -491,6 +530,87 @@ class PaymentController extends Controller
             'is_available' => false,
             'room_status' => 'occupied',
         ]);
+    }
+
+    private function receiptData(Payment $payment): array
+    {
+        $application = $payment->rentalApplication;
+        $tenant = $application?->user;
+        $room = $application?->room;
+        $branch = $room?->branch;
+        $paymentDate = $payment->settlement_time ?? $payment->paid_at ?? $payment->updated_at ?? $payment->created_at;
+
+        return [
+            'status' => $payment->transaction_status === 'capture' ? 'Capture' : 'Settlement',
+            'transaction_id' => $payment->transaction_id ?: '-',
+            'order_id' => $payment->order_id ?: '-',
+            'payment_category' => $payment->payment_category === Payment::CATEGORY_RENEWAL
+                ? 'Perpanjangan Sewa'
+                : 'Pembayaran Awal',
+            'tenant_name' => $tenant?->name ?: '-',
+            'tenant_email' => $tenant?->email ?: '-',
+            'branch_name' => $branch?->branch_name ?? $room?->getAttribute('branch') ?? '-',
+            'room_name' => $room?->room_name ?? '-',
+            'period_start' => $this->formatReceiptDate($payment->period_start ?? $application?->move_in_date),
+            'period_end' => $this->formatReceiptDate($payment->period_end),
+            'duration' => $this->formatReceiptDuration($payment, $application),
+            'subtotal_amount' => $this->formatReceiptMoney((int) $payment->subtotal_amount),
+            'discount_amount' => $this->formatReceiptMoney((int) $payment->discount_amount),
+            'gross_amount' => $this->formatReceiptMoney((int) $payment->gross_amount),
+            'payment_type' => $this->formatPaymentType($payment->payment_type),
+            'paid_at' => $this->formatReceiptDateTime($paymentDate),
+            'generated_at' => $this->formatReceiptDateTime(now()),
+        ];
+    }
+
+    private function formatReceiptMoney(int $amount): string
+    {
+        return 'Rp '.number_format(max(0, $amount), 0, ',', '.');
+    }
+
+    private function formatReceiptDate(mixed $date): string
+    {
+        if (! $date) {
+            return '-';
+        }
+
+        try {
+            return Carbon::parse($date)->translatedFormat('d M Y');
+        } catch (Throwable) {
+            return '-';
+        }
+    }
+
+    private function formatReceiptDateTime(mixed $date): string
+    {
+        if (! $date) {
+            return '-';
+        }
+
+        try {
+            return Carbon::parse($date)->translatedFormat('d M Y H:i');
+        } catch (Throwable) {
+            return '-';
+        }
+    }
+
+    private function formatReceiptDuration(Payment $payment, ?RentalApplication $application): string
+    {
+        $durationMonths = (int) ($payment->duration_months ?: ($application ? $this->getDurationInMonths($application) : 0));
+
+        return $durationMonths > 0 ? $durationMonths.' Bulan' : '-';
+    }
+
+    private function formatPaymentType(?string $paymentType): string
+    {
+        if (! $paymentType) {
+            return '-';
+        }
+
+        return Str::of($paymentType)
+            ->replace('_', ' ')
+            ->title()
+            ->toString();
     }
 
     private function applySuccessfulRenewalPayment(Payment $payment): void

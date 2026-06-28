@@ -79,10 +79,10 @@ export default function Page() {
   }, [isAuthLoading, params.id, router, user]);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f9f9ff', color: '#111c2d', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f9f9ff', color: '#111c2d', fontFamily: 'var(--font-manrope), Manrope, sans-serif' }}>
       <Navbar />
       <main style={{ maxWidth: 1120, margin: '0 auto', padding: '48px 24px 72px' }}>
-        <h1 style={{ margin: '0 0 10px', fontFamily: 'Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 38px)' }}>
+        <h1 style={{ margin: '0 0 10px', fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 'clamp(28px, 4vw, 38px)' }}>
           Formulir Pengajuan Sewa
         </h1>
         <p style={{ margin: '0 0 28px', color: '#3d4a3d' }}>
@@ -101,7 +101,7 @@ export default function Page() {
                 alt={room.room_name}
                 style={{ width: '100%', height: 210, objectFit: 'cover', borderRadius: 10, marginBottom: 16 }}
               />
-              <h2 style={{ margin: 0, fontFamily: 'Manrope, sans-serif', fontSize: 24 }}>{room.room_name}</h2>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-manrope), Manrope, sans-serif', fontSize: 24 }}>{room.room_name}</h2>
               <p style={{ margin: '8px 0 0', color: '#006e2f', fontWeight: 800 }}>{formatRupiah(room.price)} / bulan</p>
               <p style={{ margin: '8px 0 0', color: '#3d4a3d' }}>{room.branch?.branch_name || 'Cabang belum diatur'}</p>
               {error && <p style={{ margin: '16px 0 0', color: '#93000a', background: '#ffdad6', padding: 12, borderRadius: 8, fontWeight: 700 }}>{error}</p>}
